@@ -64,7 +64,7 @@ const TemplatesPage: React.FC = () => {
   const [formatString, setFormatString] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewValues, setPreviewValues] = useState<Record<string, string>>({});
-
+  const [templateType, setTemplateType] = useState<TemplateType>("structured");
   useEffect(() => {
     fetchTemplates();
   }, []);
