@@ -22,6 +22,7 @@ export type Database = {
           format_string: string
           id: string
           name: string
+          requires_approval: boolean
           updated_at: string
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           format_string?: string
           id?: string
           name: string
+          requires_approval?: boolean
           updated_at?: string
         }
         Update: {
@@ -40,7 +42,100 @@ export type Database = {
           format_string?: string
           id?: string
           name?: string
+          requires_approval?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      invoices: {
+        Row: {
+          approval_note: string | null
+          approved_at: string | null
+          approved_by: string | null
+          contact_name: string
+          created_at: string
+          id: string
+          invoice_date: string
+          invoice_number: string | null
+          line_items: Json
+          requires_approval: boolean
+          status: string
+          submitted_by_name: string
+          submitted_by_system_id: string
+          template_id: string | null
+          total: number
+        }
+        Insert: {
+          approval_note?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          contact_name: string
+          created_at?: string
+          id?: string
+          invoice_date: string
+          invoice_number?: string | null
+          line_items?: Json
+          requires_approval?: boolean
+          status?: string
+          submitted_by_name?: string
+          submitted_by_system_id: string
+          template_id?: string | null
+          total?: number
+        }
+        Update: {
+          approval_note?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          contact_name?: string
+          created_at?: string
+          id?: string
+          invoice_date?: string
+          invoice_number?: string | null
+          line_items?: Json
+          requires_approval?: boolean
+          status?: string
+          submitted_by_name?: string
+          submitted_by_system_id?: string
+          template_id?: string | null
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_approval_flags: {
+        Row: {
+          created_at: string
+          flagged_by: string | null
+          id: string
+          requires_approval: boolean
+          system_id: string
+          updated_at: string
+          user_name: string
+        }
+        Insert: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          requires_approval?: boolean
+          system_id: string
+          updated_at?: string
+          user_name?: string
+        }
+        Update: {
+          created_at?: string
+          flagged_by?: string | null
+          id?: string
+          requires_approval?: boolean
+          system_id?: string
+          updated_at?: string
+          user_name?: string
         }
         Relationships: []
       }
