@@ -46,12 +46,12 @@ export const apiClient = {
   },
 
   /** Shorthand for auth edge function */
-  async auth<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
-    return this.invoke<T>("auth", action, body);
+  auth<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+    return apiClient.invoke<T>("auth", action, body);
   },
 
   /** Shorthand for invoices edge function */
-  async invoices<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
-    return this.invoke<T>("invoices", action, body);
+  invoices<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+    return apiClient.invoke<T>("invoices", action, body);
   },
 };
