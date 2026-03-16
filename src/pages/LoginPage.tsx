@@ -152,9 +152,6 @@ const LoginPage: React.FC = () => {
           )}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Protected by NeonDB &middot; Xero Integration
-        </p>
       </div>
     </div>
   );
