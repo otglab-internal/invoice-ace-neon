@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { nowGMT8 } from "@/lib/utils";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,7 +158,7 @@ const TemplatesPage: React.FC = () => {
     if (editingId) {
       ({ error } = await supabase
         .from("invoice_templates")
-        .update({ ...payload, updated_at: new Date().toISOString() } as any)
+        .update({ ...payload, updated_at: nowGMT8() } as any)
         .eq("id", editingId));
     } else {
       ({ error } = await supabase.from("invoice_templates").insert(payload as any));
@@ -452,7 +453,7 @@ const TemplatesPage: React.FC = () => {
                   <h3 className="text-sm font-semibold text-foreground">{t.name}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {t.fields.length} field{t.fields.length !== 1 ? "s" : ""} · Created{" "}
-                    {new Date(t.created_at).toLocaleDateString()}
+                    {new Date(t.created_at).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

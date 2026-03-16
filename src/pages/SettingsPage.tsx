@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { nowGMT8 } from "@/lib/utils";
 import AppLayout from "@/components/AppLayout";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -54,7 +55,7 @@ const SettingsPage: React.FC = () => {
     const newVal = !flag.requires_approval;
     const { error } = await supabase
       .from("user_approval_flags")
-      .update({ requires_approval: newVal, updated_at: new Date().toISOString() } as any)
+      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
       .eq("id", flag.id);
     if (error) {
       toast.error("Failed to update user flag");
@@ -103,7 +104,7 @@ const SettingsPage: React.FC = () => {
     const newVal = !template.requires_approval;
     const { error } = await supabase
       .from("invoice_templates")
-      .update({ requires_approval: newVal, updated_at: new Date().toISOString() } as any)
+      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
       .eq("id", template.id);
     if (error) {
       toast.error("Failed to update template flag");

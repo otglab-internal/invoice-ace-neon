@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { nowGMT8 } from "@/lib/utils";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -64,7 +65,7 @@ const ApprovalsPage: React.FC = () => {
         status: "approved",
         approval_note: adjustmentNote || null,
         approved_by: systemId || "",
-        approved_at: new Date().toISOString(),
+        approved_at: nowGMT8(),
       } as any)
       .eq("id", id);
 
@@ -87,7 +88,7 @@ const ApprovalsPage: React.FC = () => {
         status: "rejected",
         approval_note: adjustmentNote || null,
         approved_by: systemId || "",
-        approved_at: new Date().toISOString(),
+        approved_at: nowGMT8(),
       } as any)
       .eq("id", id);
 
