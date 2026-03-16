@@ -32,7 +32,15 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
-  const [invoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [invoiceDate] = useState(() => {
+    const now = new Date();
+    // Convert to GMT+8
+    const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const d = gmt8.getUTCDate().toString().padStart(2, "0");
+    const m = (gmt8.getUTCMonth() + 1).toString().padStart(2, "0");
+    const y = gmt8.getUTCFullYear();
+    return `${d}/${m}/${y}`;
+  });
   const [descMode, setDescMode] = useState<DescriptionMode>("structured");
 
   // Option A fields
@@ -75,7 +83,7 @@ const CreateInvoicePage: React.FC = () => {
     descMode === "structured"
       ? [
           studentName,
-          age ? `${age} (${new Date().getFullYear()})` : "",
+          age ? `${age} (${new Date(Date.now() + 8 * 60 * 60 * 1000).getUTCFullYear()})` : "",
           packageName,
           firstLesson ? `First Lesson: ${firstLesson}` : "",
         ]
@@ -206,8 +214,8 @@ const CreateInvoicePage: React.FC = () => {
                   <Input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="e.g. Lee Rou Xuan" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Age (Year)</Label>
-                  <Input value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 15" />
+                  <Label className="text-xs text-muted-foreground">Age</Label>
+                  <Input type="number" min="0" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 15" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Package Name</Label>
