@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Send, Plus, Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 type DescriptionMode = "structured" | "freetext";
 
@@ -76,6 +79,7 @@ function isLineItemValid(item: LineItem): boolean {
 }
 
 const CreateInvoicePage: React.FC = () => {
+  const { user, systemId } = useAuth();
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
@@ -105,6 +109,10 @@ const CreateInvoicePage: React.FC = () => {
     setLineItems((prev) => [...prev, createLineItem()]);
   }, []);
 
+  const contactName = contactMode === "select"
+    ? demoContacts.find((c) => c.id === contactId)?.name || ""
+    : newContactName.trim();
+
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
   const allValid = contactValid && lineItems.every(isLineItemValid);
 
@@ -118,12 +126,61 @@ const CreateInvoicePage: React.FC = () => {
     e.preventDefault();
     if (!allValid) return;
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    toast.success("Invoice submitted successfully");
-    setSubmitting(false);
-    setContactId("");
-    setNewContactName("");
-    setLineItems([createLineItem()]);
+
+    try {
+      // Check if user is flagged for approval
+      const { data: userFlag } = await supabase
+        .from("user_approval_flags")
+        .select("requires_approval")
+        .eq("system_id", systemId || "")
+        .maybeSingle();
+
+      const userFlagged = userFlag?.requires_approval === true;
+
+      // Build line items payload
+      const lineItemsPayload = lineItems.map((item) => ({
+        description: getGeneratedDescription(item),
+        quantity: Number(item.quantity),
+        cost: Number(item.cost),
+        account: item.account,
+        center: item.center,
+      }));
+
+      const needsApproval = userFlagged;
+
+      const invoicePayload = {
+        contact_name: contactName,
+        invoice_date: invoiceDate,
+        line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
+        total,
+        submitted_by_system_id: systemId || "",
+        submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+        requires_approval: needsApproval,
+        status: needsApproval ? "pending_approval" : "submitted",
+      };
+
+      const { error } = await supabase.from("invoices").insert(invoicePayload as any);
+
+      if (error) {
+        toast.error("Failed to submit invoice");
+      } else if (needsApproval) {
+        toast.info("Invoice submitted for admin approval", {
+          description: "Your invoice has been flagged and requires approval before being processed.",
+          icon: <ShieldAlert className="w-4 h-4" />,
+        });
+      } else {
+        toast.success("Invoice submitted successfully");
+      }
+
+      // Reset form
+      setContactId("");
+      setNewContactName("");
+      setLineItems([createLineItem()]);
+    } catch (err) {
+      toast.error("Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

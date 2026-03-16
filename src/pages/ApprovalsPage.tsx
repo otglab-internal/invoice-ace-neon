@@ -1,160 +1,265 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, X, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Check, X, Eye, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface PendingInvoice {
+interface Invoice {
   id: string;
-  contact: string;
-  description: string;
-  amount: string;
-  date: string;
-  status: "pending" | "approved" | "rejected";
-  reason?: string;
+  invoice_number: string | null;
+  contact_name: string;
+  invoice_date: string;
+  line_items: any[];
+  total: number;
+  submitted_by_name: string;
+  submitted_by_system_id: string;
+  status: string;
+  requires_approval: boolean;
+  approval_note: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+  template_id: string | null;
 }
 
-const initialInvoices: PendingInvoice[] = [
-  { id: "INV-006", contact: "Lee Music Academy", description: "Lee Rou Xuan\n15 (2026)\nGrand Opening Term Package (RM 2,000)\nFirst Lesson: Last week of March", amount: "RM 2,000.00", date: "2026-03-15", status: "pending" },
-  { id: "INV-007", contact: "Tan Piano Studio", description: "Private lesson package x3 months", amount: "RM 1,500.00", date: "2026-03-14", status: "pending" },
-  { id: "INV-008", contact: "Wong Violin Lessons", description: "Summer camp registration fee", amount: "RM 800.00", date: "2026-03-13", status: "pending" },
-];
-
 const ApprovalsPage: React.FC = () => {
-  const [invoices, setInvoices] = useState<PendingInvoice[]>(initialInvoices);
+  const { systemId, user } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adjustmentNote, setAdjustmentNote] = useState("");
+  const [processing, setProcessing] = useState(false);
 
   const selected = invoices.find((i) => i.id === selectedId);
 
-  const handleApprove = (id: string) => {
-    setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, status: "approved" as const } : i)));
-    toast.success(`${id} approved and pushed to Xero`);
-    setSelectedId(null);
+  useEffect(() => {
+    fetchInvoices();
+  }, []);
+
+  const fetchInvoices = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("requires_approval", true)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      toast.error("Failed to load invoices");
+    } else {
+      setInvoices((data as unknown as Invoice[]) || []);
+    }
+    setLoading(false);
   };
 
-  const handleReject = (id: string) => {
-    setInvoices((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, status: "rejected" as const, reason: adjustmentNote } : i))
-    );
-    toast.error(`${id} rejected`);
-    setSelectedId(null);
-    setAdjustmentNote("");
+  const handleApprove = async (id: string) => {
+    setProcessing(true);
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        status: "approved",
+        approval_note: adjustmentNote || null,
+        approved_by: systemId || "",
+        approved_at: new Date().toISOString(),
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to approve invoice");
+    } else {
+      toast.success("Invoice approved and will be pushed to Xero");
+      setSelectedId(null);
+      setAdjustmentNote("");
+      fetchInvoices();
+    }
+    setProcessing(false);
   };
 
-  const pendingCount = invoices.filter((i) => i.status === "pending").length;
+  const handleReject = async (id: string) => {
+    setProcessing(true);
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        status: "rejected",
+        approval_note: adjustmentNote || null,
+        approved_by: systemId || "",
+        approved_at: new Date().toISOString(),
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to reject invoice");
+    } else {
+      toast.error("Invoice rejected");
+      setSelectedId(null);
+      setAdjustmentNote("");
+      fetchInvoices();
+    }
+    setProcessing(false);
+  };
+
+  const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "pending_approval":
+        return <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">Pending</Badge>;
+      case "approved":
+        return <Badge variant="default" className="text-xs bg-emerald-600">Approved</Badge>;
+      case "rejected":
+        return <Badge variant="destructive" className="text-xs">Rejected</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-xs">{status}</Badge>;
+    }
+  };
 
   return (
     <AppLayout>
       <div className="max-w-5xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold font-display text-foreground">Approvals</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {pendingCount} invoice{pendingCount !== 1 ? "s" : ""} pending approval
-          </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold font-display text-foreground">Approvals</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {pendingCount} invoice{pendingCount !== 1 ? "s" : ""} pending approval
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchInvoices} className="gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          {/* List */}
-          <div className="col-span-2 bg-card border border-border rounded-xl divide-y divide-border">
-            {invoices.map((inv) => (
-              <div
-                key={inv.id}
-                className={`px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors ${
-                  selectedId === inv.id ? "bg-muted/50" : ""
-                }`}
-                onClick={() => setSelectedId(inv.id)}
-              >
-                <div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-foreground">{inv.id}</span>
-                    <span
-                      className={
-                        inv.status === "pending"
-                          ? "pill-manual"
-                          : inv.status === "approved"
-                          ? "pill-automated"
-                          : "pill-failed"
-                      }
-                    >
-                      {inv.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{inv.contact}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-foreground">{inv.amount}</p>
-                  <p className="text-xs text-muted-foreground">{inv.date}</p>
-                </div>
-              </div>
-            ))}
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-
-          {/* Detail */}
-          <div className="bg-card border border-border rounded-xl p-5">
-            {selected ? (
-              <div className="space-y-4 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold font-display text-foreground">{selected.id}</h3>
-                  <Eye className="w-4 h-4 text-muted-foreground" />
-                </div>
-                <div className="space-y-2 text-sm">
-                  <p><span className="text-muted-foreground">Contact:</span> {selected.contact}</p>
-                  <p><span className="text-muted-foreground">Amount:</span> {selected.amount}</p>
-                  <p><span className="text-muted-foreground">Date:</span> {selected.date}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Description:</p>
-                  <pre className="text-sm text-foreground whitespace-pre-wrap bg-muted p-3 rounded-lg font-body">{selected.description}</pre>
-                </div>
-
-                {selected.status === "pending" && (
-                  <>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Adjustment Notes</p>
-                      <Textarea
-                        value={adjustmentNote}
-                        onChange={(e) => setAdjustmentNote(e.target.value)}
-                        placeholder="Optional notes..."
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button onClick={() => handleApprove(selected.id)} className="flex-1 gap-1" size="sm">
-                        <Check className="w-3.5 h-3.5" /> Approve
-                      </Button>
-                      <Button
-                        onClick={() => handleReject(selected.id)}
-                        variant="destructive"
-                        className="flex-1 gap-1"
-                        size="sm"
-                      >
-                        <X className="w-3.5 h-3.5" /> Reject
-                      </Button>
-                    </div>
-                  </>
-                )}
-
-                {selected.status === "approved" && (
-                  <div className="p-3 rounded-lg bg-success/10 text-success text-sm font-medium text-center">
-                    ✓ Pushed to Xero
-                  </div>
-                )}
-
-                {selected.status === "rejected" && (
-                  <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                    Rejected{selected.reason ? `: ${selected.reason}` : ""}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-                Select an invoice to review
-              </div>
-            )}
+        ) : invoices.length === 0 ? (
+          <div className="bg-card border border-border rounded-xl p-12 text-center">
+            <Check className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-foreground mb-1">All clear</h3>
+            <p className="text-sm text-muted-foreground">No invoices require approval</p>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-6">
+            {/* List */}
+            <div className="col-span-2 bg-card border border-border rounded-xl divide-y divide-border">
+              {invoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className={`px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors ${
+                    selectedId === inv.id ? "bg-muted/50" : ""
+                  }`}
+                  onClick={() => setSelectedId(inv.id)}
+                >
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-foreground">
+                        {inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      {getStatusBadge(inv.status)}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">{inv.contact_name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      by {inv.submitted_by_name || "Unknown"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{inv.invoice_date}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Detail */}
+            <div className="bg-card border border-border rounded-xl p-5">
+              {selected ? (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold font-display text-foreground">
+                      {selected.invoice_number || selected.id.slice(0, 8).toUpperCase()}
+                    </h3>
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
+                    <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
+                    <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
+                    <p><span className="text-muted-foreground">Submitted by:</span> {selected.submitted_by_name}</p>
+                  </div>
+
+                  {/* Line items */}
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Line Items ({selected.line_items?.length || 0}):</p>
+                    <div className="space-y-2">
+                      {(selected.line_items || []).map((item: any, idx: number) => (
+                        <div key={idx} className="text-sm bg-muted p-3 rounded-lg">
+                          <pre className="text-foreground whitespace-pre-wrap font-body text-xs">{item.description}</pre>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selected.status === "pending_approval" && (
+                    <>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Adjustment Notes</p>
+                        <Textarea
+                          value={adjustmentNote}
+                          onChange={(e) => setAdjustmentNote(e.target.value)}
+                          placeholder="Optional notes..."
+                          rows={3}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleApprove(selected.id)}
+                          className="flex-1 gap-1"
+                          size="sm"
+                          disabled={processing}
+                        >
+                          {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          Approve
+                        </Button>
+                        <Button
+                          onClick={() => handleReject(selected.id)}
+                          variant="destructive"
+                          className="flex-1 gap-1"
+                          size="sm"
+                          disabled={processing}
+                        >
+                          <X className="w-3.5 h-3.5" /> Reject
+                        </Button>
+                      </div>
+                    </>
+                  )}
+
+                  {selected.status === "approved" && (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-600 text-sm font-medium text-center">
+                      ✓ Approved{selected.approval_note ? ` — ${selected.approval_note}` : ""}
+                    </div>
+                  )}
+
+                  {selected.status === "rejected" && (
+                    <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                      Rejected{selected.approval_note ? `: ${selected.approval_note}` : ""}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+                  Select an invoice to review
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
