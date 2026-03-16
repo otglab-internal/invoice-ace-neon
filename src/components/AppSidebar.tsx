@@ -1,11 +1,12 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText } from "lucide-react";
+import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate } from "lucide-react";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
   { to: "/create-invoice", label: "Create Invoice", icon: FilePlus, adminOnly: false },
+  { to: "/templates", label: "Templates", icon: LayoutTemplate, adminOnly: false },
   { to: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
