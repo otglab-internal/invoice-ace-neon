@@ -90,6 +90,7 @@ const TemplatesPage: React.FC = () => {
     setFormatString("");
     setPreviewValues({});
     setEditingId(null);
+    setTemplateType("structured");
   };
 
   const openCreate = () => {
