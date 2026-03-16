@@ -142,7 +142,7 @@ const TemplatesPage: React.FC = () => {
 
     const payload = {
       name: templateName.trim(),
-      fields: validFields,
+      fields: JSON.parse(JSON.stringify(validFields)),
       format_string: formatString,
     };
 
@@ -150,10 +150,10 @@ const TemplatesPage: React.FC = () => {
     if (editingId) {
       ({ error } = await supabase
         .from("invoice_templates")
-        .update({ ...payload, updated_at: new Date().toISOString() })
+        .update({ ...payload, updated_at: new Date().toISOString() } as any)
         .eq("id", editingId));
     } else {
-      ({ error } = await supabase.from("invoice_templates").insert(payload));
+      ({ error } = await supabase.from("invoice_templates").insert(payload as any));
     }
 
     if (error) {
