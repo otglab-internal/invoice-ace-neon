@@ -11,8 +11,10 @@ const navItems = [
 ];
 
 const AppSidebar: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
+
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   const handleLogout = () => {
     logout();
