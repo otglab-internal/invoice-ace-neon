@@ -32,7 +32,15 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
-  const [invoiceDate] = useState(new Date().toISOString().split("T")[0]);
+  const [invoiceDate] = useState(() => {
+    const now = new Date();
+    // Convert to GMT+8
+    const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const d = gmt8.getUTCDate().toString().padStart(2, "0");
+    const m = (gmt8.getUTCMonth() + 1).toString().padStart(2, "0");
+    const y = gmt8.getUTCFullYear();
+    return `${d}/${m}/${y}`;
+  });
   const [descMode, setDescMode] = useState<DescriptionMode>("structured");
 
   // Option A fields
