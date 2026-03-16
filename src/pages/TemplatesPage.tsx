@@ -29,6 +29,12 @@ interface Template {
   created_at: string;
 }
 
+type TemplateType = "structured";
+
+const TEMPLATE_TYPES: { value: TemplateType; label: string; description: string }[] = [
+  { value: "structured", label: "Structured Template", description: "Define custom fields and a format string to compose the final invoice description" },
+];
+
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
