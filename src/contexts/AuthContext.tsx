@@ -80,7 +80,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: { action: "verify-2fa", challenge_token: challengeToken, totp_code: code },
     });
 
-    if (error) throw new Error(error.message || "Verification failed");
+    if (error) {
+      const bodyError = data?.error || data?.message;
+      if (bodyError) throw new Error(bodyError);
+      throw new Error("Verification failed");
+    }
     if (data?.error) throw new Error(data.message || data.error);
     if (!data.success || !data.user) throw new Error("Verification failed");
 
