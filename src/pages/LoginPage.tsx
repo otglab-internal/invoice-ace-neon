@@ -63,7 +63,8 @@ const LoginPage: React.FC = () => {
     try {
       await verify2FA(otpCode, challengeToken);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed");
+      const msg = err instanceof Error ? err.message : "";
+      setError(friendlyError(msg));
     } finally {
       setLoading(false);
     }
