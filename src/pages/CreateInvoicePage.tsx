@@ -5,7 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Send, Plus, Trash2, ShieldAlert } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -94,6 +97,8 @@ const CreateInvoicePage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
@@ -260,25 +265,79 @@ const CreateInvoicePage: React.FC = () => {
           {/* Bill To */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h2 className="text-sm font-semibold font-display text-foreground">Bill To</h2>
-            <div className="flex gap-2 mb-3">
-              <Button type="button" variant={contactMode === "select" ? "default" : "outline"} size="sm" onClick={() => setContactMode("select")}>
-                Select Contact
-              </Button>
-              <Button type="button" variant={contactMode === "new" ? "default" : "outline"} size="sm" onClick={() => setContactMode("new")}>
-                Create New
-              </Button>
-            </div>
-            {contactMode === "select" ? (
-              <Select value={contactId} onValueChange={setContactId}>
-                <SelectTrigger><SelectValue placeholder="Select a contact" /></SelectTrigger>
-                <SelectContent>
-                  {demoContacts.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input placeholder="Contact name" value={newContactName} onChange={(e) => setNewContactName(e.target.value)} />
+            <Popover open={contactOpen} onOpenChange={setContactOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={contactOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  {contactId
+                    ? demoContacts.find((c) => c.id === contactId)?.name
+                    : "Search contacts..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
+                  <CommandList>
+                    <CommandEmpty>
+                      <button
+                        type="button"
+                        className="w-full text-left px-2 py-1.5 text-sm text-primary hover:underline"
+                        onClick={() => {
+                          setContactMode("new");
+                          setNewContactName(contactSearch);
+                          setContactId("");
+                          setContactOpen(false);
+                        }}
+                      >
+                        + Create "{contactSearch}"
+                      </button>
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {demoContacts.map((c) => (
+                        <CommandItem
+                          key={c.id}
+                          value={c.name}
+                          onSelect={() => {
+                            setContactId(c.id);
+                            setContactMode("select");
+                            setNewContactName("");
+                            setContactOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", contactId === c.id ? "opacity-100" : "opacity-0")} />
+                          {c.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            {contactMode === "new" && (
+              <div className="flex items-center gap-2 animate-fade-in">
+                <Input
+                  placeholder="New contact name"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setContactMode("select");
+                    setNewContactName("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
             )}
           </div>
 
