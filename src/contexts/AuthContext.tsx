@@ -59,14 +59,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: { email, password, environment: AUTH_ENVIRONMENT },
     });
 
-    if (error) throw new Error(error.message || "Login failed");
+    // Extract a clean error message from either the SDK error or the response body
+    if (error) {
+      // The SDK wraps the response body in the error message, try to parse the actual error
+      const bodyError = data?.error || data?.message;
+      if (bodyError) throw new Error(bodyError);
+      throw new Error("Login failed");
+    }
     if (data?.error) throw new Error(data.message || data.error);
 
     if (data.requires_2fa) {
       return { requires2FA: true, challengeToken: data.challenge_token };
     }
 
-    throw new Error("Two-factor authentication is required but was not triggered.");
+    throw new Error("Two-factor authentication is not enabled for this account.");
   }, []);
 
   const verify2FA = useCallback(async (code: string, challengeToken: string) => {
@@ -74,7 +80,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: { action: "verify-2fa", challenge_token: challengeToken, totp_code: code },
     });
 
-    if (error) throw new Error(error.message || "Verification failed");
+    if (error) {
+      const bodyError = data?.error || data?.message;
+      if (bodyError) throw new Error(bodyError);
+      throw new Error("Verification failed");
+    }
     if (data?.error) throw new Error(data.message || data.error);
     if (!data.success || !data.user) throw new Error("Verification failed");
 
