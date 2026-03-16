@@ -1,25 +1,39 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Send, Plus, Trash2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-type DescriptionMode = "structured" | "freetext";
+interface TemplateField {
+  id: string;
+  name: string;
+  label: string;
+  type: "text" | "number" | "date" | "select";
+  required: boolean;
+  placeholder: string;
+  options: string[];
+}
+
+interface Template {
+  id: string;
+  name: string;
+  fields: TemplateField[];
+  format_string: string;
+  requires_approval: boolean;
+}
+
+const FREETEXT_ID = "__freetext__";
 
 interface LineItem {
   id: string;
-  descMode: DescriptionMode;
-  studentName: string;
-  age: string;
-  packageName: string;
-  firstLesson: string;
+  templateId: string; // template id or FREETEXT_ID
+  fieldValues: Record<string, string>; // keyed by field name
   freeDescription: string;
   quantity: string;
   cost: string;
@@ -27,13 +41,10 @@ interface LineItem {
   center: string;
 }
 
-const createLineItem = (): LineItem => ({
+const createLineItem = (defaultTemplateId: string): LineItem => ({
   id: crypto.randomUUID(),
-  descMode: "structured",
-  studentName: "",
-  age: "",
-  packageName: "",
-  firstLesson: "",
+  templateId: defaultTemplateId,
+  fieldValues: {},
   freeDescription: "",
   quantity: "",
   cost: "",
@@ -59,27 +70,30 @@ const demoCenters = [
   { id: "c3", name: "JB Center" },
 ];
 
-function getGeneratedDescription(item: LineItem): string {
-  if (item.descMode === "structured") {
-    return [
-      item.studentName,
-      item.age ? `${item.age} (${new Date(Date.now() + 8 * 60 * 60 * 1000).getUTCFullYear()})` : "",
-      item.packageName,
-      item.firstLesson ? `First Lesson: ${item.firstLesson}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+function getGeneratedDescription(item: LineItem, templates: Template[]): string {
+  if (item.templateId === FREETEXT_ID) {
+    return item.freeDescription;
   }
-  return item.freeDescription;
+  const template = templates.find((t) => t.id === item.templateId);
+  if (!template) return item.freeDescription;
+
+  let output = template.format_string;
+  template.fields.forEach((f) => {
+    const val = item.fieldValues[f.name] || "";
+    output = output.split(`{{${f.name}}}`).join(val);
+  });
+  return output;
 }
 
-function isLineItemValid(item: LineItem): boolean {
-  const desc = getGeneratedDescription(item).trim();
+function isLineItemValid(item: LineItem, templates: Template[]): boolean {
+  const desc = getGeneratedDescription(item, templates).trim();
   return !!desc && !!item.quantity && !!item.cost && !!item.account && !!item.center;
 }
 
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId } = useAuth();
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
@@ -92,8 +106,42 @@ const CreateInvoicePage: React.FC = () => {
     return `${d}/${m}/${y}`;
   });
 
-  const [lineItems, setLineItems] = useState<LineItem[]>([createLineItem()]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      setLoadingTemplates(true);
+      const { data, error } = await supabase
+        .from("invoice_templates")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        toast.error("Failed to load templates");
+        setTemplates([]);
+      } else {
+        const parsed = (data || []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          fields: (typeof t.fields === "string" ? JSON.parse(t.fields) : t.fields) as TemplateField[],
+          format_string: t.format_string,
+          requires_approval: t.requires_approval,
+        }));
+        setTemplates(parsed);
+      }
+      setLoadingTemplates(false);
+    };
+    fetchTemplates();
+  }, []);
+
+  // Initialize line items once templates load
+  useEffect(() => {
+    if (!loadingTemplates && lineItems.length === 0) {
+      const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+      setLineItems([createLineItem(defaultId)]);
+    }
+  }, [loadingTemplates]);
 
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
@@ -106,15 +154,16 @@ const CreateInvoicePage: React.FC = () => {
   }, []);
 
   const addLineItem = useCallback(() => {
-    setLineItems((prev) => [...prev, createLineItem()]);
-  }, []);
+    const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+    setLineItems((prev) => [...prev, createLineItem(defaultId)]);
+  }, [templates]);
 
   const contactName = contactMode === "select"
     ? demoContacts.find((c) => c.id === contactId)?.name || ""
     : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
-  const allValid = contactValid && lineItems.every(isLineItemValid);
+  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates));
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -137,16 +186,21 @@ const CreateInvoicePage: React.FC = () => {
 
       const userFlagged = userFlag?.requires_approval === true;
 
-      // Build line items payload
+      // Check if any selected template is flagged
+      const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
+      const templateFlagged = templates.some(
+        (t) => selectedTemplateIds.includes(t.id) && t.requires_approval
+      );
+
+      const needsApproval = userFlagged || templateFlagged;
+
       const lineItemsPayload = lineItems.map((item) => ({
-        description: getGeneratedDescription(item),
+        description: getGeneratedDescription(item, templates),
         quantity: Number(item.quantity),
         cost: Number(item.cost),
         account: item.account,
         center: item.center,
       }));
-
-      const needsApproval = userFlagged;
 
       const invoicePayload = {
         contact_name: contactName,
@@ -157,6 +211,7 @@ const CreateInvoicePage: React.FC = () => {
         submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
         requires_approval: needsApproval,
         status: needsApproval ? "pending_approval" : "submitted",
+        template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
       };
 
       const { error } = await supabase.from("invoices").insert(invoicePayload as any);
@@ -172,16 +227,26 @@ const CreateInvoicePage: React.FC = () => {
         toast.success("Invoice submitted successfully");
       }
 
-      // Reset form
+      const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setContactId("");
       setNewContactName("");
-      setLineItems([createLineItem()]);
+      setLineItems([createLineItem(defaultId)]);
     } catch (err) {
       toast.error("Something went wrong");
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (loadingTemplates) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -230,6 +295,7 @@ const CreateInvoicePage: React.FC = () => {
               item={item}
               index={index}
               canRemove={lineItems.length > 1}
+              templates={templates}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
             />
@@ -268,20 +334,18 @@ interface LineItemCardProps {
   item: LineItem;
   index: number;
   canRemove: boolean;
+  templates: Template[];
   onUpdate: (id: string, updates: Partial<LineItem>) => void;
   onRemove: (id: string) => void;
 }
 
-const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, onUpdate, onRemove }) => {
+const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, onUpdate, onRemove }) => {
   const update = (updates: Partial<LineItem>) => onUpdate(item.id, updates);
-  const desc = getGeneratedDescription(item);
+  const selectedTemplate = templates.find((t) => t.id === item.templateId);
+  const desc = getGeneratedDescription(item, templates);
 
-  const setDescMode = (mode: DescriptionMode) => {
-    if (mode === "structured") {
-      update({ descMode: mode, freeDescription: "" });
-    } else {
-      update({ descMode: mode, studentName: "", age: "", packageName: "", firstLesson: "" });
-    }
+  const handleTemplateChange = (templateId: string) => {
+    update({ templateId, fieldValues: {}, freeDescription: "" });
   };
 
   return (
@@ -297,61 +361,22 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, onU
         )}
       </div>
 
-      {/* Description mode toggle */}
+      {/* Template selector */}
       <div>
-        <Label className="text-xs text-muted-foreground mb-2 block">Description</Label>
-        <div className="flex rounded-lg border border-border overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setDescMode("structured")}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              item.descMode === "structured"
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            Structured (Option A)
-          </button>
-          <button
-            type="button"
-            onClick={() => setDescMode("freetext")}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              item.descMode === "freetext"
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            Free Text (Option B)
-          </button>
-        </div>
+        <Label className="text-xs text-muted-foreground mb-2 block">Template</Label>
+        <Select value={item.templateId} onValueChange={handleTemplateChange}>
+          <SelectTrigger><SelectValue placeholder="Select a template" /></SelectTrigger>
+          <SelectContent>
+            {templates.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
+            <SelectItem value={FREETEXT_ID}>Free Text</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {item.descMode === "structured" ? (
-        <div className="space-y-3 animate-fade-in">
-          <div>
-            <Label className="text-xs text-muted-foreground">Student Name</Label>
-            <Input value={item.studentName} onChange={(e) => update({ studentName: e.target.value })} placeholder="e.g. Lee Rou Xuan" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Age</Label>
-            <Input type="number" min="0" value={item.age} onChange={(e) => update({ age: e.target.value })} placeholder="e.g. 15" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Package Name</Label>
-            <Input value={item.packageName} onChange={(e) => update({ packageName: e.target.value })} placeholder="e.g. Grand Opening Term Package (RM 2,000)" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">First Lesson</Label>
-            <Input value={item.firstLesson} onChange={(e) => update({ firstLesson: e.target.value })} placeholder="e.g. Last week of March" />
-          </div>
-          {desc.trim() && (
-            <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
-              <p className="text-xs text-muted-foreground mb-1 font-medium">Preview:</p>
-              <pre className="text-sm text-foreground whitespace-pre-wrap font-body">{desc}</pre>
-            </div>
-          )}
-        </div>
-      ) : (
+      {/* Template fields or free text */}
+      {item.templateId === FREETEXT_ID ? (
         <div className="animate-fade-in">
           <Textarea
             value={item.freeDescription}
@@ -360,7 +385,46 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, onU
             rows={5}
           />
         </div>
-      )}
+      ) : selectedTemplate ? (
+        <div className="space-y-3 animate-fade-in">
+          {selectedTemplate.fields.map((field) => (
+            <div key={field.id}>
+              <Label className="text-xs text-muted-foreground">
+                {field.label}
+                {field.required && <span className="text-destructive ml-0.5">*</span>}
+              </Label>
+              {field.type === "select" ? (
+                <Select
+                  value={item.fieldValues[field.name] || ""}
+                  onValueChange={(v) => update({ fieldValues: { ...item.fieldValues, [field.name]: v } })}
+                >
+                  <SelectTrigger><SelectValue placeholder={field.placeholder || `Select ${field.label}`} /></SelectTrigger>
+                  <SelectContent>
+                    {field.options.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                  value={item.fieldValues[field.name] || ""}
+                  onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
+                  placeholder={field.placeholder}
+                />
+              )}
+            </div>
+          ))}
+
+          {/* Preview */}
+          {desc.trim() && (
+            <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
+              <p className="text-xs text-muted-foreground mb-1 font-medium">Preview:</p>
+              <pre className="text-sm text-foreground whitespace-pre-wrap font-body">{desc}</pre>
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* Quantity, Cost, Account, Center */}
       <div className="grid grid-cols-2 gap-4">
