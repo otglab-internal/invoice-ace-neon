@@ -215,7 +215,29 @@ const TemplatesPage: React.FC = () => {
               />
             </Card>
 
-            {/* Fields Builder */}
+            {/* Template Type */}
+            <Card className="p-5 space-y-3">
+              <Label className="text-sm font-semibold font-display text-foreground">Template Type</Label>
+              <div className="grid gap-2">
+                {TEMPLATE_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setTemplateType(t.value)}
+                    className={`text-left p-3 rounded-lg border transition-colors ${
+                      templateType === t.value
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/30"
+                    }`}
+                  >
+                    <span className="text-sm font-medium text-foreground">{t.label}</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>
+                  </button>
+                ))}
+              </div>
+            </Card>
+
+
             <Card className="p-5 space-y-4">
               <h2 className="text-sm font-semibold font-display text-foreground">Fields</h2>
               <p className="text-xs text-muted-foreground">
