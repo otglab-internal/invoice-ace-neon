@@ -10,13 +10,16 @@ export interface AuthUser {
   expiryDate: string;
 }
 
+// Change this value to switch between "production" and "sandbox"
+const AUTH_ENVIRONMENT = "production";
+
 interface AuthContextType {
   user: AuthUser | null;
   environment: string | null;
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
+  login: (email: string, password: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
 }
@@ -51,9 +54,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string, env: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { email, password, environment: env },
+      body: { email, password, environment: AUTH_ENVIRONMENT },
     });
 
     if (error) throw new Error(error.message || "Login failed");

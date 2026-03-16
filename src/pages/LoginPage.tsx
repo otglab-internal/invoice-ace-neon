@@ -3,22 +3,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Mail, ShieldCheck, Loader2, Key } from "lucide-react";
+import { Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const LoginPage: React.FC = () => {
   const { login, verify2FA } = useAuth();
   const [step, setStep] = useState<"credentials" | "2fa">("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [apiEnvironment, setApiEnvironment] = useState<"production" | "sandbox">("production");
   const [otpCode, setOtpCode] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
   const [error, setError] = useState("");
@@ -29,7 +21,7 @@ const LoginPage: React.FC = () => {
     setError("");
     setLoading(true);
     try {
-      const result = await login(email, password, apiEnvironment);
+      const result = await login(email, password);
       if (result.requires2FA) {
         setChallengeToken(result.challengeToken || "");
         setStep("2fa");
@@ -96,21 +88,6 @@ const LoginPage: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                   />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="environment" className="text-sm font-medium">Environment</Label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
-                  <Select value={apiEnvironment} onValueChange={(v) => setApiEnvironment(v as "production" | "sandbox")}>
-                    <SelectTrigger className="pl-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="production">Production</SelectItem>
-                      <SelectItem value="sandbox">Sandbox</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
