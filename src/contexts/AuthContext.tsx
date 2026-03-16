@@ -19,6 +19,7 @@ interface AuthContextType {
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
@@ -114,8 +115,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_system_id");
   }, []);
 
+  const isAdmin = !!user && (user.role === "admin" || user.role === "accountant");
+
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );
