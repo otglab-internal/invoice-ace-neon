@@ -27,7 +27,8 @@ const LoginPage: React.FC = () => {
         setStep("2fa");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "";
+      setError(friendlyError(msg));
     } finally {
       setLoading(false);
     }
