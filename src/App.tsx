@@ -9,6 +9,7 @@ import DashboardPage from "@/pages/DashboardPage";
 import CreateInvoicePage from "@/pages/CreateInvoicePage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import TemplatesPage from "@/pages/TemplatesPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
