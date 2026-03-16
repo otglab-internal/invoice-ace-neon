@@ -10,13 +10,16 @@ export interface AuthUser {
   expiryDate: string;
 }
 
+// Change this value to switch between "production" and "sandbox"
+const AUTH_ENVIRONMENT = "production";
+
 interface AuthContextType {
   user: AuthUser | null;
   environment: string | null;
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
+  login: (email: string, password: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
 }
