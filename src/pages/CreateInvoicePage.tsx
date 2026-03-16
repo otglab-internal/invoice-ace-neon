@@ -214,8 +214,8 @@ const CreateInvoicePage: React.FC = () => {
                   <Input value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="e.g. Lee Rou Xuan" />
                 </div>
                 <div>
-                  <Label className="text-xs text-muted-foreground">Age (Year)</Label>
-                  <Input value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 15" />
+                  <Label className="text-xs text-muted-foreground">Age</Label>
+                  <Input type="number" min="0" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 15" />
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Package Name</Label>
