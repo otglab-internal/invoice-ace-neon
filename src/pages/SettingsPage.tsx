@@ -55,7 +55,7 @@ const SettingsPage: React.FC = () => {
     const newVal = !flag.requires_approval;
     const { error } = await supabase
       .from("user_approval_flags")
-      .update({ requires_approval: newVal, updated_at: new Date().toISOString() } as any)
+      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
       .eq("id", flag.id);
     if (error) {
       toast.error("Failed to update user flag");
