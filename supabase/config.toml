@@ -1,1 +1,7 @@
 project_id = "gixcedwingxsukkzlifj"
+
+[functions.auth]
+verify_jwt = false
+
+[functions.invoices]
+verify_jwt = false

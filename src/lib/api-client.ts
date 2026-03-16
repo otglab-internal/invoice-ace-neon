@@ -1,27 +1,53 @@
-const API_BASE = "";
+import { supabase } from "@/integrations/supabase/client";
+
 
 const getEnvironment = (): string => {
   return import.meta.env.MODE === "production" ? "production" : "development";
 };
 
 export const apiClient = {
-  async post<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+  /**
+   * Call an edge function with action-routing pattern.
+   * Automatically injects Authorization + X-Environment headers.
+   */
+  async invoke<T = unknown>(
+    functionName: string,
+    action: string,
+    body: Record<string, unknown> = {}
+  ): Promise<T> {
     const token = localStorage.getItem("auth_token");
-    const response = await fetch(`${API_BASE}/api/${action}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        "X-Environment": getEnvironment(),
-      },
-      body: JSON.stringify(body),
+
+    const headers: Record<string, string> = {
+      "X-Environment": getEnvironment(),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const { data, error } = await supabase.functions.invoke(functionName, {
+      body: { action, ...body },
+      headers,
     });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: "Request failed" }));
+    if (error) {
       throw new Error(error.message || "Request failed");
     }
 
-    return response.json();
+    // Handle edge function returning error in body
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    return data as T;
+  },
+
+  /** Shorthand for auth edge function */
+  auth<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+    return apiClient.invoke<T>("auth", action, body);
+  },
+
+  /** Shorthand for invoices edge function */
+  invoices<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+    return apiClient.invoke<T>("invoices", action, body);
   },
 };
