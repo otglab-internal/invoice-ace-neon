@@ -6,6 +6,28 @@ import { Label } from "@/components/ui/label";
 import { Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
+const friendlyError = (msg: string): string => {
+  const lower = msg.toLowerCase();
+  if (lower.includes("invalid") || lower.includes("credentials") || lower.includes("incorrect"))
+    return "Incorrect email or password. Please try again.";
+  if (lower.includes("not found") || lower.includes("no user"))
+    return "No account found with that email address.";
+  if (lower.includes("expired"))
+    return "Your session has expired. Please sign in again.";
+  if (lower.includes("too many") || lower.includes("rate"))
+    return "Too many attempts. Please wait a moment and try again.";
+  if (lower.includes("network") || lower.includes("fetch"))
+    return "Unable to connect. Please check your internet connection.";
+  if (lower.includes("api key"))
+    return "Service temporarily unavailable. Please try again later.";
+  if (lower.includes("two-factor") || lower.includes("2fa"))
+    return "Two-factor authentication error. Please try again.";
+  if (lower.includes("verification failed") || lower.includes("invalid code") || lower.includes("totp"))
+    return "Invalid verification code. Please check and try again.";
+  if (msg) return msg;
+  return "Something went wrong. Please try again.";
+};
+
 const LoginPage: React.FC = () => {
   const { login, verify2FA } = useAuth();
   const [step, setStep] = useState<"credentials" | "2fa">("credentials");
@@ -27,7 +49,8 @@ const LoginPage: React.FC = () => {
         setStep("2fa");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "";
+      setError(friendlyError(msg));
     } finally {
       setLoading(false);
     }
@@ -40,7 +63,8 @@ const LoginPage: React.FC = () => {
     try {
       await verify2FA(otpCode, challengeToken);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed");
+      const msg = err instanceof Error ? err.message : "";
+      setError(friendlyError(msg));
     } finally {
       setLoading(false);
     }
@@ -128,9 +152,6 @@ const LoginPage: React.FC = () => {
           )}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Protected by NeonDB &middot; Xero Integration
-        </p>
       </div>
     </div>
   );
