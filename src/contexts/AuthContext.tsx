@@ -11,7 +11,7 @@ export interface AuthUser {
 }
 
 // Change this value to switch between "production" and "sandbox"
-const AUTH_ENVIRONMENT = "production";
+const AUTH_ENVIRONMENT = "sandbox";
 
 interface AuthContextType {
   user: AuthUser | null;
