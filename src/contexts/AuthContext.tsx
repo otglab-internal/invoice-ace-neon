@@ -54,9 +54,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string, env: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { email, password, environment: env },
+      body: { email, password, environment: AUTH_ENVIRONMENT },
     });
 
     if (error) throw new Error(error.message || "Login failed");
