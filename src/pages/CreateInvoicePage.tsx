@@ -97,6 +97,8 @@ const CreateInvoicePage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
