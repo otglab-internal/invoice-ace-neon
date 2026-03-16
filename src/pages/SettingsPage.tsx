@@ -104,7 +104,7 @@ const SettingsPage: React.FC = () => {
     const newVal = !template.requires_approval;
     const { error } = await supabase
       .from("invoice_templates")
-      .update({ requires_approval: newVal, updated_at: new Date().toISOString() } as any)
+      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
       .eq("id", template.id);
     if (error) {
       toast.error("Failed to update template flag");

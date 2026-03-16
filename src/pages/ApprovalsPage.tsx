@@ -88,7 +88,7 @@ const ApprovalsPage: React.FC = () => {
         status: "rejected",
         approval_note: adjustmentNote || null,
         approved_by: systemId || "",
-        approved_at: new Date().toISOString(),
+        approved_at: nowGMT8(),
       } as any)
       .eq("id", id);
 

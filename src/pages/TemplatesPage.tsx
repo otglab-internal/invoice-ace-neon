@@ -453,7 +453,7 @@ const TemplatesPage: React.FC = () => {
                   <h3 className="text-sm font-semibold text-foreground">{t.name}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {t.fields.length} field{t.fields.length !== 1 ? "s" : ""} · Created{" "}
-                    {new Date(t.created_at).toLocaleDateString()}
+                    {new Date(t.created_at).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
