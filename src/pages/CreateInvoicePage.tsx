@@ -83,7 +83,7 @@ const CreateInvoicePage: React.FC = () => {
     descMode === "structured"
       ? [
           studentName,
-          age ? `${age} (${new Date().getFullYear()})` : "",
+          age ? `${age} (${new Date(Date.now() + 8 * 60 * 60 * 1000).getUTCFullYear()})` : "",
           packageName,
           firstLesson ? `First Lesson: ${firstLesson}` : "",
         ]
