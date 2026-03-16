@@ -118,7 +118,7 @@ const TemplatesPage: React.FC = () => {
     let output = formatString;
     fields.forEach((f) => {
       const val = previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
-      output = output.replaceAll(`{{${f.name}}}`, val);
+      output = output.split(`{{${f.name}}}`).join(val);
     });
     return output;
   };
