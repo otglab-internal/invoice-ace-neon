@@ -24,21 +24,12 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const apiKeyMap: Record<string, string> = {
-    production: import.meta.env.VITE_AUTH_API_KEY_PROD || "",
-    sandbox: import.meta.env.VITE_AUTH_API_KEY_SANDBOX || "",
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const apiKey = apiKeyMap[apiEnvironment];
-      if (!apiKey) {
-        throw new Error("API key not configured for this environment");
-      }
-      const result = await login(email, password, apiKey);
+      const result = await login(email, password, apiEnvironment);
       if (result.requires2FA) {
         setChallengeToken(result.challengeToken || "");
         setStep("2fa");
