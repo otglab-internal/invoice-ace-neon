@@ -4,10 +4,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText } from "lucide-react";
 
 const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/create-invoice", label: "Create Invoice", icon: FilePlus },
-  { to: "/approvals", label: "Approvals", icon: CheckSquare },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
+  { to: "/create-invoice", label: "Create Invoice", icon: FilePlus, adminOnly: false },
+  { to: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
+  { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 const AppSidebar: React.FC = () => {
