@@ -31,7 +31,7 @@ const AppSidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
