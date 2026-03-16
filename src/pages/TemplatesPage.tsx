@@ -158,7 +158,7 @@ const TemplatesPage: React.FC = () => {
     if (editingId) {
       ({ error } = await supabase
         .from("invoice_templates")
-        .update({ ...payload, updated_at: new Date().toISOString() } as any)
+        .update({ ...payload, updated_at: nowGMT8() } as any)
         .eq("id", editingId));
     } else {
       ({ error } = await supabase.from("invoice_templates").insert(payload as any));
