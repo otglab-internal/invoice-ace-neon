@@ -10,9 +10,6 @@ export interface AuthUser {
   expiryDate: string;
 }
 
-// Change this value to switch between "production" and "sandbox"
-const AUTH_ENVIRONMENT = "sandbox";
-
 interface AuthContextType {
   user: AuthUser | null;
   environment: string | null;
@@ -20,7 +17,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isAdmin: boolean;
-  login: (email: string, password: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
+  login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
 }
@@ -55,9 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const [pendingEnvironment, setPendingEnvironment] = useState<string>("production");
+
+  const login = useCallback(async (email: string, password: string, env: string) => {
+    setPendingEnvironment(env);
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { email, password, environment: AUTH_ENVIRONMENT },
+      body: { email, password, environment: env },
     });
 
     // Extract a clean error message from either the SDK error or the response body
