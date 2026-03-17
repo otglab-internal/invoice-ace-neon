@@ -52,9 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const [pendingEnvironment, setPendingEnvironment] = useState<string>("production");
+
+  const login = useCallback(async (email: string, password: string, env: string) => {
+    setPendingEnvironment(env);
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { email, password, environment: AUTH_ENVIRONMENT },
+      body: { email, password, environment: env },
     });
 
     // Extract a clean error message from either the SDK error or the response body
