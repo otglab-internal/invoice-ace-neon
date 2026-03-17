@@ -83,7 +83,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => 
             <ShieldCheck className="w-7 h-7 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold font-display text-foreground">Invoice Center</h1>
-          <p className="text-muted-foreground text-sm mt-1">Secure access to your invoicing platform</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {isSandbox ? "Sandbox Environment Login" : "Secure access to your invoicing platform"}
+          </p>
+          {isSandbox && (
+            <span className="inline-block mt-2 px-2 py-0.5 rounded bg-accent text-accent-foreground text-xs font-semibold tracking-wide uppercase">
+              Sandbox
+            </span>
+          )}
         </div>
 
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
