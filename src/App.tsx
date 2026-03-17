@@ -10,6 +10,7 @@ import CreateInvoicePage from "@/pages/CreateInvoicePage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import TemplatesPage from "@/pages/TemplatesPage";
+import GlobalConfigPage from "@/pages/GlobalConfigPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
             <Route path="/approvals" element={<AdminRoute><ApprovalsPage /></AdminRoute>} />
             <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+            <Route path="/global-config" element={<AdminRoute><GlobalConfigPage /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
