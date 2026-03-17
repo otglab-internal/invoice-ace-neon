@@ -51,6 +51,7 @@ const App = () => (
             <Route path="/templates" element={<ProtectedRoute><TemplatesPage /></ProtectedRoute>} />
             <Route path="/approvals" element={<AdminRoute><ApprovalsPage /></AdminRoute>} />
             <Route path="/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+            <Route path="/global-config" element={<AdminRoute><GlobalConfigPage /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
