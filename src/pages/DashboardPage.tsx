@@ -1,35 +1,67 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { FileText, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
-const stats = [
-  { label: "Total Invoices", value: "124", icon: FileText, color: "text-primary" },
-  { label: "Pending Approval", value: "8", icon: Clock, color: "text-warning" },
-  { label: "Pushed to Xero", value: "112", icon: CheckCircle, color: "text-success" },
-  { label: "Failed", value: "4", icon: AlertTriangle, color: "text-destructive" },
-];
-
-const recentInvoices = [
-  { id: "INV-001", contact: "Lee Music Academy", amount: "RM 2,000", status: "automated", date: "2026-03-15" },
-  { id: "INV-002", contact: "Tan Piano Studio", amount: "RM 1,500", status: "manual", date: "2026-03-14" },
-  { id: "INV-003", contact: "Wong Violin Lessons", amount: "RM 800", status: "automated", date: "2026-03-13" },
-  { id: "INV-004", contact: "Lim Guitar School", amount: "RM 3,200", status: "failed", date: "2026-03-12" },
-  { id: "INV-005", contact: "Chen Music Hub", amount: "RM 1,800", status: "pending", date: "2026-03-11" },
-];
+interface Invoice {
+  id: string;
+  contact_name: string;
+  total: number;
+  status: string;
+  created_at: string;
+  invoice_number: string | null;
+}
 
 const statusPill = (status: string) => {
   const map: Record<string, string> = {
-    automated: "pill-automated",
-    manual: "pill-manual",
+    submitted: "pill-automated",
+    approved: "pill-automated",
+    pushed: "pill-automated",
+    pending_approval: "pill-pending",
+    rejected: "pill-failed",
     failed: "pill-failed",
-    pending: "pill-pending",
   };
-  return <span className={map[status] || "pill-pending"}>{status}</span>;
+  return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
 };
+
+const formatCurrency = (amount: number) =>
+  `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id, contact_name, total, status, created_at, invoice_number")
+        .order("created_at", { ascending: false });
+
+      if (!error && data) setInvoices(data);
+      setLoading(false);
+    };
+    fetchInvoices();
+  }, []);
+
+  const totalCount = invoices.length;
+  const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;
+  const pushedCount = invoices.filter((i) => ["submitted", "approved", "pushed"].includes(i.status)).length;
+  const failedCount = invoices.filter((i) => ["failed", "rejected"].includes(i.status)).length;
+
+  const stats = [
+    { label: "Total Invoices", value: String(totalCount), icon: FileText, color: "text-primary" },
+    { label: "Pending Approval", value: String(pendingCount), icon: Clock, color: "text-warning" },
+    { label: "Pushed to Xero", value: String(pushedCount), icon: CheckCircle, color: "text-success" },
+    { label: "Failed", value: String(failedCount), icon: AlertTriangle, color: "text-destructive" },
+  ];
+
+  const recentInvoices = invoices.slice(0, 10);
 
   return (
     <AppLayout>
@@ -47,7 +79,9 @@ const DashboardPage: React.FC = () => {
               <div className="flex items-center justify-between mb-3">
                 <s.icon className={`w-5 h-5 ${s.color}`} />
               </div>
-              <p className="text-2xl font-bold font-display text-foreground">{s.value}</p>
+              <p className="text-2xl font-bold font-display text-foreground">
+                {loading ? "–" : s.value}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
             </div>
           ))}
@@ -58,19 +92,29 @@ const DashboardPage: React.FC = () => {
             <h2 className="text-sm font-semibold font-display text-foreground">Recent Invoices</h2>
           </div>
           <div className="divide-y divide-border">
-            {recentInvoices.map((inv) => (
-              <div key={inv.id} className="px-5 py-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-foreground w-20">{inv.id}</span>
-                  <span className="text-sm text-foreground">{inv.contact}</span>
+            {loading ? (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</div>
+            ) : recentInvoices.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-muted-foreground">No invoices yet</div>
+            ) : (
+              recentInvoices.map((inv) => (
+                <div key={inv.id} className="px-5 py-3.5 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-foreground w-20">
+                      {inv.invoice_number || "—"}
+                    </span>
+                    <span className="text-sm text-foreground">{inv.contact_name}</span>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
+                    <span className="text-sm font-medium text-foreground w-24 text-right">
+                      {formatCurrency(inv.total)}
+                    </span>
+                    {statusPill(inv.status)}
+                  </div>
                 </div>
-                <div className="flex items-center gap-6">
-                  <span className="text-sm text-muted-foreground">{inv.date}</span>
-                  <span className="text-sm font-medium text-foreground w-24 text-right">{inv.amount}</span>
-                  {statusPill(inv.status)}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
