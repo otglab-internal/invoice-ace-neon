@@ -28,7 +28,11 @@ const friendlyError = (msg: string): string => {
   return "Something went wrong. Please try again.";
 };
 
-const LoginPage: React.FC = () => {
+interface LoginPageProps {
+  environment?: string;
+}
+
+const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => {
   const { login, verify2FA } = useAuth();
   const [step, setStep] = useState<"credentials" | "2fa">("credentials");
   const [email, setEmail] = useState("");
@@ -37,13 +41,14 @@ const LoginPage: React.FC = () => {
   const [challengeToken, setChallengeToken] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const isSandbox = environment === "sandbox";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const result = await login(email, password);
+      const result = await login(email, password, environment);
       if (result.requires2FA) {
         setChallengeToken(result.challengeToken || "");
         setStep("2fa");
