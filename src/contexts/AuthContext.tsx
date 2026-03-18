@@ -115,7 +115,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_system_id");
   }, []);
 
-  const isAdmin = !!user && (user.role === "admin" || user.role === "accountant");
+  const normalizedRole = user?.role?.toLowerCase() ?? "";
+  const isAdmin = !!user && (normalizedRole === "admin" || normalizedRole === "accountant");
 
   return (
     <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, isAdmin, login, verify2FA, logout }}>
