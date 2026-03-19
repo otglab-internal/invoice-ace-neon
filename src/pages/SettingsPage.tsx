@@ -4,12 +4,14 @@ import AppLayout from "@/components/AppLayout";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ShieldAlert, ShieldCheck, Plus, Trash2, Search } from "lucide-react";
+import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface UserFlag {
   id: string;
@@ -24,6 +26,11 @@ interface TemplateFlag {
   requires_approval: boolean;
 }
 
+interface StaffOption {
+  system_id: string;
+  user_name: string;
+}
+
 const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [autoMode, setAutoMode] = useState(true);
@@ -32,9 +39,12 @@ const SettingsPage: React.FC = () => {
   // Approval flags
   const [userFlags, setUserFlags] = useState<UserFlag[]>([]);
   const [templates, setTemplates] = useState<TemplateFlag[]>([]);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [loadingFlags, setLoadingFlags] = useState(true);
-  const [newSystemId, setNewSystemId] = useState("");
-  const [newUserName, setNewUserName] = useState("");
+
+  // Combobox state
+  const [userComboOpen, setUserComboOpen] = useState(false);
+  const [templateComboOpen, setTemplateComboOpen] = useState(false);
 
   useEffect(() => {
     fetchFlags();
@@ -42,77 +52,92 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes] = await Promise.all([
       supabase.from("user_approval_flags").select("*").order("user_name"),
       supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
+      supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
+    if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
     setLoadingFlags(false);
   };
 
-  const toggleUserFlag = async (flag: UserFlag) => {
-    const newVal = !flag.requires_approval;
-    const { error } = await supabase
-      .from("user_approval_flags")
-      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
-      .eq("id", flag.id);
-    if (error) {
-      toast.error("Failed to update user flag");
-    } else {
-      setUserFlags((prev) => prev.map((f) => (f.id === flag.id ? { ...f, requires_approval: newVal } : f)));
-      toast.success(`${flag.user_name || flag.system_id} ${newVal ? "flagged for approval" : "unflagged"}`);
-    }
-  };
+  // --- User flags ---
+  const flaggedUserIds = new Set(userFlags.filter((f) => f.requires_approval).map((f) => f.system_id));
 
-  const addUserFlag = async () => {
-    if (!newSystemId.trim()) {
-      toast.error("Enter a system ID");
-      return;
-    }
-    const { error } = await supabase.from("user_approval_flags").insert({
-      system_id: newSystemId.trim(),
-      user_name: newUserName.trim(),
-      requires_approval: true,
-      flagged_by: systemId || "",
-    } as any);
-    if (error) {
-      if (error.code === "23505") {
-        toast.error("User already exists in the list");
+  const addUserFlag = async (staff: StaffOption) => {
+    // Check if already exists in user_approval_flags
+    const existing = userFlags.find((f) => f.system_id === staff.system_id);
+    if (existing) {
+      // Just toggle it on
+      const { error } = await supabase
+        .from("user_approval_flags")
+        .update({ requires_approval: true, updated_at: nowGMT8() } as any)
+        .eq("id", existing.id);
+      if (error) {
+        toast.error("Failed to flag user");
       } else {
-        toast.error("Failed to add user");
+        setUserFlags((prev) =>
+          prev.map((f) => (f.id === existing.id ? { ...f, requires_approval: true } : f))
+        );
+        toast.success(`${staff.user_name} flagged for approval`);
       }
     } else {
-      toast.success("User added and flagged for approval");
-      setNewSystemId("");
-      setNewUserName("");
-      fetchFlags();
+      const { error } = await supabase.from("user_approval_flags").insert({
+        system_id: staff.system_id,
+        user_name: staff.user_name,
+        requires_approval: true,
+        flagged_by: systemId || "",
+      } as any);
+      if (error) {
+        toast.error("Failed to flag user");
+      } else {
+        toast.success(`${staff.user_name} flagged for approval`);
+        fetchFlags();
+      }
     }
+    setUserComboOpen(false);
   };
 
   const removeUserFlag = async (flag: UserFlag) => {
-    const { error } = await supabase.from("user_approval_flags").delete().eq("id", flag.id);
+    const { error } = await supabase
+      .from("user_approval_flags")
+      .update({ requires_approval: false, updated_at: nowGMT8() } as any)
+      .eq("id", flag.id);
     if (error) {
-      toast.error("Failed to remove user");
+      toast.error("Failed to unflag user");
     } else {
-      setUserFlags((prev) => prev.filter((f) => f.id !== flag.id));
-      toast.success("User removed from approval list");
+      setUserFlags((prev) =>
+        prev.map((f) => (f.id === flag.id ? { ...f, requires_approval: false } : f))
+      );
+      toast.success(`${flag.user_name || flag.system_id} unflagged`);
     }
   };
 
-  const toggleTemplateFlag = async (template: TemplateFlag) => {
-    const newVal = !template.requires_approval;
+  // --- Template flags ---
+  const flaggedTemplateIds = new Set(templates.filter((t) => t.requires_approval).map((t) => t.id));
+
+  const toggleTemplateFlag = async (template: TemplateFlag, flag: boolean) => {
     const { error } = await supabase
       .from("invoice_templates")
-      .update({ requires_approval: newVal, updated_at: nowGMT8() } as any)
+      .update({ requires_approval: flag, updated_at: nowGMT8() } as any)
       .eq("id", template.id);
     if (error) {
       toast.error("Failed to update template flag");
     } else {
-      setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, requires_approval: newVal } : t)));
-      toast.success(`Template "${template.name}" ${newVal ? "flagged for approval" : "unflagged"}`);
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === template.id ? { ...t, requires_approval: flag } : t))
+      );
+      toast.success(`"${template.name}" ${flag ? "flagged" : "unflagged"}`);
     }
+    setTemplateComboOpen(false);
   };
+
+  const unflaggedStaff = staffOptions.filter((s) => !flaggedUserIds.has(s.system_id));
+  const flaggedUsers = userFlags.filter((f) => f.requires_approval);
+  const unflaggedTemplates = templates.filter((t) => !t.requires_approval);
+  const flaggedTemplates = templates.filter((t) => t.requires_approval);
 
   const handleSave = async () => {
     setSaving(true);
@@ -161,113 +186,150 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* User Approval Flags */}
+          {/* User Approval Tags */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-primary" />
-              <h2 className="text-sm font-semibold font-display text-foreground">User Approval Flags</h2>
+              <h2 className="text-sm font-semibold font-display text-foreground">User Approval Tags</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Flagged users' invoices require admin approval before being pushed, regardless of workflow mode.
+              Tagged users' invoices require approval before being pushed to Xero, regardless of workflow mode.
             </p>
 
-            {/* Add new user */}
-            <div className="flex gap-2">
-              <Input
-                value={newSystemId}
-                onChange={(e) => setNewSystemId(e.target.value)}
-                placeholder="System ID"
-                className="flex-1"
-              />
-              <Input
-                value={newUserName}
-                onChange={(e) => setNewUserName(e.target.value)}
-                placeholder="Display name"
-                className="flex-1"
-              />
-              <Button size="sm" onClick={addUserFlag} className="gap-1 shrink-0">
-                <Plus className="w-3.5 h-3.5" /> Add
-              </Button>
-            </div>
+            {/* Searchable dropdown to add users */}
+            <Popover open={userComboOpen} onOpenChange={setUserComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={userComboOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="text-muted-foreground">Search and tag a user...</span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search by name or ID..." />
+                  <CommandList>
+                    <CommandEmpty>No untagged users found.</CommandEmpty>
+                    <CommandGroup>
+                      {unflaggedStaff.map((s) => (
+                        <CommandItem
+                          key={s.system_id}
+                          value={`${s.user_name} ${s.system_id}`}
+                          onSelect={() => addUserFlag(s)}
+                        >
+                          <span className="font-medium">{s.user_name}</span>
+                          <span className="ml-2 text-xs text-muted-foreground font-mono">{s.system_id}</span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
-            {/* User list */}
+            {/* Tagged users */}
             {loadingFlags ? (
               <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
-            ) : userFlags.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-4 text-center">No users added yet</div>
+            ) : flaggedUsers.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">No users tagged for approval</div>
             ) : (
-              <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-                {userFlags.map((flag) => (
-                  <div key={flag.id} className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {flag.user_name || flag.system_id}
-                      </p>
-                      {flag.user_name && (
-                        <p className="text-xs text-muted-foreground font-mono">{flag.system_id}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {flag.requires_approval ? (
-                        <Badge variant="destructive" className="text-xs">Flagged</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">Clear</Badge>
-                      )}
-                      <Switch
-                        checked={flag.requires_approval}
-                        onCheckedChange={() => toggleUserFlag(flag)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeUserFlag(flag)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+              <div className="flex flex-wrap gap-2">
+                {flaggedUsers.map((flag) => (
+                  <Badge key={flag.id} variant="secondary" className="gap-1.5 py-1.5 px-3 text-sm">
+                    <ShieldAlert className="w-3 h-3 text-destructive" />
+                    {flag.user_name || flag.system_id}
+                    <button
+                      onClick={() => removeUserFlag(flag)}
+                      className="ml-1 hover:text-destructive transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Template Approval Flags */}
+          {/* Template Approval Tags */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-primary" />
-              <h2 className="text-sm font-semibold font-display text-foreground">Template Approval Flags</h2>
+              <h2 className="text-sm font-semibold font-display text-foreground">Template Approval Tags</h2>
             </div>
             <p className="text-xs text-muted-foreground">
-              Invoices using flagged templates require admin approval before being pushed.
+              Invoices using tagged templates require approval before being pushed to Xero.
             </p>
 
+            {/* Searchable dropdown to add templates */}
+            <Popover open={templateComboOpen} onOpenChange={setTemplateComboOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={templateComboOpen}
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="text-muted-foreground">Search and tag a template...</span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search templates..." />
+                  <CommandList>
+                    <CommandEmpty>No untagged templates found.</CommandEmpty>
+                    <CommandGroup>
+                      {unflaggedTemplates.map((t) => (
+                        <CommandItem
+                          key={t.id}
+                          value={t.name}
+                          onSelect={() => toggleTemplateFlag(t, true)}
+                        >
+                          {t.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            {/* Tagged templates */}
             {loadingFlags ? (
               <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
-            ) : templates.length === 0 ? (
-              <div className="text-sm text-muted-foreground py-4 text-center">No templates created yet</div>
+            ) : flaggedTemplates.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-4 text-center">No templates tagged for approval</div>
             ) : (
-              <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-                {templates.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{t.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {t.requires_approval ? (
-                        <Badge variant="destructive" className="text-xs">Flagged</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">Clear</Badge>
-                      )}
-                      <Switch
-                        checked={t.requires_approval}
-                        onCheckedChange={() => toggleTemplateFlag(t)}
-                      />
-                    </div>
-                  </div>
+              <div className="flex flex-wrap gap-2">
+                {flaggedTemplates.map((t) => (
+                  <Badge key={t.id} variant="secondary" className="gap-1.5 py-1.5 px-3 text-sm">
+                    <ShieldCheck className="w-3 h-3 text-destructive" />
+                    {t.name}
+                    <button
+                      onClick={() => toggleTemplateFlag(t, false)}
+                      className="ml-1 hover:text-destructive transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Free Text Notice */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-warning" />
+              <h2 className="text-sm font-semibold font-display text-foreground">Free Text Invoices</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Invoices containing free text line items always require approval before being pushed to Xero. This cannot be disabled.
+            </p>
           </div>
 
           {/* Xero Connection */}
