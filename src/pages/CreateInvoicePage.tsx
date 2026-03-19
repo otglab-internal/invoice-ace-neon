@@ -141,6 +141,20 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
+  // Check if the current user is flagged for approval
+  useEffect(() => {
+    if (!systemId) return;
+    const checkUserFlag = async () => {
+      const { data } = await supabase
+        .from("user_approval_flags")
+        .select("requires_approval")
+        .eq("system_id", systemId)
+        .maybeSingle();
+      setUserFlagged(data?.requires_approval === true);
+    };
+    checkUserFlag();
+  }, [systemId]);
+
   // Initialize line items once templates load
   useEffect(() => {
     if (!loadingTemplates && lineItems.length === 0) {
