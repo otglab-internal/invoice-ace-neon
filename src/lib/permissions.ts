@@ -44,7 +44,7 @@ export interface Permissions {
   canAccessGlobalConfig: boolean;
   /** Can manage templates */
   canManageTemplates: boolean;
-  /** Treat as system-level admin (admin | accountant) */
+  /** Treat as system-level admin */
   isSystemAdmin: boolean;
 }
 
