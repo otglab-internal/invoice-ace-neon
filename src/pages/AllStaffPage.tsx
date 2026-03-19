@@ -312,9 +312,18 @@ const AllStaffPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={roleBadgeVariant(row.role)} className="capitalize">
-                          {row.role}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={roleBadgeVariant(row.role)} className="capitalize">
+                            {row.role}
+                          </Badge>
+                          {row.companyRoles
+                            .filter((cr) => cr.toLowerCase() !== row.role.toLowerCase())
+                            .map((cr) => (
+                              <Badge key={cr} variant={roleBadgeVariant(cr)} className="capitalize">
+                                {cr}
+                              </Badge>
+                            ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Select
