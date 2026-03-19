@@ -35,6 +35,8 @@ export interface Permissions {
   canViewAllInvoices: boolean;
   /** Can approve / reject invoices */
   canApproveInvoices: boolean;
+  /** Approval is scoped to subordinates only (centre — hierarchy TBD) */
+  approveSubordinatesOnly: boolean;
   /** Can access the Approvals page */
   canAccessApprovals: boolean;
   /** Can access Settings page */
