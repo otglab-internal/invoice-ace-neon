@@ -7,9 +7,8 @@
  *                   (Hierarchy definition is TBD — scaffolding only.)
  *   - management:  Can view and approve all invoices.
  *
- * System roles (existing):
+ * System roles:
  *   - admin:       Full access to everything including settings and global config.
- *   - accountant:  Same access as admin for approval/settings pages.
  */
 
 export type AppRole = "sales" | "centre" | "management" | "admin";
