@@ -17,6 +17,7 @@ interface ExternalUser {
   email: string;
   role: string;
   country: string;
+  company_roles?: string[];
 }
 
 interface TagRecord {
@@ -33,10 +34,11 @@ interface StaffRow {
   lastName: string;
   email: string;
   role: string;
+  companyRoles: string[];
   country: string;
   tags: string[];
   centreLocation: string;
-  tagRecordId: string | null; // null = not yet saved
+  tagRecordId: string | null;
 }
 
 const CENTRE_LOCATIONS = [
@@ -114,6 +116,7 @@ const AllStaffPage: React.FC = () => {
           lastName: u.last_name,
           email: u.email,
           role: u.role,
+          companyRoles: u.company_roles || [],
           country: u.country,
           tags: tag?.tags || [],
           centreLocation: tag?.centre_location || "",
@@ -309,9 +312,18 @@ const AllStaffPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={roleBadgeVariant(row.role)} className="capitalize">
-                          {row.role}
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={roleBadgeVariant(row.role)} className="capitalize">
+                            {row.role}
+                          </Badge>
+                          {row.companyRoles
+                            .filter((cr) => cr.toLowerCase() !== row.role.toLowerCase())
+                            .map((cr) => (
+                              <Badge key={cr} variant={roleBadgeVariant(cr)} className="capitalize">
+                                {cr}
+                              </Badge>
+                            ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Select
