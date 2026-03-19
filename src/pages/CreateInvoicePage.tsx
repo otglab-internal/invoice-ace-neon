@@ -95,6 +95,7 @@ function isLineItemValid(item: LineItem, templates: Template[]): boolean {
 
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId } = useAuth();
+  const [userFlagged, setUserFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [contactOpen, setContactOpen] = useState(false);
