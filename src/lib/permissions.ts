@@ -35,6 +35,8 @@ export interface Permissions {
   canViewAllInvoices: boolean;
   /** Can approve / reject invoices */
   canApproveInvoices: boolean;
+  /** Approval is scoped to subordinates only (centre — hierarchy TBD) */
+  approveSubordinatesOnly: boolean;
   /** Can access the Approvals page */
   canAccessApprovals: boolean;
   /** Can access Settings page */
@@ -56,6 +58,7 @@ export function getPermissions(role: AppRole): Permissions {
         canViewSubordinateInvoices: false,
         canViewAllInvoices: false,
         canApproveInvoices: false,
+        approveSubordinatesOnly: false,
         canAccessApprovals: false,
         canAccessSettings: false,
         canAccessGlobalConfig: false,
@@ -67,9 +70,10 @@ export function getPermissions(role: AppRole): Permissions {
       return {
         canCreateInvoice: false,
         viewOwnInvoicesOnly: false,
-        canViewSubordinateInvoices: true, // scoped — hierarchy TBD
+        canViewSubordinateInvoices: true,
         canViewAllInvoices: false,
         canApproveInvoices: true,
+        approveSubordinatesOnly: true, // scoped — hierarchy TBD
         canAccessApprovals: true,
         canAccessSettings: false,
         canAccessGlobalConfig: false,
@@ -84,6 +88,7 @@ export function getPermissions(role: AppRole): Permissions {
         canViewSubordinateInvoices: false,
         canViewAllInvoices: true,
         canApproveInvoices: true,
+        approveSubordinatesOnly: false,
         canAccessApprovals: true,
         canAccessSettings: false,
         canAccessGlobalConfig: false,
@@ -98,6 +103,7 @@ export function getPermissions(role: AppRole): Permissions {
         canViewSubordinateInvoices: false,
         canViewAllInvoices: true,
         canApproveInvoices: true,
+        approveSubordinatesOnly: false,
         canAccessApprovals: true,
         canAccessSettings: true,
         canAccessGlobalConfig: false,
@@ -112,6 +118,7 @@ export function getPermissions(role: AppRole): Permissions {
         canViewSubordinateInvoices: false,
         canViewAllInvoices: true,
         canApproveInvoices: true,
+        approveSubordinatesOnly: false,
         canAccessApprovals: true,
         canAccessSettings: true,
         canAccessGlobalConfig: true,
