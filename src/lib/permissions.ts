@@ -18,10 +18,9 @@ export type AppRole = "sales" | "centre" | "management" | "admin";
 export function normalizeRole(raw: string | undefined | null): AppRole {
   const lower = (raw ?? "").trim().toLowerCase();
   if (lower === "admin") return "admin";
-  if (lower === "accountant") return "accountant";
   if (lower === "management") return "management";
   if (lower === "centre" || lower === "center") return "centre";
-  return "sales"; // default / fallback
+  return "sales"; // default / fallback (includes "accountant")
 }
 
 export interface Permissions {
