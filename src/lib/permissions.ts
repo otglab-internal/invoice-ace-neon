@@ -43,6 +43,8 @@ export interface Permissions {
   canAccessGlobalConfig: boolean;
   /** Can manage templates */
   canManageTemplates: boolean;
+  /** Can access the All Staff page */
+  canAccessAllStaff: boolean;
   /** Treat as system-level admin */
   isSystemAdmin: boolean;
 }
@@ -61,6 +63,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: false,
         canAccessGlobalConfig: false,
         canManageTemplates: false,
+        canAccessAllStaff: false,
         isSystemAdmin: false,
       };
 
@@ -76,6 +79,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: false,
         canAccessGlobalConfig: false,
         canManageTemplates: false,
+        canAccessAllStaff: false,
         isSystemAdmin: false,
       };
 
@@ -91,6 +95,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: false,
         canAccessGlobalConfig: false,
         canManageTemplates: false,
+        canAccessAllStaff: true,
         isSystemAdmin: false,
       };
 
@@ -106,6 +111,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: true,
         canAccessGlobalConfig: true,
         canManageTemplates: true,
+        canAccessAllStaff: true,
         isSystemAdmin: true,
       };
   }

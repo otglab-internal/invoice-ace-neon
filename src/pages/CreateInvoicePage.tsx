@@ -197,7 +197,10 @@ const CreateInvoicePage: React.FC = () => {
         (t) => selectedTemplateIds.includes(t.id) && t.requires_approval
       );
 
-      const needsApproval = userFlagged || templateFlagged;
+      // Free text line items always require approval
+      const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
+
+      const needsApproval = userFlagged || templateFlagged || hasFreeText;
 
       const lineItemsPayload = lineItems.map((item) => ({
         description: getGeneratedDescription(item, templates),
@@ -283,21 +286,20 @@ const CreateInvoicePage: React.FC = () => {
                 <Command>
                   <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
                   <CommandList>
-                    <CommandEmpty>
-                      <button
-                        type="button"
-                        className="w-full text-left px-2 py-1.5 text-sm text-primary hover:underline"
-                        onClick={() => {
+                    <CommandEmpty>No contacts found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create_new__"
+                        onSelect={() => {
                           setContactMode("new");
                           setNewContactName(contactSearch);
                           setContactId("");
                           setContactOpen(false);
                         }}
                       >
-                        + Create "{contactSearch}"
-                      </button>
-                    </CommandEmpty>
-                    <CommandGroup>
+                        <Plus className="mr-2 h-4 w-4 text-primary" />
+                        <span className="text-primary font-medium">Create New Contact</span>
+                      </CommandItem>
                       {demoContacts.map((c) => (
                         <CommandItem
                           key={c.id}
