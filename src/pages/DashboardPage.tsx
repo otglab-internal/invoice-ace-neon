@@ -32,22 +32,36 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, systemId, permissions, centreLocation, role } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchInvoices = async () => {
-      const { data, error } = await supabase
+      // If user has no invoice permissions at all, show nothing
+      if (!permissions.canCreateInvoice && !permissions.canApproveInvoices && !permissions.canViewAllInvoices) {
+        setInvoices([]);
+        setLoading(false);
+        return;
+      }
+
+      let query = supabase
         .from("invoices")
-        .select("id, contact_name, total, status, created_at, invoice_number")
+        .select("id, contact_name, total, status, created_at, invoice_number, submitted_by_system_id")
         .order("created_at", { ascending: false });
 
+      // Requesters who aren't approvers/admin only see their own invoices
+      if (permissions.viewOwnInvoicesOnly && systemId) {
+        query = query.eq("submitted_by_system_id", systemId);
+      }
+      // canViewAllInvoices (management approver / admin) → no filter
+
+      const { data, error } = await query;
       if (!error && data) setInvoices(data);
       setLoading(false);
     };
     fetchInvoices();
-  }, []);
+  }, [systemId, permissions, centreLocation, role]);
 
   const totalCount = invoices.length;
   const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;

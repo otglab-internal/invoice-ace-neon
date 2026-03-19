@@ -130,6 +130,42 @@ export type Database = {
           },
         ]
       }
+      staff_centre_assignments: {
+        Row: {
+          assigned_by: string | null
+          centre_location: string
+          created_at: string
+          id: string
+          system_id: string
+          tags: string[]
+          updated_at: string
+          user_name: string
+          user_role: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          centre_location?: string
+          created_at?: string
+          id?: string
+          system_id: string
+          tags?: string[]
+          updated_at?: string
+          user_name?: string
+          user_role?: string
+        }
+        Update: {
+          assigned_by?: string | null
+          centre_location?: string
+          created_at?: string
+          id?: string
+          system_id?: string
+          tags?: string[]
+          updated_at?: string
+          user_name?: string
+          user_role?: string
+        }
+        Relationships: []
+      }
       user_approval_flags: {
         Row: {
           created_at: string

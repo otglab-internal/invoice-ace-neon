@@ -1,22 +1,34 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate, Wrench } from "lucide-react";
+import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate, Wrench, Users } from "lucide-react";
 
-const navItems = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
-  { to: "/create-invoice", label: "Create Invoice", icon: FilePlus, adminOnly: false },
-  { to: "/templates", label: "Templates", icon: LayoutTemplate, adminOnly: false },
-  { to: "/approvals", label: "Approvals", icon: CheckSquare, adminOnly: true },
-  { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
-  { to: "/global-config", label: "Global Config", icon: Wrench, adminOnly: true },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.FC<{ className?: string }>;
+  /** Permission key that must be truthy, or null for always-visible */
+  permissionKey: string | null;
+}
+
+const navItems: NavItem[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, permissionKey: null },
+  { to: "/create-invoice", label: "Create Invoice", icon: FilePlus, permissionKey: "canCreateInvoice" },
+  { to: "/templates", label: "Templates", icon: LayoutTemplate, permissionKey: "canManageTemplates" },
+  { to: "/approvals", label: "Approvals", icon: CheckSquare, permissionKey: "canAccessApprovals" },
+  { to: "/settings", label: "Settings", icon: Settings, permissionKey: "canAccessSettings" },
+  { to: "/global-config", label: "Global Config", icon: Wrench, permissionKey: "canAccessGlobalConfig" },
+  { to: "/all-staff", label: "All Staff", icon: Users, permissionKey: "canAccessAllStaff" },
 ];
 
 const AppSidebar: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, permissions } = useAuth();
   const navigate = useNavigate();
 
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const visibleNavItems = navItems.filter((item) => {
+    if (!item.permissionKey) return true;
+    return (permissions as any)[item.permissionKey] === true;
+  });
 
   const handleLogout = () => {
     logout();

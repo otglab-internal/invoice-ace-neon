@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeRole, getPermissions, type AppRole, type StaffTag, type Permissions } from "@/lib/permissions";
 
 export interface AuthUser {
   firstName: string;
@@ -16,11 +17,22 @@ interface AuthContextType {
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Normalized role */
+  role: AppRole;
+  /** Tags assigned to this user (requester / approver) */
+  tags: StaffTag[];
+  /** Centre location from staff_centre_assignments */
+  centreLocation: string | null;
+  /** Computed permissions for the current role + tags */
+  permissions: Permissions;
+  /** Legacy convenience — true for admin */
   isAdmin: boolean;
   login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
 }
+
+const defaultPermissions = getPermissions("sales", []);
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -34,7 +46,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [environment, setEnvironment] = useState<string | null>(null);
   const [systemId, setSystemId] = useState<string | null>(null);
+  const [tags, setTags] = useState<StaffTag[]>([]);
+  const [centreLocation, setCentreLocation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch tags from staff_centre_assignments when systemId changes
+  const fetchTags = useCallback(async (sysId: string) => {
+    const { data } = await supabase
+      .from("staff_centre_assignments")
+      .select("tags, centre_location")
+      .eq("system_id", sysId)
+      .limit(1);
+
+    if (data && data.length > 0) {
+      const row = data[0] as any;
+      const rawTags: string[] = row.tags || [];
+      setTags(rawTags.filter((t: string) => t === "requester" || t === "approver") as StaffTag[]);
+      setCentreLocation(row.centre_location || null);
+    } else {
+      setTags([]);
+      setCentreLocation(null);
+    }
+  }, []);
 
   useEffect(() => {
     const storedUser = localStorage.getItem("auth_user");
@@ -45,24 +78,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
         setSystemId(storedSysId);
+        if (storedSysId) fetchTags(storedSysId);
       } catch {
         localStorage.removeItem("auth_user");
       }
     }
     setIsLoading(false);
-  }, []);
-
-  const [pendingEnvironment, setPendingEnvironment] = useState<string>("production");
+  }, [fetchTags]);
 
   const login = useCallback(async (email: string, password: string, env: string) => {
-    setPendingEnvironment(env);
     const { data, error } = await supabase.functions.invoke("login-proxy", {
       body: { email, password, environment: env },
     });
 
-    // Extract a clean error message from either the SDK error or the response body
     if (error) {
-      // The SDK wraps the response body in the error message, try to parse the actual error
       const bodyError = data?.error || data?.message;
       if (bodyError) throw new Error(bodyError);
       throw new Error("Login failed");
@@ -98,28 +127,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expiryDate: data.user.expiry_date,
     };
 
+    const sysId = data.system_id || null;
+
     setUser(authUser);
     setEnvironment(data.environment || null);
-    setSystemId(data.system_id || null);
+    setSystemId(sysId);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
-    localStorage.setItem("auth_system_id", data.system_id || "");
-  }, []);
+    localStorage.setItem("auth_system_id", sysId || "");
+
+    if (sysId) await fetchTags(sysId);
+  }, [fetchTags]);
 
   const logout = useCallback(() => {
     setUser(null);
     setEnvironment(null);
     setSystemId(null);
+    setTags([]);
+    setCentreLocation(null);
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_environment");
     localStorage.removeItem("auth_system_id");
   }, []);
 
-  const normalizedRole = user?.role?.toLowerCase() ?? "";
-  const isAdmin = !!user && (normalizedRole === "admin" || normalizedRole === "accountant");
+  const role = normalizeRole(user?.role);
+  const permissions = user ? getPermissions(role, tags) : defaultPermissions;
+  const isAdmin = permissions.isSystemAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, isAdmin, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocation, permissions, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );

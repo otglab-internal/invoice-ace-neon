@@ -1,0 +1,1 @@
+ALTER TABLE public.staff_centre_assignments ADD COLUMN tags text[] NOT NULL DEFAULT '{}'::text[];

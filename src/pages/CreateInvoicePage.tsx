@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check } from "lucide-react";
+import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -95,6 +95,8 @@ function isLineItemValid(item: LineItem, templates: Template[]): boolean {
 
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId } = useAuth();
+  const [userFlagged, setUserFlagged] = useState(false);
+  const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [contactOpen, setContactOpen] = useState(false);
@@ -140,6 +142,21 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
+  // Check if the current user is flagged and if free text is flagged
+  useEffect(() => {
+    const checkFlags = async () => {
+      const [userRes, freeTextRes] = await Promise.all([
+        systemId
+          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
+      ]);
+      setUserFlagged(userRes.data?.requires_approval === true);
+      setFreeTextFlagged(freeTextRes.data?.value === "true");
+    };
+    checkFlags();
+  }, [systemId]);
+
   // Initialize line items once templates load
   useEffect(() => {
     if (!loadingTemplates && lineItems.length === 0) {
@@ -176,29 +193,24 @@ const CreateInvoicePage: React.FC = () => {
     return sum + q * c;
   }, 0);
 
+  // Compute whether this invoice will need approval
+  const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
+  const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
+  const templateFlagged = templates.some((t) => selectedTemplateIds.includes(t.id) && t.requires_approval);
+  const freeTextTriggered = hasFreeText && freeTextFlagged;
+  const willNeedApproval = userFlagged || templateFlagged || freeTextTriggered;
+
+  const approvalReasons: string[] = [];
+  if (userFlagged) approvalReasons.push("Your account is flagged for approval");
+  if (templateFlagged) approvalReasons.push("A selected template requires approval");
+  if (freeTextTriggered) approvalReasons.push("Free text is flagged for approval");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!allValid) return;
     setSubmitting(true);
 
     try {
-      // Check if user is flagged for approval
-      const { data: userFlag } = await supabase
-        .from("user_approval_flags")
-        .select("requires_approval")
-        .eq("system_id", systemId || "")
-        .maybeSingle();
-
-      const userFlagged = userFlag?.requires_approval === true;
-
-      // Check if any selected template is flagged
-      const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
-      const templateFlagged = templates.some(
-        (t) => selectedTemplateIds.includes(t.id) && t.requires_approval
-      );
-
-      const needsApproval = userFlagged || templateFlagged;
-
       const lineItemsPayload = lineItems.map((item) => ({
         description: getGeneratedDescription(item, templates),
         quantity: Number(item.quantity),
@@ -214,8 +226,8 @@ const CreateInvoicePage: React.FC = () => {
         total,
         submitted_by_system_id: systemId || "",
         submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
-        requires_approval: needsApproval,
-        status: needsApproval ? "pending_approval" : "submitted",
+        requires_approval: willNeedApproval,
+        status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
       };
 
@@ -223,13 +235,16 @@ const CreateInvoicePage: React.FC = () => {
 
       if (error) {
         toast.error("Failed to submit invoice");
-      } else if (needsApproval) {
-        toast.info("Invoice submitted for admin approval", {
-          description: "Your invoice has been flagged and requires approval before being processed.",
+      } else if (willNeedApproval) {
+        toast.info("Invoice submitted for approval", {
+          description: "Your invoice requires approval before being pushed to Xero.",
           icon: <ShieldAlert className="w-4 h-4" />,
         });
       } else {
-        toast.success("Invoice submitted successfully");
+        toast.success("Invoice auto-submitted to Xero", {
+          description: "Your invoice has been automatically validated and pushed.",
+          icon: <Zap className="w-4 h-4" />,
+        });
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
@@ -283,21 +298,20 @@ const CreateInvoicePage: React.FC = () => {
                 <Command>
                   <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
                   <CommandList>
-                    <CommandEmpty>
-                      <button
-                        type="button"
-                        className="w-full text-left px-2 py-1.5 text-sm text-primary hover:underline"
-                        onClick={() => {
+                    <CommandEmpty>No contacts found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create_new__"
+                        onSelect={() => {
                           setContactMode("new");
                           setNewContactName(contactSearch);
                           setContactId("");
                           setContactOpen(false);
                         }}
                       >
-                        + Create "{contactSearch}"
-                      </button>
-                    </CommandEmpty>
-                    <CommandGroup>
+                        <Plus className="mr-2 h-4 w-4 text-primary" />
+                        <span className="text-primary font-medium">Create New Contact</span>
+                      </CommandItem>
                       {demoContacts.map((c) => (
                         <CommandItem
                           key={c.id}
@@ -366,6 +380,30 @@ const CreateInvoicePage: React.FC = () => {
             Add Line Item
           </Button>
 
+          {/* Approval Status Indicator */}
+          {willNeedApproval ? (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-destructive" />
+                <span className="text-sm font-semibold text-destructive">Requires Approval</span>
+              </div>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {approvalReasons.map((r, i) => (
+                  <li key={i}>• {r}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">This invoice will be sent to the approvals queue instead of being pushed directly to Xero.</p>
+            </div>
+          ) : (
+            <div className="bg-success/10 border border-success/20 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-success" />
+                <span className="text-sm font-semibold text-success">Automated</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">This invoice will be automatically validated and pushed to Xero upon submission.</p>
+            </div>
+          )}
+
           {/* Sticky Submit */}
           <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center">
             <div className="text-sm text-muted-foreground">
@@ -379,8 +417,8 @@ const CreateInvoicePage: React.FC = () => {
               )}
             </div>
             <Button type="submit" disabled={!allValid || submitting} className="gap-2">
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Submit Invoice
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : willNeedApproval ? <ShieldAlert className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+              {willNeedApproval ? "Submit for Approval" : "Submit to Xero"}
             </Button>
           </div>
         </form>
