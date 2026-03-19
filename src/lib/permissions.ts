@@ -58,6 +58,7 @@ export function getPermissions(role: AppRole): Permissions {
         canViewSubordinateInvoices: false,
         canViewAllInvoices: false,
         canApproveInvoices: false,
+        approveSubordinatesOnly: false,
         canAccessApprovals: false,
         canAccessSettings: false,
         canAccessGlobalConfig: false,
