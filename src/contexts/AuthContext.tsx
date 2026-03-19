@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeRole, getPermissions, type AppRole, type Permissions } from "@/lib/permissions";
 
 export interface AuthUser {
   firstName: string;
@@ -16,11 +17,18 @@ interface AuthContextType {
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Normalized role */
+  role: AppRole;
+  /** Computed permissions for the current role */
+  permissions: Permissions;
+  /** Legacy convenience — true for admin | accountant */
   isAdmin: boolean;
   login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
   logout: () => void;
 }
+
+const defaultPermissions = getPermissions("sales");
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -60,9 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body: { email, password, environment: env },
     });
 
-    // Extract a clean error message from either the SDK error or the response body
     if (error) {
-      // The SDK wraps the response body in the error message, try to parse the actual error
       const bodyError = data?.error || data?.message;
       if (bodyError) throw new Error(bodyError);
       throw new Error("Login failed");
@@ -115,11 +121,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_system_id");
   }, []);
 
-  const normalizedRole = user?.role?.toLowerCase() ?? "";
-  const isAdmin = !!user && (normalizedRole === "admin" || normalizedRole === "accountant");
+  const role = normalizeRole(user?.role);
+  const permissions = user ? getPermissions(role) : defaultPermissions;
+  const isAdmin = permissions.isSystemAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, isAdmin, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, permissions, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );
