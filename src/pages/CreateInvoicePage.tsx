@@ -197,7 +197,10 @@ const CreateInvoicePage: React.FC = () => {
         (t) => selectedTemplateIds.includes(t.id) && t.requires_approval
       );
 
-      const needsApproval = userFlagged || templateFlagged;
+      // Free text line items always require approval
+      const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
+
+      const needsApproval = userFlagged || templateFlagged || hasFreeText;
 
       const lineItemsPayload = lineItems.map((item) => ({
         description: getGeneratedDescription(item, templates),

@@ -43,6 +43,8 @@ export interface Permissions {
   canAccessGlobalConfig: boolean;
   /** Can manage templates */
   canManageTemplates: boolean;
+  /** Can access the All Staff page */
+  canAccessAllStaff: boolean;
   /** Treat as system-level admin */
   isSystemAdmin: boolean;
 }
