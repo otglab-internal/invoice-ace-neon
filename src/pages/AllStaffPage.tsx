@@ -34,10 +34,11 @@ interface StaffRow {
   lastName: string;
   email: string;
   role: string;
+  companyRoles: string[];
   country: string;
   tags: string[];
   centreLocation: string;
-  tagRecordId: string | null; // null = not yet saved
+  tagRecordId: string | null;
 }
 
 const CENTRE_LOCATIONS = [
