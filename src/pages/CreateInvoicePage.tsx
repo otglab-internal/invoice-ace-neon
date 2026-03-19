@@ -191,6 +191,17 @@ const CreateInvoicePage: React.FC = () => {
     return sum + q * c;
   }, 0);
 
+  // Compute whether this invoice will need approval
+  const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
+  const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
+  const templateFlagged = templates.some((t) => selectedTemplateIds.includes(t.id) && t.requires_approval);
+  const willNeedApproval = userFlagged || templateFlagged || hasFreeText;
+
+  const approvalReasons: string[] = [];
+  if (userFlagged) approvalReasons.push("Your account is flagged for approval");
+  if (templateFlagged) approvalReasons.push("A selected template requires approval");
+  if (hasFreeText) approvalReasons.push("Free text line items require approval");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!allValid) return;
