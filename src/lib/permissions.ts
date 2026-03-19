@@ -12,7 +12,7 @@
  *   - accountant:  Same access as admin for approval/settings pages.
  */
 
-export type AppRole = "sales" | "centre" | "management" | "admin" | "accountant";
+export type AppRole = "sales" | "centre" | "management" | "admin";
 
 /** Normalise whatever the backend returns into a known role string. */
 export function normalizeRole(raw: string | undefined | null): AppRole {
