@@ -208,26 +208,6 @@ const CreateInvoicePage: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // Check if user is flagged for approval
-      const { data: userFlag } = await supabase
-        .from("user_approval_flags")
-        .select("requires_approval")
-        .eq("system_id", systemId || "")
-        .maybeSingle();
-
-      const userFlagged = userFlag?.requires_approval === true;
-
-      // Check if any selected template is flagged
-      const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
-      const templateFlagged = templates.some(
-        (t) => selectedTemplateIds.includes(t.id) && t.requires_approval
-      );
-
-      // Free text line items always require approval
-      const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
-
-      const needsApproval = userFlagged || templateFlagged || hasFreeText;
-
       const lineItemsPayload = lineItems.map((item) => ({
         description: getGeneratedDescription(item, templates),
         quantity: Number(item.quantity),
@@ -243,8 +223,8 @@ const CreateInvoicePage: React.FC = () => {
         total,
         submitted_by_system_id: systemId || "",
         submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
-        requires_approval: needsApproval,
-        status: needsApproval ? "pending_approval" : "submitted",
+        requires_approval: willNeedApproval,
+        status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
       };
 
@@ -252,13 +232,16 @@ const CreateInvoicePage: React.FC = () => {
 
       if (error) {
         toast.error("Failed to submit invoice");
-      } else if (needsApproval) {
-        toast.info("Invoice submitted for admin approval", {
-          description: "Your invoice has been flagged and requires approval before being processed.",
+      } else if (willNeedApproval) {
+        toast.info("Invoice submitted for approval", {
+          description: "Your invoice requires approval before being pushed to Xero.",
           icon: <ShieldAlert className="w-4 h-4" />,
         });
       } else {
-        toast.success("Invoice submitted successfully");
+        toast.success("Invoice auto-submitted to Xero", {
+          description: "Your invoice has been automatically validated and pushed.",
+          icon: <Zap className="w-4 h-4" />,
+        });
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
