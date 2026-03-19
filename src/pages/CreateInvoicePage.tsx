@@ -142,18 +142,19 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
-  // Check if the current user is flagged for approval
+  // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
-    if (!systemId) return;
-    const checkUserFlag = async () => {
-      const { data } = await supabase
-        .from("user_approval_flags")
-        .select("requires_approval")
-        .eq("system_id", systemId)
-        .maybeSingle();
-      setUserFlagged(data?.requires_approval === true);
+    const checkFlags = async () => {
+      const [userRes, freeTextRes] = await Promise.all([
+        systemId
+          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
+      ]);
+      setUserFlagged(userRes.data?.requires_approval === true);
+      setFreeTextFlagged(freeTextRes.data?.value === "true");
     };
-    checkUserFlag();
+    checkFlags();
   }, [systemId]);
 
   // Initialize line items once templates load
