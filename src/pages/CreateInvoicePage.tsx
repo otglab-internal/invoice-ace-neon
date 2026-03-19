@@ -377,6 +377,30 @@ const CreateInvoicePage: React.FC = () => {
             Add Line Item
           </Button>
 
+          {/* Approval Status Indicator */}
+          {willNeedApproval ? (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-destructive" />
+                <span className="text-sm font-semibold text-destructive">Requires Approval</span>
+              </div>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                {approvalReasons.map((r, i) => (
+                  <li key={i}>• {r}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground">This invoice will be sent to the approvals queue instead of being pushed directly to Xero.</p>
+            </div>
+          ) : (
+            <div className="bg-success/10 border border-success/20 rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-success" />
+                <span className="text-sm font-semibold text-success">Automated</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">This invoice will be automatically validated and pushed to Xero upon submission.</p>
+            </div>
+          )}
+
           {/* Sticky Submit */}
           <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center">
             <div className="text-sm text-muted-foreground">
@@ -390,8 +414,8 @@ const CreateInvoicePage: React.FC = () => {
               )}
             </div>
             <Button type="submit" disabled={!allValid || submitting} className="gap-2">
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              Submit Invoice
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : willNeedApproval ? <ShieldAlert className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+              {willNeedApproval ? "Submit for Approval" : "Submit to Xero"}
             </Button>
           </div>
         </form>
