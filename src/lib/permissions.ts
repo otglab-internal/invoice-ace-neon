@@ -63,6 +63,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: false,
         canAccessGlobalConfig: false,
         canManageTemplates: false,
+        canAccessAllStaff: false,
         isSystemAdmin: false,
       };
 
