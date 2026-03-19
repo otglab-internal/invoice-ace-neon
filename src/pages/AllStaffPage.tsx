@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Save, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +17,7 @@ interface StaffAssignment {
   user_name: string;
   user_role: string;
   centre_location: string;
+  tags: string[];
   assigned_by: string | null;
   updated_at: string;
 }
@@ -38,6 +40,7 @@ const AllStaffPage: React.FC = () => {
   const [newUserName, setNewUserName] = useState("");
   const [newRole, setNewRole] = useState("sales");
   const [newCentre, setNewCentre] = useState("");
+  const [newTags, setNewTags] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
 
   const fetchAssignments = useCallback(async () => {
@@ -50,7 +53,9 @@ const AllStaffPage: React.FC = () => {
     if (error) {
       toast.error("Failed to load staff assignments");
     } else {
-      setAssignments((data as any[]) || []);
+      setAssignments(
+        ((data as any[]) || []).map((d) => ({ ...d, tags: d.tags || [] }))
+      );
     }
     setLoading(false);
   }, []);
@@ -83,6 +88,33 @@ const AllStaffPage: React.FC = () => {
     setSaving(null);
   };
 
+  const handleTagToggle = async (assignment: StaffAssignment, tag: string, checked: boolean) => {
+    setSaving(assignment.id);
+    const newTagList = checked
+      ? [...assignment.tags.filter((t) => t !== tag), tag]
+      : assignment.tags.filter((t) => t !== tag);
+
+    const { error } = await supabase
+      .from("staff_centre_assignments")
+      .update({
+        tags: newTagList,
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq("id", assignment.id);
+
+    if (error) {
+      toast.error("Failed to update tags");
+    } else {
+      toast.success(`Tags updated for ${assignment.user_name}`);
+      setAssignments((prev) =>
+        prev.map((a) =>
+          a.id === assignment.id ? { ...a, tags: newTagList } : a
+        )
+      );
+    }
+    setSaving(null);
+  };
+
   const handleAddStaff = async () => {
     if (!newSystemId.trim() || !newUserName.trim() || !newCentre) {
       toast.error("Please fill in all fields");
@@ -94,6 +126,7 @@ const AllStaffPage: React.FC = () => {
       user_name: newUserName.trim(),
       user_role: newRole,
       centre_location: newCentre,
+      tags: newTags,
       assigned_by: user ? `${user.firstName} ${user.lastName}` : null,
     } as any);
 
@@ -109,9 +142,16 @@ const AllStaffPage: React.FC = () => {
       setNewUserName("");
       setNewRole("sales");
       setNewCentre("");
+      setNewTags([]);
       fetchAssignments();
     }
     setAdding(false);
+  };
+
+  const toggleNewTag = (tag: string) => {
+    setNewTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
   };
 
   const filtered = assignments.filter(
@@ -135,14 +175,14 @@ const AllStaffPage: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-6 h-6 text-primary" />
             <h1 className="text-2xl font-bold font-display text-foreground">All Staff</h1>
           </div>
           <p className="text-sm text-muted-foreground">
-            Assign sales and centre staff to their centre locations
+            Assign staff to centre locations and tag them as requesters or approvers
           </p>
         </div>
 
@@ -176,6 +216,22 @@ const AllStaffPage: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex items-center gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={newTags.includes("requester")}
+                onCheckedChange={() => toggleNewTag("requester")}
+              />
+              Requester
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={newTags.includes("approver")}
+                onCheckedChange={() => toggleNewTag("approver")}
+              />
+              Approver
+            </label>
+          </div>
           <Button onClick={handleAddStaff} disabled={adding} className="gap-2">
             {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Add Staff
@@ -207,12 +263,14 @@ const AllStaffPage: React.FC = () => {
                   <TableHead>System ID</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Centre Location</TableHead>
+                  <TableHead className="text-center">Requester</TableHead>
+                  <TableHead className="text-center">Approver</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       No staff members found
                     </TableCell>
                   </TableRow>
@@ -241,6 +299,20 @@ const AllStaffPage: React.FC = () => {
                             ))}
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={a.tags.includes("requester")}
+                          onCheckedChange={(checked) => handleTagToggle(a, "requester", !!checked)}
+                          disabled={saving === a.id}
+                        />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Checkbox
+                          checked={a.tags.includes("approver")}
+                          onCheckedChange={(checked) => handleTagToggle(a, "approver", !!checked)}
+                          disabled={saving === a.id}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
