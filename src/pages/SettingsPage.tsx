@@ -33,6 +33,8 @@ interface StaffOption {
 
 const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
+  const [autoMode, setAutoMode] = useState(true);
+  const [saving, setSaving] = useState(false);
   const FREETEXT_ID = "__freetext__";
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
 
