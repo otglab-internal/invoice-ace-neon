@@ -12,6 +12,7 @@ import ApprovalsPage from "@/pages/ApprovalsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import TemplatesPage from "@/pages/TemplatesPage";
 import GlobalConfigPage from "@/pages/GlobalConfigPage";
+import AllStaffPage from "@/pages/AllStaffPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
