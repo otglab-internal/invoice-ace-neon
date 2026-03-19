@@ -17,6 +17,7 @@ interface ExternalUser {
   email: string;
   role: string;
   country: string;
+  company_roles?: string[];
 }
 
 interface TagRecord {
