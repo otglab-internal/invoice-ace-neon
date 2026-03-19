@@ -70,9 +70,10 @@ export function getPermissions(role: AppRole): Permissions {
       return {
         canCreateInvoice: false,
         viewOwnInvoicesOnly: false,
-        canViewSubordinateInvoices: true, // scoped — hierarchy TBD
+        canViewSubordinateInvoices: true,
         canViewAllInvoices: false,
         canApproveInvoices: true,
+        approveSubordinatesOnly: true, // scoped — hierarchy TBD
         canAccessApprovals: true,
         canAccessSettings: false,
         canAccessGlobalConfig: false,
