@@ -117,7 +117,7 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // --- Template flags ---
+  // --- Template flags (includes Free Text as virtual entry) ---
   const flaggedTemplateIds = new Set(templates.filter((t) => t.requires_approval).map((t) => t.id));
 
   const toggleTemplateFlag = async (template: TemplateFlag, flag: boolean) => {
@@ -132,6 +132,35 @@ const SettingsPage: React.FC = () => {
         prev.map((t) => (t.id === template.id ? { ...t, requires_approval: flag } : t))
       );
       toast.success(`"${template.name}" ${flag ? "flagged" : "unflagged"}`);
+    }
+    setTemplateComboOpen(false);
+  };
+
+  const toggleFreeTextFlag = async (flag: boolean) => {
+    // Upsert into global_config
+    const { data: existing } = await supabase
+      .from("global_config")
+      .select("id")
+      .eq("key", "freetext_requires_approval")
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from("global_config")
+        .update({ value: String(flag), updated_at: nowGMT8() } as any)
+        .eq("key", "freetext_requires_approval"));
+    } else {
+      ({ error } = await supabase
+        .from("global_config")
+        .insert({ key: "freetext_requires_approval", value: String(flag) } as any));
+    }
+
+    if (error) {
+      toast.error("Failed to update free text flag");
+    } else {
+      setFreeTextFlagged(flag);
+      toast.success(`Free Text ${flag ? "flagged" : "unflagged"} for approval`);
     }
     setTemplateComboOpen(false);
   };
