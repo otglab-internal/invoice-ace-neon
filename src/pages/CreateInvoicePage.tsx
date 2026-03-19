@@ -283,21 +283,20 @@ const CreateInvoicePage: React.FC = () => {
                 <Command>
                   <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
                   <CommandList>
-                    <CommandEmpty>
-                      <button
-                        type="button"
-                        className="w-full text-left px-2 py-1.5 text-sm text-primary hover:underline"
-                        onClick={() => {
+                    <CommandEmpty>No contacts found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create_new__"
+                        onSelect={() => {
                           setContactMode("new");
                           setNewContactName(contactSearch);
                           setContactId("");
                           setContactOpen(false);
                         }}
                       >
-                        + Create "{contactSearch}"
-                      </button>
-                    </CommandEmpty>
-                    <CommandGroup>
+                        <Plus className="mr-2 h-4 w-4 text-primary" />
+                        <span className="text-primary font-medium">Create New Contact</span>
+                      </CommandItem>
                       {demoContacts.map((c) => (
                         <CommandItem
                           key={c.id}
