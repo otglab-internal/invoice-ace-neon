@@ -7,21 +7,19 @@
  *                   (Hierarchy definition is TBD — scaffolding only.)
  *   - management:  Can view and approve all invoices.
  *
- * System roles (existing):
+ * System roles:
  *   - admin:       Full access to everything including settings and global config.
- *   - accountant:  Same access as admin for approval/settings pages.
  */
 
-export type AppRole = "sales" | "centre" | "management" | "admin" | "accountant";
+export type AppRole = "sales" | "centre" | "management" | "admin";
 
 /** Normalise whatever the backend returns into a known role string. */
 export function normalizeRole(raw: string | undefined | null): AppRole {
   const lower = (raw ?? "").trim().toLowerCase();
   if (lower === "admin") return "admin";
-  if (lower === "accountant") return "accountant";
   if (lower === "management") return "management";
   if (lower === "centre" || lower === "center") return "centre";
-  return "sales"; // default / fallback
+  return "sales"; // default / fallback (includes "accountant")
 }
 
 export interface Permissions {
@@ -45,7 +43,7 @@ export interface Permissions {
   canAccessGlobalConfig: boolean;
   /** Can manage templates */
   canManageTemplates: boolean;
-  /** Treat as system-level admin (admin | accountant) */
+  /** Treat as system-level admin */
   isSystemAdmin: boolean;
 }
 
@@ -94,21 +92,6 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessGlobalConfig: false,
         canManageTemplates: false,
         isSystemAdmin: false,
-      };
-
-    case "accountant":
-      return {
-        canCreateInvoice: true,
-        viewOwnInvoicesOnly: false,
-        canViewSubordinateInvoices: false,
-        canViewAllInvoices: true,
-        canApproveInvoices: true,
-        approveSubordinatesOnly: false,
-        canAccessApprovals: true,
-        canAccessSettings: true,
-        canAccessGlobalConfig: false,
-        canManageTemplates: true,
-        isSystemAdmin: true,
       };
 
     case "admin":
