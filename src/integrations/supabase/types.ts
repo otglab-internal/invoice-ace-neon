@@ -137,6 +137,7 @@ export type Database = {
           created_at: string
           id: string
           system_id: string
+          tags: string[]
           updated_at: string
           user_name: string
           user_role: string
@@ -147,6 +148,7 @@ export type Database = {
           created_at?: string
           id?: string
           system_id: string
+          tags?: string[]
           updated_at?: string
           user_name?: string
           user_role?: string
@@ -157,6 +159,7 @@ export type Database = {
           created_at?: string
           id?: string
           system_id?: string
+          tags?: string[]
           updated_at?: string
           user_name?: string
           user_role?: string
