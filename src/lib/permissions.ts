@@ -95,21 +95,6 @@ export function getPermissions(role: AppRole): Permissions {
         isSystemAdmin: false,
       };
 
-    case "accountant":
-      return {
-        canCreateInvoice: true,
-        viewOwnInvoicesOnly: false,
-        canViewSubordinateInvoices: false,
-        canViewAllInvoices: true,
-        canApproveInvoices: true,
-        approveSubordinatesOnly: false,
-        canAccessApprovals: true,
-        canAccessSettings: true,
-        canAccessGlobalConfig: false,
-        canManageTemplates: true,
-        isSystemAdmin: true,
-      };
-
     case "admin":
       return {
         canCreateInvoice: true,
