@@ -116,6 +116,7 @@ const AllStaffPage: React.FC = () => {
           lastName: u.last_name,
           email: u.email,
           role: u.role,
+          companyRoles: u.company_roles || [],
           country: u.country,
           tags: tag?.tags || [],
           centreLocation: tag?.centre_location || "",
