@@ -52,14 +52,16 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes, staffRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes, freeTextRes] = await Promise.all([
       supabase.from("user_approval_flags").select("*").order("user_name"),
       supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
       supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
+      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
     if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
+    setFreeTextFlagged(freeTextRes.data?.value === "true");
     setLoadingFlags(false);
   };
 
