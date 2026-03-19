@@ -56,6 +56,7 @@ const App = () => (
             <Route path="/approvals" element={<PermissionRoute permissionKey="canAccessApprovals"><ApprovalsPage /></PermissionRoute>} />
             <Route path="/settings" element={<PermissionRoute permissionKey="canAccessSettings"><SettingsPage /></PermissionRoute>} />
             <Route path="/global-config" element={<PermissionRoute permissionKey="canAccessGlobalConfig"><GlobalConfigPage /></PermissionRoute>} />
+            <Route path="/all-staff" element={<PermissionRoute permissionKey="canAccessAllStaff"><AllStaffPage /></PermissionRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { to: "/approvals", label: "Approvals", icon: CheckSquare, permissionKey: "canAccessApprovals" },
   { to: "/settings", label: "Settings", icon: Settings, permissionKey: "canAccessSettings" },
   { to: "/global-config", label: "Global Config", icon: Wrench, permissionKey: "canAccessGlobalConfig" },
+  { to: "/all-staff", label: "All Staff", icon: Users, permissionKey: "canAccessAllStaff" },
 ];
 
 const AppSidebar: React.FC = () => {
