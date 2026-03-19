@@ -111,6 +111,7 @@ export function getPermissions(role: AppRole): Permissions {
         canAccessSettings: true,
         canAccessGlobalConfig: true,
         canManageTemplates: true,
+        canAccessAllStaff: true,
         isSystemAdmin: true,
       };
   }
