@@ -32,22 +32,30 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 
 const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, systemId, permissions } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchInvoices = async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("invoices")
-        .select("id, contact_name, total, status, created_at, invoice_number")
+        .select("id, contact_name, total, status, created_at, invoice_number, submitted_by_system_id")
         .order("created_at", { ascending: false });
 
+      // Sales users only see their own invoices
+      if (permissions.viewOwnInvoicesOnly && systemId) {
+        query = query.eq("submitted_by_system_id", systemId);
+      }
+      // Centre users: for now show all (hierarchy TBD — will be filtered once defined)
+      // Management / admin / accountant: no filter, see all
+
+      const { data, error } = await query;
       if (!error && data) setInvoices(data);
       setLoading(false);
     };
     fetchInvoices();
-  }, []);
+  }, [systemId, permissions]);
 
   const totalCount = invoices.length;
   const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;
