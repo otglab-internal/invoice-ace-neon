@@ -35,6 +35,8 @@ const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [autoMode, setAutoMode] = useState(true);
   const [saving, setSaving] = useState(false);
+  const FREETEXT_ID = "__freetext__";
+  const [freeTextFlagged, setFreeTextFlagged] = useState(false);
 
   // Approval flags
   const [userFlags, setUserFlags] = useState<UserFlag[]>([]);
@@ -52,14 +54,16 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes, staffRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes, freeTextRes] = await Promise.all([
       supabase.from("user_approval_flags").select("*").order("user_name"),
       supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
       supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
+      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
     if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
+    setFreeTextFlagged(freeTextRes.data?.value === "true");
     setLoadingFlags(false);
   };
 
@@ -115,7 +119,7 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // --- Template flags ---
+  // --- Template flags (includes Free Text as virtual entry) ---
   const flaggedTemplateIds = new Set(templates.filter((t) => t.requires_approval).map((t) => t.id));
 
   const toggleTemplateFlag = async (template: TemplateFlag, flag: boolean) => {
@@ -130,6 +134,35 @@ const SettingsPage: React.FC = () => {
         prev.map((t) => (t.id === template.id ? { ...t, requires_approval: flag } : t))
       );
       toast.success(`"${template.name}" ${flag ? "flagged" : "unflagged"}`);
+    }
+    setTemplateComboOpen(false);
+  };
+
+  const toggleFreeTextFlag = async (flag: boolean) => {
+    // Upsert into global_config
+    const { data: existing } = await supabase
+      .from("global_config")
+      .select("id")
+      .eq("key", "freetext_requires_approval")
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from("global_config")
+        .update({ value: String(flag), updated_at: nowGMT8() } as any)
+        .eq("key", "freetext_requires_approval"));
+    } else {
+      ({ error } = await supabase
+        .from("global_config")
+        .insert({ key: "freetext_requires_approval", value: String(flag) } as any));
+    }
+
+    if (error) {
+      toast.error("Failed to update free text flag");
+    } else {
+      setFreeTextFlagged(flag);
+      toast.success(`Free Text ${flag ? "flagged" : "unflagged"} for approval`);
     }
     setTemplateComboOpen(false);
   };
@@ -283,6 +316,15 @@ const SettingsPage: React.FC = () => {
                   <CommandList>
                     <CommandEmpty>No untagged templates found.</CommandEmpty>
                     <CommandGroup>
+                      {!freeTextFlagged && (
+                        <CommandItem
+                          value="Free Text"
+                          onSelect={() => toggleFreeTextFlag(true)}
+                        >
+                          <span className="font-medium">Free Text</span>
+                          <span className="ml-2 text-xs text-muted-foreground">(custom descriptions)</span>
+                        </CommandItem>
+                      )}
                       {unflaggedTemplates.map((t) => (
                         <CommandItem
                           key={t.id}
@@ -301,10 +343,22 @@ const SettingsPage: React.FC = () => {
             {/* Tagged templates */}
             {loadingFlags ? (
               <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
-            ) : flaggedTemplates.length === 0 ? (
+            ) : (flaggedTemplates.length === 0 && !freeTextFlagged) ? (
               <div className="text-sm text-muted-foreground py-4 text-center">No templates tagged for approval</div>
             ) : (
               <div className="flex flex-wrap gap-2">
+                {freeTextFlagged && (
+                  <Badge variant="secondary" className="gap-1.5 py-1.5 px-3 text-sm">
+                    <ShieldCheck className="w-3 h-3 text-destructive" />
+                    Free Text
+                    <button
+                      onClick={() => toggleFreeTextFlag(false)}
+                      className="ml-1 hover:text-destructive transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                )}
                 {flaggedTemplates.map((t) => (
                   <Badge key={t.id} variant="secondary" className="gap-1.5 py-1.5 px-3 text-sm">
                     <ShieldCheck className="w-3 h-3 text-destructive" />
@@ -319,17 +373,6 @@ const SettingsPage: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Free Text Notice */}
-          <div className="bg-card border border-border rounded-xl p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-warning" />
-              <h2 className="text-sm font-semibold font-display text-foreground">Free Text Invoices</h2>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Invoices containing free text line items always require approval before being pushed to Xero. This cannot be disabled.
-            </p>
           </div>
 
           {/* Xero Connection */}
