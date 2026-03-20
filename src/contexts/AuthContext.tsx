@@ -73,12 +73,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedUser = localStorage.getItem("auth_user");
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
+    const storedUserId = localStorage.getItem("auth_user_id");
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
         setSystemId(storedSysId);
-        if (storedSysId) fetchTags(storedSysId);
+        // Prefer user ID for tag lookups, fall back to system_id
+        const tagLookupId = storedUserId || storedSysId;
+        if (tagLookupId) fetchTags(tagLookupId);
       } catch {
         localStorage.removeItem("auth_user");
       }
