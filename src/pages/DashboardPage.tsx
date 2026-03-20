@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
-import { FileText, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Invoice {
@@ -36,32 +36,51 @@ const DashboardPage: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchInvoices = async () => {
-      // If user has no invoice permissions at all, show nothing
-      if (!permissions.canCreateInvoice && !permissions.canApproveInvoices && !permissions.canViewAllInvoices) {
-        setInvoices([]);
-        setLoading(false);
-        return;
-      }
+  const canView = permissions.canViewInvoices;
 
+  useEffect(() => {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchInvoices = async () => {
       let query = supabase
         .from("invoices")
         .select("id, contact_name, total, status, created_at, invoice_number, submitted_by_system_id")
         .order("created_at", { ascending: false });
 
-      // Requesters who aren't approvers/admin only see their own invoices
       if (permissions.viewOwnInvoicesOnly && systemId) {
         query = query.eq("submitted_by_system_id", systemId);
       }
-      // canViewAllInvoices (management approver / admin) → no filter
 
       const { data, error } = await query;
       if (!error && data) setInvoices(data);
       setLoading(false);
     };
     fetchInvoices();
-  }, [systemId, permissions, centreLocation, role]);
+  }, [systemId, permissions, centreLocation, role, canView]);
+
+  if (!canView) {
+    return (
+      <AppLayout>
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold font-display text-foreground">
+              Welcome back, {user?.firstName}
+            </h1>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-12 text-center">
+            <ShieldX className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">No Invoice Access</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              You don't have requester or approver permissions yet. Contact your manager or admin to get tagged with the appropriate access.
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   const totalCount = invoices.length;
   const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;
