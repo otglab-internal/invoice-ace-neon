@@ -344,6 +344,44 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ACTION: notify-approval - Send approved invoice data to n8n webhook
+    if (action === "notify-approval") {
+      const { invoice } = body;
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+
+      if (!n8nWebhookUrl) {
+        return new Response(JSON.stringify({ success: false, reason: "N8N_WEBHOOK_URL not configured" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const webhookResponse = await fetch(n8nWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "invoice_approved",
+            invoice,
+            approved_by: invoice.approved_by,
+            approved_at: invoice.approved_at,
+          }),
+        });
+
+        const responseStatus = webhookResponse.status;
+        // Consume body to prevent resource leak
+        await webhookResponse.text();
+
+        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (webhookErr) {
+        console.error("n8n webhook call failed:", webhookErr);
+        return new Response(JSON.stringify({ success: false, reason: "Webhook call failed" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

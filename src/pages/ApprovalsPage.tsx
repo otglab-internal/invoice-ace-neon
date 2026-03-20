@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { nowGMT8 } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,13 +60,15 @@ const ApprovalsPage: React.FC = () => {
 
   const handleApprove = async (id: string) => {
     setProcessing(true);
+    const approvedAt = nowGMT8();
+    const approvedBy = systemId || "";
     const { error } = await supabase
       .from("invoices")
       .update({
         status: "approved",
         approval_note: adjustmentNote || null,
-        approved_by: systemId || "",
-        approved_at: nowGMT8(),
+        approved_by: approvedBy,
+        approved_at: approvedAt,
       } as any)
       .eq("id", id);
 
@@ -73,6 +76,15 @@ const ApprovalsPage: React.FC = () => {
       toast.error("Failed to approve invoice");
     } else {
       toast.success("Invoice approved and will be pushed to Xero");
+
+      // Fire webhook notification to n8n (fire-and-forget)
+      const invoice = invoices.find((i) => i.id === id);
+      if (invoice) {
+        apiClient.invoices("notify-approval", {
+          invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null },
+        }).catch((err) => console.warn("n8n webhook notification failed:", err));
+      }
+
       setSelectedId(null);
       setAdjustmentNote("");
       fetchInvoices();
