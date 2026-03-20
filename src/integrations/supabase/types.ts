@@ -79,6 +79,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string | null
           line_items: Json
+          reference: string | null
           requires_approval: boolean
           status: string
           submitted_by_name: string
@@ -96,6 +97,7 @@ export type Database = {
           invoice_date: string
           invoice_number?: string | null
           line_items?: Json
+          reference?: string | null
           requires_approval?: boolean
           status?: string
           submitted_by_name?: string
@@ -113,6 +115,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: string | null
           line_items?: Json
+          reference?: string | null
           requires_approval?: boolean
           status?: string
           submitted_by_name?: string
