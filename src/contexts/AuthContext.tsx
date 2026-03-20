@@ -21,8 +21,8 @@ interface AuthContextType {
   role: AppRole;
   /** Tags assigned to this user (requester / approver) */
   tags: StaffTag[];
-  /** Centre location from staff_centre_assignments */
-  centreLocation: string | null;
+  /** Centre locations from staff_centre_assignments */
+  centreLocations: string[];
   /** Computed permissions for the current role + tags */
   permissions: Permissions;
   /** Legacy convenience — true for admin */
