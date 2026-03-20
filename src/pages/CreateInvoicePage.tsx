@@ -99,6 +99,7 @@ const CreateInvoicePage: React.FC = () => {
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [reference, setReference] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
@@ -222,6 +223,7 @@ const CreateInvoicePage: React.FC = () => {
       const invoicePayload = {
         contact_name: contactName,
         invoice_date: invoiceDate,
+        reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
         submitted_by_system_id: systemId || "",
@@ -250,6 +252,7 @@ const CreateInvoicePage: React.FC = () => {
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setContactId("");
       setNewContactName("");
+      setReference("");
       setLineItems([createLineItem(defaultId)]);
     } catch (err) {
       toast.error("Something went wrong");
@@ -355,10 +358,23 @@ const CreateInvoicePage: React.FC = () => {
             )}
           </div>
 
-          {/* Invoice Date */}
-          <div className="bg-card border border-border rounded-xl p-5">
-            <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
-            <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+          {/* Date & Reference */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
+                <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+              </div>
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Reference</Label>
+                <Input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="e.g. PO-12345"
+                  className="mt-2"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Line Items */}
