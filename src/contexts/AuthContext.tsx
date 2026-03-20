@@ -127,7 +127,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expiryDate: data.user.expiry_date,
     };
 
-    const sysId = data.system_id || null;
+    // Use the user's own ID for tag lookups (not system_id which may be a system_access entry)
+    const userId = data.user.id || data.system_id || null;
+    const sysId = data.system_id || userId;
 
     setUser(authUser);
     setEnvironment(data.environment || null);
@@ -135,8 +137,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
     localStorage.setItem("auth_system_id", sysId || "");
+    // Store user ID separately for tag lookups
+    localStorage.setItem("auth_user_id", userId || "");
 
-    if (sysId) await fetchTags(sysId);
+    if (userId) await fetchTags(userId);
   }, [fetchTags]);
 
   const logout = useCallback(() => {
