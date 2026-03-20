@@ -7,12 +7,12 @@
  *                   Approver tag scopes approval to their centre location.
  *   - management:  No inherent invoice permissions — needs "requester" or "approver" tag.
  *                   Approver tag gives global approval access.
- *   - admin:       Full access to everything including settings and global config.
- *                   Always has requester + approver capabilities.
+ *   - admin:       Access to settings, global config, templates, all staff.
+ *                   Still needs requester/approver tags for invoice capabilities.
  *
  * Tags (assigned on All Staff page):
  *   - requester:   Can create invoices and view their own invoices.
- *   - approver:    Can approve invoices (scoped by centre for centre role, global for management).
+ *   - approver:    Can approve invoices (scoped by centre for centre role, global for management/admin).
  */
 
 export type AppRole = "sales" | "centre" | "management" | "admin";
@@ -28,15 +28,15 @@ export function normalizeRole(raw: string | undefined | null): AppRole {
 }
 
 export interface Permissions {
-  /** Can create new invoices (requires "requester" tag or admin) */
+  /** Can create new invoices (requires "requester" tag) */
   canCreateInvoice: boolean;
-  /** Can view invoice history on dashboard (requires requester or approver tag, or admin) */
+  /** Can view invoice history on dashboard (requires requester or approver tag) */
   canViewInvoices: boolean;
   /** Can only see their own invoices (requester without global view) */
   viewOwnInvoicesOnly: boolean;
   /** Can see ALL invoices regardless of who submitted */
   canViewAllInvoices: boolean;
-  /** Can approve / reject invoices (requires "approver" tag or admin) */
+  /** Can approve / reject invoices (requires "approver" tag) */
   canApproveInvoices: boolean;
   /** Approval is scoped to their centre only (centre role with approver tag) */
   approveSubordinatesOnly: boolean;
@@ -56,39 +56,23 @@ export interface Permissions {
 
 export function getPermissions(role: AppRole, tags: StaffTag[] = []): Permissions {
   const hasTag = (t: StaffTag) => tags.includes(t);
-
-  if (role === "admin") {
-    return {
-      canCreateInvoice: true,
-      canViewInvoices: true,
-      viewOwnInvoicesOnly: false,
-      canViewAllInvoices: true,
-      canApproveInvoices: true,
-      approveSubordinatesOnly: false,
-      canAccessApprovals: true,
-      canAccessSettings: true,
-      canAccessGlobalConfig: true,
-      canManageTemplates: true,
-      canAccessAllStaff: true,
-      isSystemAdmin: true,
-    };
-  }
-
   const isRequester = hasTag("requester");
   const isApprover = hasTag("approver");
+
+  const isAdmin = role === "admin";
 
   return {
     canCreateInvoice: isRequester,
     canViewInvoices: isRequester || isApprover,
-    viewOwnInvoicesOnly: isRequester && !isApprover && role !== "management",
-    canViewAllInvoices: isApprover && role === "management",
+    viewOwnInvoicesOnly: isRequester && !isApprover && role !== "management" && !isAdmin,
+    canViewAllInvoices: isApprover && (role === "management" || isAdmin),
     canApproveInvoices: isApprover,
     approveSubordinatesOnly: isApprover && role === "centre",
     canAccessApprovals: isApprover,
-    canAccessSettings: false,
-    canAccessGlobalConfig: false,
-    canManageTemplates: false,
-    canAccessAllStaff: role === "management",
-    isSystemAdmin: false,
+    canAccessSettings: isAdmin,
+    canAccessGlobalConfig: isAdmin,
+    canManageTemplates: isAdmin,
+    canAccessAllStaff: isAdmin || role === "management",
+    isSystemAdmin: isAdmin,
   };
 }
