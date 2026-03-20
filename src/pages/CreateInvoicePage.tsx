@@ -356,10 +356,23 @@ const CreateInvoicePage: React.FC = () => {
             )}
           </div>
 
-          {/* Invoice Date */}
-          <div className="bg-card border border-border rounded-xl p-5">
-            <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
-            <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+          {/* Date & Reference */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
+                <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+              </div>
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Reference</Label>
+                <Input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="e.g. PO-12345"
+                  className="mt-2"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Line Items */}
