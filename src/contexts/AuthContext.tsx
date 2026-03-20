@@ -168,7 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = permissions.isSystemAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocation, permissions, isAdmin, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocations, permissions, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );

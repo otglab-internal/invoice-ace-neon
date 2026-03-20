@@ -59,7 +59,7 @@ const DashboardPage: React.FC = () => {
       setLoading(false);
     };
     fetchInvoices();
-  }, [systemId, permissions, centreLocation, role, canView]);
+  }, [systemId, permissions, centreLocations, role, canView]);
 
   if (!canView) {
     return (
