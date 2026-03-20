@@ -142,6 +142,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("auth_system_id", sysId || "");
     // Store user ID separately for tag lookups
     localStorage.setItem("auth_user_id", userId || "");
+    // Store auth token for edge function calls
+    if (data.token) {
+      localStorage.setItem("auth_token", data.token);
+    }
 
     if (userId) await fetchTags(userId);
   }, [fetchTags]);
@@ -155,6 +159,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_environment");
     localStorage.removeItem("auth_system_id");
+    localStorage.removeItem("auth_user_id");
+    localStorage.removeItem("auth_token");
   }, []);
 
   const role = normalizeRole(user?.role);
