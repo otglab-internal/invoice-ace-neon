@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchTags = useCallback(async (sysId: string) => {
     const { data } = await supabase
       .from("staff_centre_assignments")
-      .select("tags, centre_location")
+      .select("tags, centre_locations")
       .eq("system_id", sysId)
       .limit(1);
 
@@ -62,10 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const row = data[0] as any;
       const rawTags: string[] = row.tags || [];
       setTags(rawTags.filter((t: string) => t === "requester" || t === "approver") as StaffTag[]);
-      setCentreLocation(row.centre_location || null);
+      setCentreLocations(row.centre_locations || []);
     } else {
       setTags([]);
-      setCentreLocation(null);
+      setCentreLocations([]);
     }
   }, []);
 
