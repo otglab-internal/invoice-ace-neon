@@ -159,6 +159,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_environment");
     localStorage.removeItem("auth_system_id");
+    localStorage.removeItem("auth_user_id");
+    localStorage.removeItem("auth_token");
   }, []);
 
   const role = normalizeRole(user?.role);
