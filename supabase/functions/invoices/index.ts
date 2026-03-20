@@ -60,6 +60,46 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const { action, ...body } = await req.json();
+
+    // notify-approval is a fire-and-forget webhook trigger — skip auth
+    if (action === "notify-approval") {
+      const { invoice } = body;
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+
+      if (!n8nWebhookUrl) {
+        return new Response(JSON.stringify({ success: false, reason: "N8N_WEBHOOK_URL not configured" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const webhookResponse = await fetch(n8nWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "invoice_approved",
+            invoice,
+            approved_by: invoice.approved_by,
+            approved_at: invoice.approved_at,
+          }),
+        });
+
+        const responseStatus = webhookResponse.status;
+        await webhookResponse.text();
+
+        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (webhookErr) {
+        console.error("n8n webhook call failed:", webhookErr);
+        return new Response(JSON.stringify({ success: false, reason: "Webhook call failed" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // All other actions require authentication
     const claims = await authenticate(req);
     if (!claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -69,7 +109,6 @@ Deno.serve(async (req) => {
     }
 
     const sql = getDb(req);
-    const { action, ...body } = await req.json();
     const userId = claims.sub as string;
 
     // ACTION: create - Create a new invoice
