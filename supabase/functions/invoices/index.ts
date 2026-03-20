@@ -62,13 +62,14 @@ Deno.serve(async (req) => {
   try {
     const { action, ...body } = await req.json();
 
-    // notify-approval is a fire-and-forget webhook trigger — skip auth
+    // notify-approval is a webhook proxy — skip auth but fail loudly on delivery errors
     if (action === "notify-approval") {
       const { invoice } = body;
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
 
       if (!n8nWebhookUrl) {
-        return new Response(JSON.stringify({ success: false, reason: "N8N_WEBHOOK_URL not configured" }), {
+        return new Response(JSON.stringify({ error: "N8N_WEBHOOK_URL not configured" }), {
+          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -80,20 +81,33 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             event: "invoice_approved",
             invoice,
-            approved_by: invoice.approved_by,
-            approved_at: invoice.approved_at,
+            approved_by: invoice?.approved_by,
+            approved_at: invoice?.approved_at,
           }),
         });
 
         const responseStatus = webhookResponse.status;
-        await webhookResponse.text();
+        const responseBody = await webhookResponse.text();
+
+        if (!webhookResponse.ok) {
+          console.error("n8n webhook returned non-2xx", { responseStatus, responseBody });
+          return new Response(JSON.stringify({
+            error: `n8n webhook returned ${responseStatus}`,
+            webhookStatus: responseStatus,
+            webhookBody: responseBody,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
         return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (webhookErr) {
         console.error("n8n webhook call failed:", webhookErr);
-        return new Response(JSON.stringify({ success: false, reason: "Webhook call failed" }), {
+        return new Response(JSON.stringify({ error: "Webhook call failed" }), {
+          status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
