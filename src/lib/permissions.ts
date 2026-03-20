@@ -30,6 +30,8 @@ export function normalizeRole(raw: string | undefined | null): AppRole {
 export interface Permissions {
   /** Can create new invoices (requires "requester" tag or admin) */
   canCreateInvoice: boolean;
+  /** Can view invoice history on dashboard (requires requester or approver tag, or admin) */
+  canViewInvoices: boolean;
   /** Can only see their own invoices (requester without global view) */
   viewOwnInvoicesOnly: boolean;
   /** Can see ALL invoices regardless of who submitted */
@@ -58,6 +60,7 @@ export function getPermissions(role: AppRole, tags: StaffTag[] = []): Permission
   if (role === "admin") {
     return {
       canCreateInvoice: true,
+      canViewInvoices: true,
       viewOwnInvoicesOnly: false,
       canViewAllInvoices: true,
       canApproveInvoices: true,
@@ -76,6 +79,7 @@ export function getPermissions(role: AppRole, tags: StaffTag[] = []): Permission
 
   return {
     canCreateInvoice: isRequester,
+    canViewInvoices: isRequester || isApprover,
     viewOwnInvoicesOnly: isRequester && !isApprover && role !== "management",
     canViewAllInvoices: isApprover && role === "management",
     canApproveInvoices: isApprover,
