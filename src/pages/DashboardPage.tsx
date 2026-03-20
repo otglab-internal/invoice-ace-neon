@@ -32,7 +32,7 @@ const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 
 const DashboardPage: React.FC = () => {
-  const { user, systemId, permissions, centreLocation, role } = useAuth();
+  const { user, systemId, permissions, centreLocations, role } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +59,7 @@ const DashboardPage: React.FC = () => {
       setLoading(false);
     };
     fetchInvoices();
-  }, [systemId, permissions, centreLocation, role, canView]);
+  }, [systemId, permissions, centreLocations, role, canView]);
 
   if (!canView) {
     return (

@@ -133,7 +133,7 @@ export type Database = {
       staff_centre_assignments: {
         Row: {
           assigned_by: string | null
-          centre_location: string
+          centre_locations: string[]
           created_at: string
           id: string
           system_id: string
@@ -144,7 +144,7 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
-          centre_location?: string
+          centre_locations?: string[]
           created_at?: string
           id?: string
           system_id: string
@@ -155,7 +155,7 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
-          centre_location?: string
+          centre_locations?: string[]
           created_at?: string
           id?: string
           system_id?: string

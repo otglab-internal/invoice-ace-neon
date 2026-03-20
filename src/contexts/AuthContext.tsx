@@ -21,8 +21,8 @@ interface AuthContextType {
   role: AppRole;
   /** Tags assigned to this user (requester / approver) */
   tags: StaffTag[];
-  /** Centre location from staff_centre_assignments */
-  centreLocation: string | null;
+  /** Centre locations from staff_centre_assignments */
+  centreLocations: string[];
   /** Computed permissions for the current role + tags */
   permissions: Permissions;
   /** Legacy convenience — true for admin */
@@ -47,14 +47,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [environment, setEnvironment] = useState<string | null>(null);
   const [systemId, setSystemId] = useState<string | null>(null);
   const [tags, setTags] = useState<StaffTag[]>([]);
-  const [centreLocation, setCentreLocation] = useState<string | null>(null);
+  const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch tags from staff_centre_assignments when systemId changes
   const fetchTags = useCallback(async (sysId: string) => {
     const { data } = await supabase
       .from("staff_centre_assignments")
-      .select("tags, centre_location")
+      .select("tags, centre_locations")
       .eq("system_id", sysId)
       .limit(1);
 
@@ -62,10 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const row = data[0] as any;
       const rawTags: string[] = row.tags || [];
       setTags(rawTags.filter((t: string) => t === "requester" || t === "approver") as StaffTag[]);
-      setCentreLocation(row.centre_location || null);
+      setCentreLocations(row.centre_locations || []);
     } else {
       setTags([]);
-      setCentreLocation(null);
+      setCentreLocations([]);
     }
   }, []);
 
@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEnvironment(null);
     setSystemId(null);
     setTags([]);
-    setCentreLocation(null);
+    setCentreLocations([]);
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_environment");
     localStorage.removeItem("auth_system_id");
@@ -168,7 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = permissions.isSystemAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocation, permissions, isAdmin, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocations, permissions, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );
