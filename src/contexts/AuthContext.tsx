@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [environment, setEnvironment] = useState<string | null>(null);
   const [systemId, setSystemId] = useState<string | null>(null);
   const [tags, setTags] = useState<StaffTag[]>([]);
-  const [centreLocation, setCentreLocation] = useState<string | null>(null);
+  const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch tags from staff_centre_assignments when systemId changes
