@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { nowGMT8 } from "@/lib/utils";
+import { apiClient } from "@/lib/api-client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
