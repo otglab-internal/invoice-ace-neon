@@ -190,7 +190,37 @@ Deno.serve(async (req) => {
         });
       }
 
-      return new Response(JSON.stringify({ invoice: result[0] }), {
+      const approvedInvoice = result[0];
+
+      // Send approved invoice data to n8n webhook (fire-and-forget)
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+      if (n8nWebhookUrl) {
+        try {
+          // Fetch contact name for the webhook payload
+          const contactRows = await sql`
+            SELECT c.name as contact_name
+            FROM contacts c WHERE c.id = ${approvedInvoice.contact_id}
+            LIMIT 1
+          `;
+          const contactName = contactRows.length > 0 ? contactRows[0].contact_name : null;
+
+          await fetch(n8nWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              event: "invoice_approved",
+              invoice: { ...approvedInvoice, contact_name: contactName },
+              approved_by: userId,
+              approved_at: approvedInvoice.approved_at,
+            }),
+          });
+        } catch (webhookErr) {
+          console.error("n8n webhook call failed:", webhookErr);
+          // Don't fail the approval if webhook fails
+        }
+      }
+
+      return new Response(JSON.stringify({ invoice: approvedInvoice }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
