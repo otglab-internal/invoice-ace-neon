@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEnvironment(null);
     setSystemId(null);
     setTags([]);
-    setCentreLocation(null);
+    setCentreLocations([]);
     localStorage.removeItem("auth_user");
     localStorage.removeItem("auth_environment");
     localStorage.removeItem("auth_system_id");
