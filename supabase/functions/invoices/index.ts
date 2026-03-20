@@ -60,6 +60,60 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const { action, ...body } = await req.json();
+
+    // notify-approval is a webhook proxy — skip auth but fail loudly on delivery errors
+    if (action === "notify-approval") {
+      const { invoice } = body;
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+
+      if (!n8nWebhookUrl) {
+        return new Response(JSON.stringify({ error: "N8N_WEBHOOK_URL not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      try {
+        const webhookResponse = await fetch(n8nWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "invoice_approved",
+            invoice,
+            approved_by: invoice?.approved_by,
+            approved_at: invoice?.approved_at,
+          }),
+        });
+
+        const responseStatus = webhookResponse.status;
+        const responseBody = await webhookResponse.text();
+
+        if (!webhookResponse.ok) {
+          console.error("n8n webhook returned non-2xx", { responseStatus, responseBody });
+          return new Response(JSON.stringify({
+            error: `n8n webhook returned ${responseStatus}`,
+            webhookStatus: responseStatus,
+            webhookBody: responseBody,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (webhookErr) {
+        console.error("n8n webhook call failed:", webhookErr);
+        return new Response(JSON.stringify({ error: "Webhook call failed" }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // All other actions require authentication
     const claims = await authenticate(req);
     if (!claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -69,7 +123,6 @@ Deno.serve(async (req) => {
     }
 
     const sql = getDb(req);
-    const { action, ...body } = await req.json();
     const userId = claims.sub as string;
 
     // ACTION: create - Create a new invoice
@@ -190,7 +243,37 @@ Deno.serve(async (req) => {
         });
       }
 
-      return new Response(JSON.stringify({ invoice: result[0] }), {
+      const approvedInvoice = result[0];
+
+      // Send approved invoice data to n8n webhook (fire-and-forget)
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+      if (n8nWebhookUrl) {
+        try {
+          // Fetch contact name for the webhook payload
+          const contactRows = await sql`
+            SELECT c.name as contact_name
+            FROM contacts c WHERE c.id = ${approvedInvoice.contact_id}
+            LIMIT 1
+          `;
+          const contactName = contactRows.length > 0 ? contactRows[0].contact_name : null;
+
+          await fetch(n8nWebhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              event: "invoice_approved",
+              invoice: { ...approvedInvoice, contact_name: contactName },
+              approved_by: userId,
+              approved_at: approvedInvoice.approved_at,
+            }),
+          });
+        } catch (webhookErr) {
+          console.error("n8n webhook call failed:", webhookErr);
+          // Don't fail the approval if webhook fails
+        }
+      }
+
+      return new Response(JSON.stringify({ invoice: approvedInvoice }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -313,6 +396,8 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // notify-approval is handled before auth check above
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,

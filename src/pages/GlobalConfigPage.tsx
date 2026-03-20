@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Globe, Image } from "lucide-react";
+import { Save, Loader2, Image, Star } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
 
 interface ConfigEntry {
@@ -15,9 +15,8 @@ interface ConfigEntry {
 }
 
 const CONFIG_KEYS = [
-  { key: "connection_string_production", label: "Production Connection String", icon: Globe, description: "Database connection string for the production environment" },
-  { key: "connection_string_sandbox", label: "Sandbox Connection String", icon: Globe, description: "Database connection string for the sandbox environment" },
-  { key: "logo_url", label: "Logo URL", icon: Image, description: "URL for the application logo displayed across all pages" },
+  { key: "logo_url", label: "Logo URL", icon: Image, description: "URL for the application logo displayed across all pages", placeholder: "https://example.com/logo.png" },
+  { key: "favicon_url", label: "Favicon URL", icon: Star, description: "URL for the browser tab icon (favicon)", placeholder: "https://example.com/favicon.ico" },
 ];
 
 const GlobalConfigPage: React.FC = () => {
@@ -46,12 +45,34 @@ const GlobalConfigPage: React.FC = () => {
     setSaving(true);
     try {
       for (const { key } of CONFIG_KEYS) {
-        const { error } = await supabase
+        const value = config[key] ?? "";
+        // Upsert: try update first, insert if no rows matched
+        const { data, error } = await supabase
           .from("global_config")
-          .update({ value: config[key] ?? "", updated_at: nowGMT8() })
-          .eq("key", key);
+          .update({ value, updated_at: nowGMT8() })
+          .eq("key", key)
+          .select();
         if (error) throw error;
+        if (!data || data.length === 0) {
+          const { error: insertErr } = await supabase
+            .from("global_config")
+            .insert({ key, value });
+          if (insertErr) throw insertErr;
+        }
       }
+
+      // Apply favicon immediately
+      const faviconUrl = config["favicon_url"];
+      if (faviconUrl) {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+        if (!link) {
+          link = document.createElement("link");
+          link.rel = "icon";
+          document.head.appendChild(link);
+        }
+        link.href = faviconUrl;
+      }
+
       toast({ title: "Configuration saved" });
     } catch (err: any) {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
@@ -66,7 +87,7 @@ const GlobalConfigPage: React.FC = () => {
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Global Configuration</h1>
-            <p className="text-muted-foreground text-sm mt-1">Manage connection strings and branding across environments.</p>
+            <p className="text-muted-foreground text-sm mt-1">Manage branding settings across the application.</p>
           </div>
 
           {loading ? (
@@ -75,7 +96,7 @@ const GlobalConfigPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {CONFIG_KEYS.map(({ key, label, icon: Icon, description }) => (
+              {CONFIG_KEYS.map(({ key, label, icon: Icon, description, placeholder }) => (
                 <Card key={key}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
@@ -88,15 +109,20 @@ const GlobalConfigPage: React.FC = () => {
                     <Label htmlFor={key} className="sr-only">{label}</Label>
                     <Input
                       id={key}
-                      type={key.startsWith("connection_string") ? "password" : "text"}
-                      placeholder={key === "logo_url" ? "https://example.com/logo.png" : "postgresql://..."}
+                      type="text"
+                      placeholder={placeholder}
                       value={config[key] ?? ""}
                       onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
                     />
-                    {key === "logo_url" && config[key] && (
+                    {config[key] && (
                       <div className="mt-3 p-3 border border-border rounded-lg bg-muted/50">
                         <p className="text-xs text-muted-foreground mb-2">Preview:</p>
-                        <img src={config[key]} alt="Logo preview" className="max-h-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                        <img
+                          src={config[key]}
+                          alt={`${label} preview`}
+                          className={key === "favicon_url" ? "w-8 h-8 object-contain" : "max-h-12 object-contain"}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
                       </div>
                     )}
                   </CardContent>
