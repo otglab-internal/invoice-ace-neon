@@ -75,14 +75,24 @@ const ApprovalsPage: React.FC = () => {
     if (error) {
       toast.error("Failed to approve invoice");
     } else {
-      toast.success("Invoice approved and will be pushed to Xero");
-
-      // Fire webhook notification to n8n (fire-and-forget)
       const invoice = invoices.find((i) => i.id === id);
+      let webhookDelivered = true;
+
       if (invoice) {
-        apiClient.invoices("notify-approval", {
-          invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null },
-        }).catch((err) => console.warn("n8n webhook notification failed:", err));
+        try {
+          await apiClient.invoices("notify-approval", {
+            invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null },
+          });
+        } catch (err) {
+          webhookDelivered = false;
+          console.warn("n8n webhook notification failed:", err);
+        }
+      }
+
+      if (webhookDelivered) {
+        toast.success("Invoice approved and webhook sent to n8n");
+      } else {
+        toast.error("Invoice approved, but the n8n webhook failed");
       }
 
       setSelectedId(null);
