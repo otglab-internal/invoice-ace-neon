@@ -223,6 +223,7 @@ const CreateInvoicePage: React.FC = () => {
       const invoicePayload = {
         contact_name: contactName,
         invoice_date: invoiceDate,
+        reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
         submitted_by_system_id: systemId || "",
