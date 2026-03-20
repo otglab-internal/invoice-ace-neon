@@ -252,6 +252,7 @@ const CreateInvoicePage: React.FC = () => {
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setContactId("");
       setNewContactName("");
+      setReference("");
       setLineItems([createLineItem(defaultId)]);
     } catch (err) {
       toast.error("Something went wrong");
