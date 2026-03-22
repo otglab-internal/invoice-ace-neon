@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, contact_name, invoice_date, reference, line_items, template_id } = body;
+      const { system_id, user_id, contact_name, invoice_date, reference, line_items } = body;
 
       const missing: string[] = [];
       if (!system_id) missing.push("system_id");
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
           submitted_by_name: `API:${user_id}`,
           requires_approval: true,
           status: "pending_approval",
-          template_id: template_id || null,
+          template_id: null,
         }),
       });
 
