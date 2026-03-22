@@ -25,8 +25,8 @@ const statusPill = (status: string) => {
   return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
 };
 
-const formatCurrency = (amount: number) =>
-  `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+const formatCurrency = (amount: number, currency = "RM") =>
+  `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
@@ -35,8 +35,14 @@ const DashboardPage: React.FC = () => {
   const { user, systemId, permissions, centreLocations, role } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState("RM");
 
   const canView = permissions.canViewInvoices;
+
+  useEffect(() => {
+    supabase.from("global_config").select("value").eq("key", "currency").maybeSingle()
+      .then(({ data }) => { if (data?.value) setCurrency(data.value); });
+  }, []);
 
   useEffect(() => {
     if (!canView) {
@@ -141,7 +147,7 @@ const DashboardPage: React.FC = () => {
                   <div className="flex items-center gap-6">
                     <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
                     <span className="text-sm font-medium text-foreground w-24 text-right">
-                      {formatCurrency(inv.total)}
+                      {formatCurrency(inv.total, currency)}
                     </span>
                     {statusPill(inv.status)}
                   </div>

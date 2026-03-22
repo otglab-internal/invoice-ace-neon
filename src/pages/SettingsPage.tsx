@@ -7,11 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap } from "lucide-react";
+import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const CURRENCIES = [
+  { value: "RM", label: "RM — Malaysian Ringgit" },
+  { value: "SGD$", label: "SGD$ — Singapore Dollar" },
+];
 
 interface UserFlag {
   id: string;
@@ -35,6 +41,7 @@ const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [autoMode, setAutoMode] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [currency, setCurrency] = useState("RM");
   const FREETEXT_ID = "__freetext__";
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
 
@@ -54,16 +61,18 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes, staffRes, freeTextRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes] = await Promise.all([
       supabase.from("user_approval_flags").select("*").order("user_name"),
       supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
       supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
       supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
+      supabase.from("global_config").select("value").eq("key", "currency").maybeSingle(),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
     if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
     setFreeTextFlagged(freeTextRes.data?.value === "true");
+    if (currencyRes.data?.value) setCurrency(currencyRes.data.value);
     setLoadingFlags(false);
   };
 
@@ -171,6 +180,32 @@ const SettingsPage: React.FC = () => {
   const flaggedUsers = userFlags.filter((f) => f.requires_approval);
   const unflaggedTemplates = templates.filter((t) => !t.requires_approval);
   const flaggedTemplates = templates.filter((t) => t.requires_approval);
+
+  const saveCurrency = async (val: string) => {
+    setCurrency(val);
+    const { data: existing } = await supabase
+      .from("global_config")
+      .select("id")
+      .eq("key", "currency")
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from("global_config")
+        .update({ value: val, updated_at: nowGMT8() } as any)
+        .eq("key", "currency"));
+    } else {
+      ({ error } = await supabase
+        .from("global_config")
+        .insert({ key: "currency", value: val } as any));
+    }
+    if (error) {
+      toast.error("Failed to save currency");
+    } else {
+      toast.success(`Currency set to ${val}`);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -373,6 +408,27 @@ const SettingsPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Currency */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold font-display text-foreground">Currency</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select the currency used for displaying invoice amounts across the system.
+            </p>
+            <RadioGroup value={currency} onValueChange={saveCurrency} className="space-y-2">
+              {CURRENCIES.map((c) => (
+                <div key={c.value} className="flex items-center gap-3">
+                  <RadioGroupItem value={c.value} id={`currency-${c.value}`} />
+                  <Label htmlFor={`currency-${c.value}`} className="text-sm text-foreground cursor-pointer">
+                    {c.label}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
           </div>
 
           {/* Xero Connection */}
