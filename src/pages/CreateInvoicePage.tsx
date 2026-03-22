@@ -252,7 +252,13 @@ const CreateInvoicePage: React.FC = () => {
           console.warn("Failed to write log:", logErr);
         }
 
+        // Send approval notification email if needed
         if (willNeedApproval) {
+          try {
+            await apiClient.invoices("send-approval-email", { invoiceId: inserted.id });
+          } catch (emailErr) {
+            console.warn("Failed to send approval email:", emailErr);
+          }
           toast.info("Invoice submitted for approval", {
             description: "Your invoice requires approval before being pushed to Xero.",
             icon: <ShieldAlert className="w-4 h-4" />,
