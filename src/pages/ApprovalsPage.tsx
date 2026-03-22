@@ -3,13 +3,23 @@ import { nowGMT8 } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Check, X, Eye, Loader2, RefreshCw } from "lucide-react";
+import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+
+interface LineItem {
+  description: string;
+  quantity: number;
+  cost: number;
+  account?: string;
+  center?: string;
+}
 
 interface Invoice {
   id: string;
@@ -17,7 +27,7 @@ interface Invoice {
   contact_name: string;
   invoice_date: string;
   reference: string | null;
-  line_items: any[];
+  line_items: LineItem[];
   total: number;
   submitted_by_name: string;
   submitted_by_system_id: string;
@@ -38,6 +48,10 @@ const ApprovalsPage: React.FC = () => {
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [processing, setProcessing] = useState(false);
   const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editLineItems, setEditLineItems] = useState<LineItem[]>([]);
+  const [editContactName, setEditContactName] = useState("");
+  const [editReference, setEditReference] = useState("");
 
   const selected = invoices.find((i) => i.id === selectedId);
 
@@ -79,6 +93,65 @@ const ApprovalsPage: React.FC = () => {
     }
   };
 
+  const startEditing = (inv: Invoice) => {
+    setEditing(true);
+    setEditContactName(inv.contact_name);
+    setEditReference(inv.reference || "");
+    setEditLineItems(
+      (inv.line_items || []).map((li: any) => ({
+        description: li.description || "",
+        quantity: Number(li.quantity) || 0,
+        cost: Number(li.cost) || 0,
+        account: li.account || "",
+        center: li.center || "",
+      }))
+    );
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditLineItems([]);
+    setEditContactName("");
+    setEditReference("");
+  };
+
+  const saveEdits = async (id: string) => {
+    const newTotal = editLineItems.reduce((s, li) => s + li.quantity * li.cost, 0);
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        contact_name: editContactName,
+        reference: editReference,
+        line_items: JSON.parse(JSON.stringify(editLineItems)),
+        total: newTotal,
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to save edits");
+    } else {
+      toast.success("Invoice updated");
+      setEditing(false);
+      fetchInvoices();
+    }
+  };
+
+  const updateEditItem = (idx: number, updates: Partial<LineItem>) => {
+    setEditLineItems((prev) =>
+      prev.map((li, i) => (i === idx ? { ...li, ...updates } : li))
+    );
+  };
+
+  const removeEditItem = (idx: number) => {
+    setEditLineItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+  };
+
+  const addEditItem = () => {
+    setEditLineItems((prev) => [...prev, { description: "", quantity: 1, cost: 0 }]);
+  };
+
+  const editTotal = editLineItems.reduce((s, li) => s + (li.quantity || 0) * (li.cost || 0), 0);
+
   const handleApprove = async (id: string) => {
     setProcessing(true);
     const approvedAt = nowGMT8();
@@ -98,6 +171,13 @@ const ApprovalsPage: React.FC = () => {
     } else {
       const invoice = invoices.find((i) => i.id === id);
       await logAction(id, "approved", { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null });
+
+      // Send approval notification email
+      try {
+        await apiClient.invoices("send-approval-email", { invoiceId: id });
+      } catch (err) {
+        console.warn("Approval email failed:", err);
+      }
 
       let webhookDelivered = true;
       if (invoice) {
@@ -119,6 +199,7 @@ const ApprovalsPage: React.FC = () => {
 
       setSelectedId(null);
       setAdjustmentNote("");
+      setEditing(false);
       fetchInvoices();
     }
     setProcessing(false);
@@ -144,6 +225,7 @@ const ApprovalsPage: React.FC = () => {
       toast.error("Invoice rejected");
       setSelectedId(null);
       setAdjustmentNote("");
+      setEditing(false);
       fetchInvoices();
     }
     setProcessing(false);
@@ -225,44 +307,145 @@ const ApprovalsPage: React.FC = () => {
             {/* Pending section */}
             {pendingInvoices.length > 0 && (
               <div className="flex gap-4">
-                {/* List — takes most space */}
+                {/* List */}
                 <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
-                  <InvoiceTable items={pendingInvoices} onSelect={setSelectedId} selectedId={selectedId} />
+                  <InvoiceTable items={pendingInvoices} onSelect={(id) => { setSelectedId(id); cancelEditing(); }} selectedId={selectedId} />
                 </div>
 
-                {/* Compact detail pane */}
-                <div className="w-96 shrink-0 bg-card border border-border rounded-xl p-4">
+                {/* Selection pane - 768px */}
+                <div className="shrink-0 bg-card border border-border rounded-xl p-5 overflow-y-auto max-h-[80vh]" style={{ width: 768 }}>
                   {selected && selected.status === "pending_approval" ? (
-                    <div className="space-y-2 animate-fade-in">
+                    <div className="space-y-4 animate-fade-in">
                       <div className="flex items-center justify-between">
-                        <h3 className="font-semibold font-display text-foreground text-xs truncate">
+                        <h3 className="font-semibold font-display text-foreground text-sm">
                           {selected.invoice_number || selected.id.slice(0, 8).toUpperCase()}
                         </h3>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setDetailInvoice(selected)}>
-                          <Eye className="w-3 h-3" />
-                        </Button>
+                        <div className="flex gap-1">
+                          {!editing && (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs" onClick={() => startEditing(selected)}>
+                              <Pencil className="w-3 h-3" /> Edit
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setDetailInvoice(selected)}>
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="space-y-1 text-xs">
-                        <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
-                        <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
-                        <p><span className="text-muted-foreground">Items:</span> {selected.line_items?.length || 0}</p>
-                      </div>
-                      <Textarea
-                        value={adjustmentNote}
-                        onChange={(e) => setAdjustmentNote(e.target.value)}
-                        placeholder="Notes (optional)..."
-                        rows={2}
-                        className="text-xs"
-                      />
-                      <div className="flex gap-2">
-                        <Button onClick={() => handleApprove(selected.id)} className="flex-1 gap-1" size="sm" disabled={processing}>
-                          {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                          Approve
-                        </Button>
-                        <Button onClick={() => handleReject(selected.id)} variant="destructive" className="flex-1 gap-1" size="sm" disabled={processing}>
-                          <X className="w-3 h-3" /> Reject
-                        </Button>
-                      </div>
+
+                      {editing ? (
+                        /* Editing mode */
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Contact Name</Label>
+                              <Input value={editContactName} onChange={(e) => setEditContactName(e.target.value)} className="mt-1 text-sm" />
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Reference</Label>
+                              <Input value={editReference} onChange={(e) => setEditReference(e.target.value)} className="mt-1 text-sm" />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <Label className="text-xs text-muted-foreground font-medium">Line Items</Label>
+                              <Button type="button" variant="ghost" size="sm" className="h-6 px-2 gap-1 text-xs" onClick={addEditItem}>
+                                <Plus className="w-3 h-3" /> Add
+                              </Button>
+                            </div>
+                            <div className="space-y-3">
+                              {editLineItems.map((li, idx) => (
+                                <div key={idx} className="bg-muted/50 border border-border rounded-lg p-3 space-y-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1">
+                                      <Label className="text-xs text-muted-foreground">Description</Label>
+                                      <Textarea
+                                        value={li.description}
+                                        onChange={(e) => updateEditItem(idx, { description: e.target.value })}
+                                        rows={2}
+                                        className="mt-1 text-xs"
+                                      />
+                                    </div>
+                                    {editLineItems.length > 1 && (
+                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mt-5 text-destructive" onClick={() => removeEditItem(idx)}>
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Quantity</Label>
+                                      <Input
+                                        type="number"
+                                        value={li.quantity}
+                                        onChange={(e) => updateEditItem(idx, { quantity: Number(e.target.value) })}
+                                        className="mt-1 text-xs"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs text-muted-foreground">Cost (RM)</Label>
+                                      <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={li.cost}
+                                        onChange={(e) => updateEditItem(idx, { cost: Number(e.target.value) })}
+                                        className="mt-1 text-xs"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="text-sm font-medium text-foreground">
+                            Total: RM {editTotal.toFixed(2)}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => saveEdits(selected.id)} className="flex-1">Save Edits</Button>
+                            <Button size="sm" variant="outline" onClick={cancelEditing}>Cancel</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* View mode */
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
+                            <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
+                            <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
+                            {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
+                          </div>
+
+                          {/* Line items preview */}
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground font-medium">Line Items ({selected.line_items?.length || 0})</p>
+                            {(selected.line_items || []).map((item: any, idx: number) => (
+                              <div key={idx} className="text-xs bg-muted/50 p-2 rounded-lg">
+                                <p className="text-foreground">{item.description}</p>
+                                <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          <Textarea
+                            value={adjustmentNote}
+                            onChange={(e) => setAdjustmentNote(e.target.value)}
+                            placeholder="Notes (optional)..."
+                            rows={2}
+                            className="text-xs"
+                          />
+                          <div className="flex gap-2">
+                            <Button onClick={() => handleApprove(selected.id)} className="flex-1 gap-1" size="sm" disabled={processing}>
+                              {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              Approve
+                            </Button>
+                            <Button onClick={() => handleReject(selected.id)} variant="destructive" className="flex-1 gap-1" size="sm" disabled={processing}>
+                              <X className="w-3 h-3" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
@@ -273,7 +456,7 @@ const ApprovalsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Processed (Approved / Rejected) section */}
+            {/* Processed section */}
             {processedInvoices.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-muted-foreground mb-2">Processed</h2>

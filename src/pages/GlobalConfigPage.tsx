@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
 
 interface ConfigEntry {
@@ -14,9 +15,18 @@ interface ConfigEntry {
   value: string;
 }
 
-const CONFIG_KEYS = [
+const BRANDING_KEYS = [
   { key: "logo_url", label: "Logo URL", icon: Image, description: "URL for the application logo displayed across all pages", placeholder: "https://example.com/logo.png" },
   { key: "favicon_url", label: "Favicon URL", icon: Star, description: "URL for the browser tab icon (favicon)", placeholder: "https://example.com/favicon.ico" },
+];
+
+const SMTP_KEYS = [
+  { key: "smtp_host", label: "SMTP Host", placeholder: "smtp.gmail.com" },
+  { key: "smtp_port", label: "SMTP Port", placeholder: "587" },
+  { key: "smtp_user", label: "SMTP Username", placeholder: "user@example.com" },
+  { key: "smtp_pass", label: "SMTP Password", placeholder: "••••••••", type: "password" },
+  { key: "smtp_from_email", label: "From Email", placeholder: "noreply@example.com" },
+  { key: "smtp_from_name", label: "From Name", placeholder: "Invoice Center" },
 ];
 
 const GlobalConfigPage: React.FC = () => {
@@ -44,9 +54,14 @@ const GlobalConfigPage: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      for (const { key } of CONFIG_KEYS) {
+      const allKeys = [
+        ...BRANDING_KEYS.map((k) => k.key),
+        ...SMTP_KEYS.map((k) => k.key),
+        "sandbox_test_email",
+      ];
+
+      for (const key of allKeys) {
         const value = config[key] ?? "";
-        // Upsert: try update first, insert if no rows matched
         const { data, error } = await supabase
           .from("global_config")
           .update({ value, updated_at: nowGMT8() })
@@ -87,7 +102,7 @@ const GlobalConfigPage: React.FC = () => {
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Global Configuration</h1>
-            <p className="text-muted-foreground text-sm mt-1">Manage branding settings across the application.</p>
+            <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, and environment settings.</p>
           </div>
 
           {loading ? (
@@ -96,7 +111,9 @@ const GlobalConfigPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {CONFIG_KEYS.map(({ key, label, icon: Icon, description, placeholder }) => (
+              {/* Branding */}
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Branding</h2>
+              {BRANDING_KEYS.map(({ key, label, icon: Icon, description, placeholder }) => (
                 <Card key={key}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center gap-2">
@@ -128,6 +145,55 @@ const GlobalConfigPage: React.FC = () => {
                   </CardContent>
                 </Card>
               ))}
+
+              {/* SMTP */}
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">SMTP Configuration</h2>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Email Server (SMTP)</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Configure SMTP settings for sending approval notification emails.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {SMTP_KEYS.map(({ key, label, placeholder, type }) => (
+                    <div key={key}>
+                      <Label htmlFor={key} className="text-xs text-muted-foreground">{label}</Label>
+                      <Input
+                        id={key}
+                        type={type || "text"}
+                        placeholder={placeholder}
+                        value={config[key] ?? ""}
+                        onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                        className="mt-1"
+                      />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Sandbox Test Email */}
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Sandbox Settings</h2>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Sandbox Test Email</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">When set, all emails in the Sandbox environment will be redirected to this address instead of the actual approvers.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Label htmlFor="sandbox_test_email" className="sr-only">Sandbox Test Email</Label>
+                  <Input
+                    id="sandbox_test_email"
+                    type="email"
+                    placeholder="test@example.com"
+                    value={config["sandbox_test_email"] ?? ""}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, sandbox_test_email: e.target.value }))}
+                  />
+                </CardContent>
+              </Card>
 
               <Button onClick={handleSave} disabled={saving} className="w-full">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}

@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { getSmtpConfig, getSandboxTestEmail, getApproverEmails, sendEmailViaSMTP, buildApprovalEmailHtml } from "./email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,34 @@ Deno.serve(async (req) => {
         }),
       });
 
+      // Send approval email if requires approval
+      if (created.requires_approval) {
+        try {
+          const dbSql = getDb(req);
+          const smtpConfig = await getSmtpConfig(dbSql);
+          if (smtpConfig) {
+            const env = req.headers.get("x-environment") || "development";
+            const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
+            
+            let recipients: string[];
+            if (sandboxEmail) {
+              recipients = [sandboxEmail];
+            } else {
+              // Determine center from line items
+              const centers = (created.line_items || []).map((li: any) => li.center).filter(Boolean);
+              recipients = await getApproverEmails(dbSql, centers);
+            }
+
+            if (recipients.length > 0) {
+              const html = buildApprovalEmailHtml(created);
+              await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval - ${created.contact_name}`, html);
+            }
+          }
+        } catch (emailErr) {
+          console.error("Failed to send approval email:", emailErr);
+        }
+      }
+
       return new Response(JSON.stringify({
         success: true,
         invoice_id: created.id,
@@ -198,6 +227,53 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+    }
+
+    // send-approval-email — send email to approvers for an invoice (no auth required for internal use)
+    if (action === "send-approval-email") {
+      const { invoiceId } = body;
+      const dbSql = getDb(req);
+
+      const invoiceRows = await dbSql`SELECT * FROM invoices WHERE id = ${invoiceId} LIMIT 1`;
+      if (invoiceRows.length === 0) {
+        return new Response(JSON.stringify({ error: "Invoice not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const invoice = invoiceRows[0];
+      const smtpConfig = await getSmtpConfig(dbSql);
+      if (!smtpConfig) {
+        return new Response(JSON.stringify({ error: "SMTP not configured" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const env = req.headers.get("x-environment") || "development";
+      const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
+
+      let recipients: string[];
+      if (sandboxEmail) {
+        recipients = [sandboxEmail];
+      } else {
+        const centers = (invoice.line_items || []).map((li: any) => li.center).filter(Boolean);
+        recipients = await getApproverEmails(dbSql, centers);
+      }
+
+      if (recipients.length === 0) {
+        return new Response(JSON.stringify({ error: "No approvers found" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const html = buildApprovalEmailHtml(invoice);
+      await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval - ${invoice.contact_name}`, html);
+
+      return new Response(JSON.stringify({ success: true, sent_to: recipients.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // All other actions require authentication
