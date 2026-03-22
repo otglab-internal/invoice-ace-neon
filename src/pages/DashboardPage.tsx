@@ -40,6 +40,11 @@ const DashboardPage: React.FC = () => {
   const canView = permissions.canViewInvoices;
 
   useEffect(() => {
+    supabase.from("global_config").select("value").eq("key", "currency").maybeSingle()
+      .then(({ data }) => { if (data?.value) setCurrency(data.value); });
+  }, []);
+
+  useEffect(() => {
     if (!canView) {
       setLoading(false);
       return;
