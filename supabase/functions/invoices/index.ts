@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { getSmtpConfig, getSandboxTestEmail, getApproverEmails, sendEmailViaSMTP, buildApprovalEmailHtml } from "./email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
