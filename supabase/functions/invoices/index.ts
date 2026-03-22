@@ -62,6 +62,93 @@ Deno.serve(async (req) => {
   try {
     const { action, ...body } = await req.json();
 
+    // api-submit — external system invoice push (no auth required)
+    if (action === "api-submit") {
+      const { system_id, user_id, contact_name, invoice_date, reference, line_items, template_id } = body;
+
+      const missing: string[] = [];
+      if (!system_id) missing.push("system_id");
+      if (!user_id) missing.push("user_id");
+      if (!contact_name) missing.push("contact_name");
+      if (!invoice_date) missing.push("invoice_date");
+      if (!line_items || !Array.isArray(line_items) || line_items.length === 0) missing.push("line_items");
+
+      if (missing.length > 0) {
+        return new Response(JSON.stringify({ error: `Missing required fields: ${missing.join(", ")}` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
+
+      // Use Supabase client to insert (respects RLS with anon)
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+      const insertRes = await fetch(`${supabaseUrl}/rest/v1/invoices`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({
+          contact_name,
+          invoice_date,
+          reference: reference || "",
+          line_items,
+          total,
+          submitted_by_system_id: system_id,
+          submitted_by_name: `API:${user_id}`,
+          requires_approval: true,
+          status: "pending_approval",
+          template_id: template_id || null,
+        }),
+      });
+
+      if (!insertRes.ok) {
+        const errBody = await insertRes.text();
+        console.error("API submit insert failed:", errBody);
+        return new Response(JSON.stringify({ error: "Failed to create invoice" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const [created] = await insertRes.json();
+
+      // Log this action
+      await fetch(`${supabaseUrl}/rest/v1/invoice_logs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          invoice_id: created.id,
+          action_type: "request",
+          source: "api",
+          performed_by: user_id,
+          performed_by_name: `API:${user_id}`,
+          details: created,
+        }),
+      });
+
+      return new Response(JSON.stringify({
+        success: true,
+        invoice_id: created.id,
+        status: created.status,
+        requires_approval: created.requires_approval,
+        total: created.total,
+      }), {
+        status: 201,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // notify-approval is a webhook proxy — skip auth but fail loudly on delivery errors
     if (action === "notify-approval") {
       const { invoice } = body;
