@@ -25,8 +25,8 @@ const statusPill = (status: string) => {
   return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
 };
 
-const formatCurrency = (amount: number) =>
-  `RM ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+const formatCurrency = (amount: number, currency = "RM") =>
+  `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
