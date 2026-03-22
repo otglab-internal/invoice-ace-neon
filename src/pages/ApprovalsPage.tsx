@@ -231,7 +231,7 @@ const ApprovalsPage: React.FC = () => {
                 </div>
 
                 {/* Compact detail pane */}
-                <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-3">
+                <div className="w-96 shrink-0 bg-card border border-border rounded-xl p-4">
                   {selected && selected.status === "pending_approval" ? (
                     <div className="space-y-2 animate-fade-in">
                       <div className="flex items-center justify-between">
