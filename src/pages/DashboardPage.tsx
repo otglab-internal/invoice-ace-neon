@@ -147,7 +147,7 @@ const DashboardPage: React.FC = () => {
                   <div className="flex items-center gap-6">
                     <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
                     <span className="text-sm font-medium text-foreground w-24 text-right">
-                      {formatCurrency(inv.total)}
+                      {formatCurrency(inv.total, currency)}
                     </span>
                     {statusPill(inv.status)}
                   </div>
