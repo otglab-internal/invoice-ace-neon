@@ -5,6 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Check, X, Eye, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +16,7 @@ interface Invoice {
   invoice_number: string | null;
   contact_name: string;
   invoice_date: string;
+  reference: string | null;
   line_items: any[];
   total: number;
   submitted_by_name: string;
@@ -35,6 +37,7 @@ const ApprovalsPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [detailInvoice, setDetailInvoice] = useState<Invoice | null>(null);
 
   const selected = invoices.find((i) => i.id === selectedId);
 
@@ -58,6 +61,21 @@ const ApprovalsPage: React.FC = () => {
     setLoading(false);
   };
 
+  const logAction = async (invoiceId: string, actionType: string, details: any) => {
+    try {
+      await supabase.from("invoice_logs").insert({
+        invoice_id: invoiceId,
+        action_type: actionType,
+        source: "ui",
+        performed_by: systemId || "",
+        performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+        details: JSON.parse(JSON.stringify(details)),
+      } as any);
+    } catch (err) {
+      console.warn("Failed to write log:", err);
+    }
+  };
+
   const handleApprove = async (id: string) => {
     setProcessing(true);
     const approvedAt = nowGMT8();
@@ -76,8 +94,9 @@ const ApprovalsPage: React.FC = () => {
       toast.error("Failed to approve invoice");
     } else {
       const invoice = invoices.find((i) => i.id === id);
-      let webhookDelivered = true;
+      await logAction(id, "approved", { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null });
 
+      let webhookDelivered = true;
       if (invoice) {
         try {
           await apiClient.invoices("notify-approval", {
@@ -117,6 +136,8 @@ const ApprovalsPage: React.FC = () => {
     if (error) {
       toast.error("Failed to reject invoice");
     } else {
+      const invoice = invoices.find((i) => i.id === id);
+      await logAction(id, "rejected", { ...invoice, status: "rejected", approval_note: adjustmentNote || null });
       toast.error("Invoice rejected");
       setSelectedId(null);
       setAdjustmentNote("");
@@ -142,7 +163,7 @@ const ApprovalsPage: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Approvals</h1>
@@ -166,124 +187,136 @@ const ApprovalsPage: React.FC = () => {
             <p className="text-sm text-muted-foreground">No invoices require approval</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-6">
-            {/* List */}
-            <div className="col-span-2 bg-card border border-border rounded-xl divide-y divide-border">
-              {invoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  className={`px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors ${
-                    selectedId === inv.id ? "bg-muted/50" : ""
-                  }`}
-                  onClick={() => setSelectedId(inv.id)}
-                >
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-foreground">
-                        {inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}
-                      </span>
-                      {getStatusBadge(inv.status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{inv.contact_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      by {inv.submitted_by_name || "Unknown"}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{inv.invoice_date}</p>
-                  </div>
-                </div>
-              ))}
+          <div className="grid grid-cols-4 gap-6">
+            {/* List — wider */}
+            <div className="col-span-3 bg-card border border-border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Invoice ID</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Contact</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Submitted By</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Amount</th>
+                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {invoices.map((inv) => (
+                    <tr
+                      key={inv.id}
+                      className={`cursor-pointer hover:bg-muted/50 transition-colors ${selectedId === inv.id ? "bg-muted/50" : ""}`}
+                      onClick={() => setSelectedId(inv.id)}
+                    >
+                      <td className="py-3 px-4">
+                        <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
+                      <td className="py-3 px-4">{getStatusBadge(inv.status)}</td>
+                      <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
+                      <td className="py-3 px-4 text-right text-xs text-muted-foreground">{inv.invoice_date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            {/* Detail */}
-            <div className="bg-card border border-border rounded-xl p-5">
+            {/* Detail pane — smaller */}
+            <div className="col-span-1 bg-card border border-border rounded-xl p-4">
               {selected ? (
-                <div className="space-y-4 animate-fade-in">
+                <div className="space-y-3 animate-fade-in">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold font-display text-foreground">
+                    <h3 className="font-semibold font-display text-foreground text-sm">
                       {selected.invoice_number || selected.id.slice(0, 8).toUpperCase()}
                     </h3>
-                    <Eye className="w-4 h-4 text-muted-foreground" />
+                    <Button variant="ghost" size="sm" onClick={() => setDetailInvoice(selected)}>
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-1.5 text-xs">
                     <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
                     <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
                     <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
-                    <p><span className="text-muted-foreground">Submitted by:</span> {selected.submitted_by_name}</p>
-                  </div>
-
-                  {/* Line items */}
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Line Items ({selected.line_items?.length || 0}):</p>
-                    <div className="space-y-2">
-                      {(selected.line_items || []).map((item: any, idx: number) => (
-                        <div key={idx} className="text-sm bg-muted p-3 rounded-lg">
-                          <pre className="text-foreground whitespace-pre-wrap font-body text-xs">{item.description}</pre>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                    {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
+                    <p><span className="text-muted-foreground">By:</span> {selected.submitted_by_name}</p>
+                    <p><span className="text-muted-foreground">Items:</span> {selected.line_items?.length || 0}</p>
                   </div>
 
                   {selected.status === "pending_approval" && (
                     <>
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">Adjustment Notes</p>
                         <Textarea
                           value={adjustmentNote}
                           onChange={(e) => setAdjustmentNote(e.target.value)}
-                          placeholder="Optional notes..."
-                          rows={3}
+                          placeholder="Notes (optional)..."
+                          rows={2}
+                          className="text-xs"
                         />
                       </div>
                       <div className="flex gap-2">
-                        <Button
-                          onClick={() => handleApprove(selected.id)}
-                          className="flex-1 gap-1"
-                          size="sm"
-                          disabled={processing}
-                        >
-                          {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <Button onClick={() => handleApprove(selected.id)} className="flex-1 gap-1" size="sm" disabled={processing}>
+                          {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                           Approve
                         </Button>
-                        <Button
-                          onClick={() => handleReject(selected.id)}
-                          variant="destructive"
-                          className="flex-1 gap-1"
-                          size="sm"
-                          disabled={processing}
-                        >
-                          <X className="w-3.5 h-3.5" /> Reject
+                        <Button onClick={() => handleReject(selected.id)} variant="destructive" className="flex-1 gap-1" size="sm" disabled={processing}>
+                          <X className="w-3 h-3" /> Reject
                         </Button>
                       </div>
                     </>
                   )}
 
                   {selected.status === "approved" && (
-                    <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-600 text-sm font-medium text-center">
+                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 text-xs font-medium text-center">
                       ✓ Approved{selected.approval_note ? ` — ${selected.approval_note}` : ""}
                     </div>
                   )}
 
                   {selected.status === "rejected" && (
-                    <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                    <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-xs">
                       Rejected{selected.approval_note ? `: ${selected.approval_note}` : ""}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-                  Select an invoice to review
+                <div className="flex items-center justify-center h-40 text-xs text-muted-foreground">
+                  Select an invoice
                 </div>
               )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Full detail dialog */}
+      <Dialog open={!!detailInvoice} onOpenChange={() => setDetailInvoice(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display">Invoice Details</DialogTitle>
+          </DialogHeader>
+          {detailInvoice && (
+            <div className="space-y-3 text-sm">
+              <p><span className="text-muted-foreground">ID:</span> <code className="text-xs">{detailInvoice.id}</code></p>
+              <p><span className="text-muted-foreground">Contact:</span> {detailInvoice.contact_name}</p>
+              <p><span className="text-muted-foreground">Amount:</span> RM {Number(detailInvoice.total).toFixed(2)}</p>
+              <p><span className="text-muted-foreground">Date:</span> {detailInvoice.invoice_date}</p>
+              {detailInvoice.reference && <p><span className="text-muted-foreground">Reference:</span> {detailInvoice.reference}</p>}
+              <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
+              <div>
+                <p className="text-muted-foreground mb-1">Line Items:</p>
+                <div className="space-y-2">
+                  {(detailInvoice.line_items || []).map((item: any, idx: number) => (
+                    <div key={idx} className="text-xs bg-muted p-3 rounded-lg">
+                      <pre className="text-foreground whitespace-pre-wrap font-body">{item.description}</pre>
+                      <p className="text-muted-foreground mt-1">Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 };
