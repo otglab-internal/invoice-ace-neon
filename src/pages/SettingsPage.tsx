@@ -181,6 +181,32 @@ const SettingsPage: React.FC = () => {
   const unflaggedTemplates = templates.filter((t) => !t.requires_approval);
   const flaggedTemplates = templates.filter((t) => t.requires_approval);
 
+  const saveCurrency = async (val: string) => {
+    setCurrency(val);
+    const { data: existing } = await supabase
+      .from("global_config")
+      .select("id")
+      .eq("key", "currency")
+      .maybeSingle();
+
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from("global_config")
+        .update({ value: val, updated_at: nowGMT8() } as any)
+        .eq("key", "currency"));
+    } else {
+      ({ error } = await supabase
+        .from("global_config")
+        .insert({ key: "currency", value: val } as any));
+    }
+    if (error) {
+      toast.error("Failed to save currency");
+    } else {
+      toast.success(`Currency set to ${val}`);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     await new Promise((r) => setTimeout(r, 600));
