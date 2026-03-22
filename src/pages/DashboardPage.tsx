@@ -35,6 +35,7 @@ const DashboardPage: React.FC = () => {
   const { user, systemId, permissions, centreLocations, role } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState("RM");
 
   const canView = permissions.canViewInvoices;
 
