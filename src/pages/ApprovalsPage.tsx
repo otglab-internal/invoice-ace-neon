@@ -41,6 +41,9 @@ const ApprovalsPage: React.FC = () => {
 
   const selected = invoices.find((i) => i.id === selectedId);
 
+  const pendingInvoices = invoices.filter((i) => i.status === "pending_approval");
+  const processedInvoices = invoices.filter((i) => i.status === "approved" || i.status === "rejected");
+
   useEffect(() => {
     fetchInvoices();
   }, []);
@@ -146,8 +149,6 @@ const ApprovalsPage: React.FC = () => {
     setProcessing(false);
   };
 
-  const pendingCount = invoices.filter((i) => i.status === "pending_approval").length;
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending_approval":
@@ -161,6 +162,39 @@ const ApprovalsPage: React.FC = () => {
     }
   };
 
+  const InvoiceTable: React.FC<{ items: Invoice[]; onSelect: (id: string) => void; selectedId: string | null }> = ({ items, onSelect, selectedId: selId }) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-border bg-muted/50">
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Invoice ID</th>
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Contact</th>
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Submitted By</th>
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Status</th>
+          <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Amount</th>
+          <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Date</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-border">
+        {items.map((inv) => (
+          <tr
+            key={inv.id}
+            className={`cursor-pointer hover:bg-muted/50 transition-colors ${selId === inv.id ? "bg-muted/50" : ""}`}
+            onClick={() => onSelect(inv.id)}
+          >
+            <td className="py-3 px-4">
+              <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
+            </td>
+            <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
+            <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
+            <td className="py-3 px-4">{getStatusBadge(inv.status)}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs text-muted-foreground">{inv.invoice_date}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <AppLayout>
       <div className="w-full">
@@ -168,7 +202,7 @@ const ApprovalsPage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Approvals</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {pendingCount} invoice{pendingCount !== 1 ? "s" : ""} pending approval
+              {pendingInvoices.length} invoice{pendingInvoices.length !== 1 ? "s" : ""} pending approval
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchInvoices} className="gap-1.5">
@@ -180,80 +214,46 @@ const ApprovalsPage: React.FC = () => {
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
-        ) : invoices.length === 0 ? (
+        ) : pendingInvoices.length === 0 && processedInvoices.length === 0 ? (
           <div className="bg-card border border-border rounded-xl p-12 text-center">
             <Check className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <h3 className="text-sm font-semibold text-foreground mb-1">All clear</h3>
             <p className="text-sm text-muted-foreground">No invoices require approval</p>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-6">
-            {/* List — wider */}
-            <div className="col-span-3 bg-card border border-border rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Invoice ID</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Contact</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Submitted By</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Status</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Amount</th>
-                    <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {invoices.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className={`cursor-pointer hover:bg-muted/50 transition-colors ${selectedId === inv.id ? "bg-muted/50" : ""}`}
-                      onClick={() => setSelectedId(inv.id)}
-                    >
-                      <td className="py-3 px-4">
-                        <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
-                      <td className="py-3 px-4">{getStatusBadge(inv.status)}</td>
-                      <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
-                      <td className="py-3 px-4 text-right text-xs text-muted-foreground">{inv.invoice_date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="space-y-6">
+            {/* Pending section */}
+            {pendingInvoices.length > 0 && (
+              <div className="flex gap-4">
+                {/* List — takes most space */}
+                <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+                  <InvoiceTable items={pendingInvoices} onSelect={setSelectedId} selectedId={selectedId} />
+                </div>
 
-            {/* Detail pane — smaller */}
-            <div className="col-span-1 bg-card border border-border rounded-xl p-4">
-              {selected ? (
-                <div className="space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold font-display text-foreground text-sm">
-                      {selected.invoice_number || selected.id.slice(0, 8).toUpperCase()}
-                    </h3>
-                    <Button variant="ghost" size="sm" onClick={() => setDetailInvoice(selected)}>
-                      <Eye className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                  <div className="space-y-1.5 text-xs">
-                    <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
-                    <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
-                    <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
-                    {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
-                    <p><span className="text-muted-foreground">By:</span> {selected.submitted_by_name}</p>
-                    <p><span className="text-muted-foreground">Items:</span> {selected.line_items?.length || 0}</p>
-                  </div>
-
-                  {selected.status === "pending_approval" && (
-                    <>
-                      <div>
-                        <Textarea
-                          value={adjustmentNote}
-                          onChange={(e) => setAdjustmentNote(e.target.value)}
-                          placeholder="Notes (optional)..."
-                          rows={2}
-                          className="text-xs"
-                        />
+                {/* Compact detail pane */}
+                <div className="w-64 shrink-0 bg-card border border-border rounded-xl p-3">
+                  {selected && selected.status === "pending_approval" ? (
+                    <div className="space-y-2 animate-fade-in">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold font-display text-foreground text-xs truncate">
+                          {selected.invoice_number || selected.id.slice(0, 8).toUpperCase()}
+                        </h3>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setDetailInvoice(selected)}>
+                          <Eye className="w-3 h-3" />
+                        </Button>
                       </div>
+                      <div className="space-y-1 text-xs">
+                        <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
+                        <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
+                        <p><span className="text-muted-foreground">Items:</span> {selected.line_items?.length || 0}</p>
+                      </div>
+                      <Textarea
+                        value={adjustmentNote}
+                        onChange={(e) => setAdjustmentNote(e.target.value)}
+                        placeholder="Notes (optional)..."
+                        rows={2}
+                        className="text-xs"
+                      />
                       <div className="flex gap-2">
                         <Button onClick={() => handleApprove(selected.id)} className="flex-1 gap-1" size="sm" disabled={processing}>
                           {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -263,27 +263,25 @@ const ApprovalsPage: React.FC = () => {
                           <X className="w-3 h-3" /> Reject
                         </Button>
                       </div>
-                    </>
-                  )}
-
-                  {selected.status === "approved" && (
-                    <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 text-xs font-medium text-center">
-                      ✓ Approved{selected.approval_note ? ` — ${selected.approval_note}` : ""}
                     </div>
-                  )}
-
-                  {selected.status === "rejected" && (
-                    <div className="p-2 rounded-lg bg-destructive/10 text-destructive text-xs">
-                      Rejected{selected.approval_note ? `: ${selected.approval_note}` : ""}
+                  ) : (
+                    <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+                      Select a pending invoice
                     </div>
                   )}
                 </div>
-              ) : (
-                <div className="flex items-center justify-center h-40 text-xs text-muted-foreground">
-                  Select an invoice
+              </div>
+            )}
+
+            {/* Processed (Approved / Rejected) section */}
+            {processedInvoices.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-muted-foreground mb-2">Processed</h2>
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <InvoiceTable items={processedInvoices} onSelect={(id) => setDetailInvoice(invoices.find((i) => i.id === id) || null)} selectedId={null} />
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -302,6 +300,7 @@ const ApprovalsPage: React.FC = () => {
               <p><span className="text-muted-foreground">Date:</span> {detailInvoice.invoice_date}</p>
               {detailInvoice.reference && <p><span className="text-muted-foreground">Reference:</span> {detailInvoice.reference}</p>}
               <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
+              {detailInvoice.approval_note && <p><span className="text-muted-foreground">Note:</span> {detailInvoice.approval_note}</p>}
               <div>
                 <p className="text-muted-foreground mb-1">Line Items:</p>
                 <div className="space-y-2">

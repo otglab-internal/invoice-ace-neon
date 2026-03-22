@@ -107,7 +107,6 @@ const ApiDocsPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr><td className="py-2 pr-4 font-mono text-foreground">reference</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Purchase order or reference number</td></tr>
-                  <tr><td className="py-2 pr-4 font-mono text-foreground">template_id</td><td className="py-2 pr-4">uuid</td><td className="py-2 text-muted-foreground">Invoice template to use</td></tr>
                 </tbody>
               </table>
             </div>

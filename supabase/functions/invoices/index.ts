@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
           submitted_by_name: `API:${user_id}`,
           requires_approval: true,
           status: "pending_approval",
-          template_id: template_id || null,
+          template_id: null,
         }),
       });
 
