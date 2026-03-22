@@ -7,11 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap } from "lucide-react";
+import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const CURRENCIES = [
+  { value: "RM", label: "RM — Malaysian Ringgit" },
+  { value: "SGD$", label: "SGD$ — Singapore Dollar" },
+];
 
 interface UserFlag {
   id: string;
