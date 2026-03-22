@@ -13,6 +13,8 @@ import SettingsPage from "@/pages/SettingsPage";
 import TemplatesPage from "@/pages/TemplatesPage";
 import GlobalConfigPage from "@/pages/GlobalConfigPage";
 import AllStaffPage from "@/pages/AllStaffPage";
+import LogsPage from "@/pages/LogsPage";
+import ApiDocsPage from "@/pages/ApiDocsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
