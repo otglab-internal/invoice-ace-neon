@@ -410,6 +410,27 @@ const SettingsPage: React.FC = () => {
             )}
           </div>
 
+          {/* Currency */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold font-display text-foreground">Currency</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select the currency used for displaying invoice amounts across the system.
+            </p>
+            <RadioGroup value={currency} onValueChange={saveCurrency} className="space-y-2">
+              {CURRENCIES.map((c) => (
+                <div key={c.value} className="flex items-center gap-3">
+                  <RadioGroupItem value={c.value} id={`currency-${c.value}`} />
+                  <Label htmlFor={`currency-${c.value}`} className="text-sm text-foreground cursor-pointer">
+                    {c.label}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+
           {/* Xero Connection */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h2 className="text-sm font-semibold font-display text-foreground">Xero Connection</h2>
