@@ -35,6 +35,47 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          details: Json
+          id: string
+          invoice_id: string
+          performed_by: string
+          performed_by_name: string
+          source: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          details?: Json
+          id?: string
+          invoice_id: string
+          performed_by?: string
+          performed_by_name?: string
+          source?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          invoice_id?: string
+          performed_by?: string
+          performed_by_name?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_logs_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_templates: {
         Row: {
           created_at: string
