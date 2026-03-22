@@ -41,6 +41,7 @@ const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
   const [autoMode, setAutoMode] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [currency, setCurrency] = useState("RM");
   const FREETEXT_ID = "__freetext__";
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
 
