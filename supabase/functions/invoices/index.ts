@@ -138,6 +138,34 @@ Deno.serve(async (req) => {
         }),
       });
 
+      // Send approval email if requires approval
+      if (created.requires_approval) {
+        try {
+          const dbSql = getDb(req);
+          const smtpConfig = await getSmtpConfig(dbSql);
+          if (smtpConfig) {
+            const env = req.headers.get("x-environment") || "development";
+            const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
+            
+            let recipients: string[];
+            if (sandboxEmail) {
+              recipients = [sandboxEmail];
+            } else {
+              // Determine center from line items
+              const centers = (created.line_items || []).map((li: any) => li.center).filter(Boolean);
+              recipients = await getApproverEmails(dbSql, centers);
+            }
+
+            if (recipients.length > 0) {
+              const html = buildApprovalEmailHtml(created);
+              await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval - ${created.contact_name}`, html);
+            }
+          }
+        } catch (emailErr) {
+          console.error("Failed to send approval email:", emailErr);
+        }
+      }
+
       return new Response(JSON.stringify({
         success: true,
         invoice_id: created.id,
