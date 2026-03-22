@@ -233,20 +233,36 @@ const CreateInvoicePage: React.FC = () => {
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
       };
 
-      const { error } = await supabase.from("invoices").insert(invoicePayload as any);
+      const { data: inserted, error } = await supabase.from("invoices").insert(invoicePayload as any).select().single();
 
       if (error) {
         toast.error("Failed to submit invoice");
-      } else if (willNeedApproval) {
-        toast.info("Invoice submitted for approval", {
-          description: "Your invoice requires approval before being pushed to Xero.",
-          icon: <ShieldAlert className="w-4 h-4" />,
-        });
       } else {
-        toast.success("Invoice auto-submitted to Xero", {
-          description: "Your invoice has been automatically validated and pushed.",
-          icon: <Zap className="w-4 h-4" />,
-        });
+        // Log the creation
+        try {
+          await supabase.from("invoice_logs").insert({
+            invoice_id: inserted.id,
+            action_type: "request",
+            source: "ui",
+            performed_by: systemId || "",
+            performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+            details: JSON.parse(JSON.stringify(inserted)),
+          } as any);
+        } catch (logErr) {
+          console.warn("Failed to write log:", logErr);
+        }
+
+        if (willNeedApproval) {
+          toast.info("Invoice submitted for approval", {
+            description: "Your invoice requires approval before being pushed to Xero.",
+            icon: <ShieldAlert className="w-4 h-4" />,
+          });
+        } else {
+          toast.success("Invoice auto-submitted to Xero", {
+            description: "Your invoice has been automatically validated and pushed.",
+            icon: <Zap className="w-4 h-4" />,
+          });
+        }
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
