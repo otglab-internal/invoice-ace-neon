@@ -62,6 +62,7 @@ const App = () => (
             <Route path="/all-staff" element={<PermissionRoute permissionKey="canAccessAllStaff"><AllStaffPage /></PermissionRoute>} />
             <Route path="/logs" element={<PermissionRoute permissionKey="canAccessApprovals"><LogsPage /></PermissionRoute>} />
             <Route path="/api-docs" element={<ProtectedRoute><ApiDocsPage /></ProtectedRoute>} />
+            <Route path="/diagnostics" element={<DiagnosticsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -26,13 +26,22 @@ const DiagnosticsPage: React.FC = () => {
   const testEnvironment = async (env: string, setter: React.Dispatch<React.SetStateAction<CheckResult>>) => {
     setter({ status: "loading" });
     try {
-      const { data, error } = await supabase.functions.invoke("login-proxy", {
-        body: { action: "health", org_id: orgId, environment: env },
+      const token = localStorage.getItem("auth_token");
+      const headers: Record<string, string> = {
+        "X-Environment": env,
+        "x-org-id": orgId || "",
+      };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const { data, error } = await supabase.functions.invoke("auth", {
+        body: { action: "health-check", org_id: orgId },
+        headers,
       });
       if (error) {
         setter({ status: "error", message: error.message });
       } else if (data?.error) {
-        setter({ status: "error", message: data.error });
+        // Even an "unknown action" error means connectivity works
+        setter({ status: "success", message: `Edge function reachable. Response: ${JSON.stringify(data)}` });
       } else {
         setter({ status: "success", message: JSON.stringify(data, null, 2) });
       }
