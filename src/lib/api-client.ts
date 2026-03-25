@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getOrgId } from "@/lib/runtime-config";
 
 
 const getEnvironment = (): string => {
