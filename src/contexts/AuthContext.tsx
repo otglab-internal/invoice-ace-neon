@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeRole, getPermissions, type AppRole, type StaffTag, type Permissions } from "@/lib/permissions";
+import { getOrgId } from "@/lib/runtime-config";
 
 export interface AuthUser {
   firstName: string;
@@ -17,15 +18,10 @@ interface AuthContextType {
   systemId: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  /** Normalized role */
   role: AppRole;
-  /** Tags assigned to this user (requester / approver) */
   tags: StaffTag[];
-  /** Centre locations from staff_centre_assignments */
   centreLocations: string[];
-  /** Computed permissions for the current role + tags */
   permissions: Permissions;
-  /** Legacy convenience — true for admin */
   isAdmin: boolean;
   login: (email: string, password: string, environment: string) => Promise<{ requires2FA: boolean; challengeToken?: string }>;
   verify2FA: (code: string, challengeToken: string) => Promise<void>;
@@ -50,7 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch tags from staff_centre_assignments when systemId changes
   const fetchTags = useCallback(async (sysId: string) => {
     const { data } = await supabase
       .from("staff_centre_assignments")
@@ -79,7 +74,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
         setSystemId(storedSysId);
-        // Prefer user ID for tag lookups, fall back to system_id
         const tagLookupId = storedUserId || storedSysId;
         if (tagLookupId) fetchTags(tagLookupId);
       } catch {
@@ -90,8 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [fetchTags]);
 
   const login = useCallback(async (email: string, password: string, env: string) => {
+    const orgId = getOrgId();
+
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { email, password, environment: env },
+      body: { email, password, environment: env, org_id: orgId },
     });
 
     if (error) {
@@ -109,8 +105,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const verify2FA = useCallback(async (code: string, challengeToken: string) => {
+    const orgId = getOrgId();
+
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { action: "verify-2fa", challenge_token: challengeToken, totp_code: code },
+      body: { action: "verify-2fa", challenge_token: challengeToken, totp_code: code, org_id: orgId },
     });
 
     if (error) {
@@ -130,7 +128,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expiryDate: data.user.expiry_date,
     };
 
-    // Use the user's own ID for tag lookups (not system_id which may be a system_access entry)
     const userId = data.user.id || data.system_id || null;
     const sysId = data.system_id || userId;
 
@@ -140,9 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
     localStorage.setItem("auth_system_id", sysId || "");
-    // Store user ID separately for tag lookups
     localStorage.setItem("auth_user_id", userId || "");
-    // Store auth token for edge function calls
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
