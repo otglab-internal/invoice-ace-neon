@@ -96,6 +96,7 @@ Deno.serve(async (req) => {
           Prefer: "return=representation",
         },
         body: JSON.stringify({
+          contact_id: contact_id || null,
           contact_name,
           invoice_date,
           reference: reference || "",
