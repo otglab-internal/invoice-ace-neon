@@ -56,7 +56,11 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   center: "",
 });
 
-// Contacts will be fetched from Xero
+// Contacts fetched from Xero
+interface XeroContact {
+  id: string;
+  name: string;
+}
 
 const demoAccounts = [
   { code: "200", name: "Sales" },
