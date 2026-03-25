@@ -99,6 +99,8 @@ const CreateInvoicePage: React.FC = () => {
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [contacts, setContacts] = useState<XeroContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
