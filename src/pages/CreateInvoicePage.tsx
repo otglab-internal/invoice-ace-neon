@@ -146,6 +146,27 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
+  // Fetch Xero contacts
+  useEffect(() => {
+    const fetchContacts = async () => {
+      setLoadingContacts(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("xero", {
+          body: { action: "contacts" },
+        });
+        if (data?.contacts) {
+          setContacts(data.contacts);
+        } else {
+          console.warn("No Xero contacts returned:", data?.error || error);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Xero contacts:", err);
+      }
+      setLoadingContacts(false);
+    };
+    fetchContacts();
+  }, []);
+
   // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
     const checkFlags = async () => {
