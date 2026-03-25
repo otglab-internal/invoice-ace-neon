@@ -56,11 +56,7 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   center: "",
 });
 
-const demoContacts = [
-  { id: "1", name: "Lee Music Academy" },
-  { id: "2", name: "Tan Piano Studio" },
-  { id: "3", name: "Wong Violin Lessons" },
-];
+// Contacts will be fetched from Xero
 
 const demoAccounts = [
   { code: "200", name: "Sales" },
