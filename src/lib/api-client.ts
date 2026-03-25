@@ -26,7 +26,7 @@ export const apiClient = {
     }
 
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body: { action, ...body },
+      body: { action, org_id: getOrgId(), ...body },
       headers,
     });
 

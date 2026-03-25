@@ -62,8 +62,9 @@ const AllStaffPage: React.FC = () => {
       const env = environment || "production";
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const orgId = getOrgId();
       const usersRes = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/get-users-proxy?environment=${env}`,
+        `https://${projectId}.supabase.co/functions/v1/get-users-proxy?environment=${env}&org_id=${encodeURIComponent(orgId)}`,
         {
           method: "GET",
           headers: {
