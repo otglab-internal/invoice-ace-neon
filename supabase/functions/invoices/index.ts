@@ -232,9 +232,19 @@ Deno.serve(async (req) => {
     // send-approval-email — send email to approvers for an invoice (no auth required for internal use)
     if (action === "send-approval-email") {
       const { invoiceId } = body;
-      const dbSql = getDb(req);
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const supaHeaders = {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      };
 
-      const invoiceRows = await dbSql`SELECT * FROM invoices WHERE id = ${invoiceId} LIMIT 1`;
+      // Fetch invoice from Supabase REST API
+      const invoiceFetch = await fetch(
+        `${supabaseUrl}/rest/v1/invoices?id=eq.${invoiceId}&limit=1`,
+        { headers: supaHeaders }
+      );
+      const invoiceRows = await invoiceFetch.json();
       if (invoiceRows.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found" }), {
           status: 404,
@@ -242,23 +252,67 @@ Deno.serve(async (req) => {
         });
       }
       const invoice = invoiceRows[0];
-      const smtpConfig = await getSmtpConfig(dbSql);
-      if (!smtpConfig) {
+
+      // Fetch SMTP config from global_config via Supabase REST API
+      const configFetch = await fetch(
+        `${supabaseUrl}/rest/v1/global_config?key=in.(smtp_host,smtp_port,smtp_user,smtp_pass,smtp_from_email,smtp_from_name)`,
+        { headers: supaHeaders }
+      );
+      const configRows = await configFetch.json();
+      const configMap: Record<string, string> = {};
+      for (const r of configRows) configMap[r.key] = r.value;
+
+      if (!configMap.smtp_host || !configMap.smtp_user || !configMap.smtp_pass) {
         return new Response(JSON.stringify({ error: "SMTP not configured" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
+      const smtpConfig = {
+        host: configMap.smtp_host,
+        port: Number(configMap.smtp_port) || 587,
+        user: configMap.smtp_user,
+        pass: configMap.smtp_pass,
+        from_email: configMap.smtp_from_email || configMap.smtp_user,
+        from_name: configMap.smtp_from_name || "Invoice Center",
+      };
+
       const env = req.headers.get("x-environment") || "development";
-      const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
+      let sandboxEmail: string | null = null;
+      if (env !== "production") {
+        const sbFetch = await fetch(
+          `${supabaseUrl}/rest/v1/global_config?key=eq.sandbox_test_email&select=value`,
+          { headers: supaHeaders }
+        );
+        const sbRows = await sbFetch.json();
+        sandboxEmail = sbRows[0]?.value?.trim() || null;
+      }
 
       let recipients: string[];
       if (sandboxEmail) {
         recipients = [sandboxEmail];
       } else {
+        // Fetch approvers from staff_centre_assignments via Supabase REST API
+        const approverFetch = await fetch(
+          `${supabaseUrl}/rest/v1/staff_centre_assignments?tags=cs.{approver}&select=system_id,centre_locations,user_role`,
+          { headers: supaHeaders }
+        );
+        const approvers = await approverFetch.json();
         const centers = (invoice.line_items || []).map((li: any) => li.center).filter(Boolean);
-        recipients = await getApproverEmails(dbSql, centers);
+        const matchingIds: string[] = [];
+        for (const a of approvers) {
+          const role = (a.user_role || "").toLowerCase();
+          if (role === "admin" || role === "management") {
+            matchingIds.push(a.system_id);
+          } else {
+            const aLocations: string[] = a.centre_locations || [];
+            if (centers.some((loc: string) => aLocations.includes(loc))) {
+              matchingIds.push(a.system_id);
+            }
+          }
+        }
+        recipients = matchingIds;
       }
 
       if (recipients.length === 0) {
