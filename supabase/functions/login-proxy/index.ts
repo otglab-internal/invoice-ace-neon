@@ -1,7 +1,7 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const LOGIN_URL = "https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/login-user";
@@ -13,17 +13,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, environment, ...body } = await req.json();
+    const { action, environment, org_id, ...body } = await req.json();
+
+    // Resolve org_id — passed from frontend
+    const orgId = org_id || "";
 
     // Determine which API key to use
     let apiKey: string;
     if (action === "verify-2fa") {
-      // For 2FA verification, no api_key needed in body — just forward
       const response = await fetch(LOGIN_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "apikey": EXTERNAL_API_KEY,
+          "x-org-id": orgId,
         },
         body: JSON.stringify({
           action: "verify-2fa",
@@ -58,6 +61,7 @@ Deno.serve(async (req) => {
       headers: {
         "Content-Type": "application/json",
         "apikey": EXTERNAL_API_KEY,
+        "x-org-id": orgId,
       },
       body: JSON.stringify({
         email: body.email,
