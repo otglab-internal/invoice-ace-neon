@@ -320,8 +320,8 @@ const CreateInvoicePage: React.FC = () => {
                   className="w-full justify-between font-normal"
                 >
                   {contactId
-                    ? demoContacts.find((c) => c.id === contactId)?.name
-                    : "Search contacts..."}
+                    ? contacts.find((c) => c.id === contactId)?.name
+                    : loadingContacts ? "Loading contacts..." : "Search contacts..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
