@@ -185,7 +185,7 @@ const CreateInvoicePage: React.FC = () => {
   }, [templates]);
 
   const contactName = contactMode === "select"
-    ? demoContacts.find((c) => c.id === contactId)?.name || ""
+    ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
