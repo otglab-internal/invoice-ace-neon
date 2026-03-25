@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getOrgId } from "@/lib/runtime-config";
 
 
 const getEnvironment = (): string => {
@@ -25,7 +26,7 @@ export const apiClient = {
     }
 
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body: { action, ...body },
+      body: { action, org_id: getOrgId(), ...body },
       headers,
     });
 

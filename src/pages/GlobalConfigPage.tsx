@@ -4,11 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ConfigEntry {
   key: string;
@@ -29,10 +29,19 @@ const SMTP_KEYS = [
   { key: "smtp_from_name", label: "From Name", placeholder: "Invoice Center" },
 ];
 
+const XERO_KEYS = [
+  { key: "xero_client_id", label: "Client ID", placeholder: "Your Xero OAuth2 Client ID" },
+  { key: "xero_client_secret", label: "Client Secret", placeholder: "Your Xero OAuth2 Client Secret", type: "password" },
+];
+
 const GlobalConfigPage: React.FC = () => {
+  const { isAdmin } = useAuth();
   const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; hasCredentials: boolean }>({ connected: false, hasCredentials: false });
+  const [xeroConnecting, setXeroConnecting] = useState(false);
+  const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -49,7 +58,21 @@ const GlobalConfigPage: React.FC = () => {
       setLoading(false);
     };
     fetchConfig();
+    checkXeroStatus();
   }, []);
+
+  const checkXeroStatus = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "status" },
+      });
+      if (data) {
+        setXeroStatus({ connected: data.connected, hasCredentials: data.hasCredentials });
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -57,6 +80,7 @@ const GlobalConfigPage: React.FC = () => {
       const allKeys = [
         ...BRANDING_KEYS.map((k) => k.key),
         ...SMTP_KEYS.map((k) => k.key),
+        ...XERO_KEYS.map((k) => k.key),
         "sandbox_test_email",
       ];
 
@@ -89,11 +113,68 @@ const GlobalConfigPage: React.FC = () => {
       }
 
       toast({ title: "Configuration saved" });
+      // Re-check xero status after saving credentials
+      await checkXeroStatus();
     } catch (err: any) {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
     }
     setSaving(false);
   };
+
+  const handleXeroConnect = async () => {
+    setXeroConnecting(true);
+    try {
+      const redirectUri = `${window.location.origin}/global-config`;
+      const { data, error } = await supabase.functions.invoke("xero", {
+        body: { action: "get-auth-url", redirectUri },
+      });
+      if (error || data?.error) {
+        toast({ title: "Failed to start Xero OAuth", description: data?.error || "Please save Xero Client ID & Secret first", variant: "destructive" });
+      } else if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      toast({ title: "Failed to connect Xero", variant: "destructive" });
+    }
+    setXeroConnecting(false);
+  };
+
+  const handleXeroDisconnect = async () => {
+    setXeroDisconnecting(true);
+    try {
+      await supabase.functions.invoke("xero", {
+        body: { action: "disconnect" },
+      });
+      setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
+      toast({ title: "Xero disconnected" });
+    } catch {
+      toast({ title: "Failed to disconnect Xero", variant: "destructive" });
+    }
+    setXeroDisconnecting(false);
+  };
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      const exchangeCode = async () => {
+        const redirectUri = `${window.location.origin}/global-config`;
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "callback", code, redirectUri },
+        });
+        if (data?.success) {
+          toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });
+          setXeroStatus({ connected: true, hasCredentials: true });
+        } else {
+          toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
+        }
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      };
+      exchangeCode();
+    }
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -102,7 +183,7 @@ const GlobalConfigPage: React.FC = () => {
         <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Global Configuration</h1>
-            <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, and environment settings.</p>
+            <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, Xero, and environment settings.</p>
           </div>
 
           {loading ? (
@@ -145,6 +226,77 @@ const GlobalConfigPage: React.FC = () => {
                   </CardContent>
                 </Card>
               ))}
+
+              {/* Xero Integration — Admin Only */}
+              {isAdmin && (
+                <>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Xero Integration</h2>
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4 text-primary" />
+                        <CardTitle className="text-base">Xero OAuth2</CardTitle>
+                      </div>
+                      <CardDescription className="text-xs">Connect your Xero account to fetch contacts and push invoices.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {XERO_KEYS.map(({ key, label, placeholder, type }) => (
+                        <div key={key}>
+                          <Label htmlFor={key} className="text-xs text-muted-foreground">{label}</Label>
+                          <Input
+                            id={key}
+                            type={type || "text"}
+                            placeholder={placeholder}
+                            value={config[key] ?? ""}
+                            onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                            className="mt-1"
+                          />
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-3 pt-2">
+                        {xeroStatus.connected ? (
+                          <>
+                            <div className="flex items-center gap-2 text-sm text-green-600">
+                              <Link className="w-4 h-4" />
+                              <span className="font-medium">Connected to Xero</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleXeroDisconnect}
+                              disabled={xeroDisconnecting}
+                            >
+                              {xeroDisconnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Unlink className="w-3 h-3 mr-1" />}
+                              Disconnect
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleXeroConnect}
+                              disabled={xeroConnecting}
+                            >
+                              Reconnect
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            onClick={handleXeroConnect}
+                            disabled={xeroConnecting}
+                          >
+                            {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link className="w-3 h-3 mr-1" />}
+                            Connect Xero
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
 
               {/* SMTP */}
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">SMTP Configuration</h2>

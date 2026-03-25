@@ -114,6 +114,7 @@ export type Database = {
           approval_note: string | null
           approved_at: string | null
           approved_by: string | null
+          contact_id: string | null
           contact_name: string
           created_at: string
           id: string
@@ -132,6 +133,7 @@ export type Database = {
           approval_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          contact_id?: string | null
           contact_name: string
           created_at?: string
           id?: string
@@ -150,6 +152,7 @@ export type Database = {
           approval_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
+          contact_id?: string | null
           contact_name?: string
           created_at?: string
           id?: string

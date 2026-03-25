@@ -56,11 +56,11 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   center: "",
 });
 
-const demoContacts = [
-  { id: "1", name: "Lee Music Academy" },
-  { id: "2", name: "Tan Piano Studio" },
-  { id: "3", name: "Wong Violin Lessons" },
-];
+// Contacts fetched from Xero
+interface XeroContact {
+  id: string;
+  name: string;
+}
 
 const demoAccounts = [
   { code: "200", name: "Sales" },
@@ -99,6 +99,8 @@ const CreateInvoicePage: React.FC = () => {
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [contacts, setContacts] = useState<XeroContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
@@ -144,6 +146,27 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
+  // Fetch Xero contacts
+  useEffect(() => {
+    const fetchContacts = async () => {
+      setLoadingContacts(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("xero", {
+          body: { action: "contacts" },
+        });
+        if (data?.contacts) {
+          setContacts(data.contacts);
+        } else {
+          console.warn("No Xero contacts returned:", data?.error || error);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Xero contacts:", err);
+      }
+      setLoadingContacts(false);
+    };
+    fetchContacts();
+  }, []);
+
   // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
     const checkFlags = async () => {
@@ -183,7 +206,7 @@ const CreateInvoicePage: React.FC = () => {
   }, [templates]);
 
   const contactName = contactMode === "select"
-    ? demoContacts.find((c) => c.id === contactId)?.name || ""
+    ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
@@ -221,7 +244,10 @@ const CreateInvoicePage: React.FC = () => {
         center: item.center,
       }));
 
+      const finalContactId = contactMode === "select" ? contactId : "";
+
       const invoicePayload = {
+        contact_id: finalContactId || null,
         contact_name: contactName,
         invoice_date: invoiceDate,
         reference: reference.trim(),
@@ -315,8 +341,8 @@ const CreateInvoicePage: React.FC = () => {
                   className="w-full justify-between font-normal"
                 >
                   {contactId
-                    ? demoContacts.find((c) => c.id === contactId)?.name
-                    : "Search contacts..."}
+                    ? contacts.find((c) => c.id === contactId)?.name
+                    : loadingContacts ? "Loading contacts..." : "Search contacts..."}
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
@@ -338,7 +364,7 @@ const CreateInvoicePage: React.FC = () => {
                         <Plus className="mr-2 h-4 w-4 text-primary" />
                         <span className="text-primary font-medium">Create New Contact</span>
                       </CommandItem>
-                      {demoContacts.map((c) => (
+                      {contacts.map((c) => (
                         <CommandItem
                           key={c.id}
                           value={c.name}

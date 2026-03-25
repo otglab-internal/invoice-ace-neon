@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN contact_id text DEFAULT NULL;
