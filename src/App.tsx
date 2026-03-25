@@ -15,6 +15,7 @@ import GlobalConfigPage from "@/pages/GlobalConfigPage";
 import AllStaffPage from "@/pages/AllStaffPage";
 import LogsPage from "@/pages/LogsPage";
 import ApiDocsPage from "@/pages/ApiDocsPage";
+import DiagnosticsPage from "@/pages/DiagnosticsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
