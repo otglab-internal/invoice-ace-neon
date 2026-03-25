@@ -221,7 +221,10 @@ const CreateInvoicePage: React.FC = () => {
         center: item.center,
       }));
 
+      const finalContactId = contactMode === "select" ? contactId : "";
+
       const invoicePayload = {
+        contact_id: finalContactId || null,
         contact_name: contactName,
         invoice_date: invoiceDate,
         reference: reference.trim(),

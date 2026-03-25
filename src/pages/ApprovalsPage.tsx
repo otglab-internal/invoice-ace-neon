@@ -24,6 +24,7 @@ interface LineItem {
 interface Invoice {
   id: string;
   invoice_number: string | null;
+  contact_id: string | null;
   contact_name: string;
   invoice_date: string;
   reference: string | null;
