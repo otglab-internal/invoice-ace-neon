@@ -184,7 +184,7 @@ const ApprovalsPage: React.FC = () => {
       if (invoice) {
         try {
           await apiClient.invoices("notify-approval", {
-            invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null },
+            invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null, contact_id: invoice.contact_id },
           });
         } catch (err) {
           webhookDelivered = false;
