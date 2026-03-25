@@ -343,7 +343,7 @@ const CreateInvoicePage: React.FC = () => {
                         <Plus className="mr-2 h-4 w-4 text-primary" />
                         <span className="text-primary font-medium">Create New Contact</span>
                       </CommandItem>
-                      {demoContacts.map((c) => (
+                      {contacts.map((c) => (
                         <CommandItem
                           key={c.id}
                           value={c.name}
