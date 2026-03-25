@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, contact_name, invoice_date, reference, line_items } = body;
+      const { system_id, user_id, contact_id, contact_name, invoice_date, reference, line_items } = body;
 
       const missing: string[] = [];
       if (!system_id) missing.push("system_id");
