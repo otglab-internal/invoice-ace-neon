@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { getOrgId } from "@/lib/runtime-config";
 import AppLayout from "@/components/AppLayout";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
