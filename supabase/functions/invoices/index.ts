@@ -234,7 +234,19 @@ Deno.serve(async (req) => {
       const { invoiceId } = body;
       const dbSql = getDb(req);
 
-      const invoiceRows = await dbSql`SELECT * FROM invoices WHERE id = ${invoiceId} LIMIT 1`;
+      // Fetch invoice from Supabase REST API (not external neon DB)
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const invoiceFetch = await fetch(
+        `${supabaseUrl}/rest/v1/invoices?id=eq.${invoiceId}&limit=1`,
+        {
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+          },
+        }
+      );
+      const invoiceRows = await invoiceFetch.json();
       if (invoiceRows.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found" }), {
           status: 404,
