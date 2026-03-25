@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,7 +23,7 @@ interface TagRecord {
   id: string;
   system_id: string;
   tags: string[];
-  centre_location: string;
+  centre_locations: string[];
 }
 
 /** Merged view of an external user + their local tag record (if any) */
@@ -37,7 +36,7 @@ interface StaffRow {
   companyRoles: string[];
   country: string;
   tags: string[];
-  centreLocation: string;
+  centreLocations: string[];
   tagRecordId: string | null;
 }
 
@@ -59,15 +58,7 @@ const AllStaffPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch users from external auth API via proxy
       const env = environment || "production";
-      const { data: usersResponse, error: usersError } = await supabase.functions.invoke(
-        "get-users-proxy",
-        { body: null, method: "GET", headers: {} }
-      );
-
-      // Workaround: supabase.functions.invoke only supports POST by default.
-      // Use fetch directly for GET requests.
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const usersRes = await fetch(
@@ -88,10 +79,9 @@ const AllStaffPage: React.FC = () => {
       const usersData = await usersRes.json();
       const externalUsers: ExternalUser[] = usersData.data || [];
 
-      // Fetch existing tag records from DB
       const { data: tagRecords, error: tagError } = await supabase
         .from("staff_centre_assignments")
-        .select("id, system_id, tags, centre_location");
+        .select("id, system_id, tags, centre_locations");
 
       if (tagError) {
         toast.error("Failed to load tag records");
@@ -103,11 +93,10 @@ const AllStaffPage: React.FC = () => {
           id: r.id,
           system_id: r.system_id,
           tags: r.tags || [],
-          centre_location: r.centre_location || "",
+          centre_locations: r.centre_locations || [],
         });
       });
 
-      // Merge
       const merged: StaffRow[] = externalUsers.map((u) => {
         const tag = tagMap.get(u.id);
         return {
@@ -119,7 +108,7 @@ const AllStaffPage: React.FC = () => {
           companyRoles: u.company_roles || [],
           country: u.country,
           tags: tag?.tags || [],
-          centreLocation: tag?.centre_location || "",
+          centreLocations: tag?.centre_locations || [],
           tagRecordId: tag?.id || null,
         };
       });
@@ -137,16 +126,14 @@ const AllStaffPage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  /** Upsert a tag record — creates it if the user has never been tagged before */
   const upsertTagRecord = async (
     row: StaffRow,
-    updates: { tags?: string[]; centre_location?: string }
+    updates: { tags?: string[]; centre_locations?: string[] }
   ) => {
     setSaving(row.userId);
     const assignedBy = user ? `${user.firstName} ${user.lastName}` : null;
 
     if (row.tagRecordId) {
-      // Update existing
       const { error } = await supabase
         .from("staff_centre_assignments")
         .update({
@@ -162,12 +149,10 @@ const AllStaffPage: React.FC = () => {
         return;
       }
     } else {
-      // Insert new — only when user is being tagged
       const newTags = updates.tags ?? row.tags;
-      const newCentre = updates.centre_location ?? row.centreLocation;
+      const newLocations = updates.centre_locations ?? row.centreLocations;
 
-      // Don't insert if nothing meaningful is being set
-      if (newTags.length === 0 && !newCentre) {
+      if (newTags.length === 0 && newLocations.length === 0) {
         setSaving(null);
         return;
       }
@@ -179,7 +164,7 @@ const AllStaffPage: React.FC = () => {
           user_name: `${row.firstName} ${row.lastName}`,
           user_role: row.role,
           tags: newTags,
-          centre_location: newCentre,
+          centre_locations: newLocations,
           assigned_by: assignedBy,
         } as any)
         .select("id")
@@ -191,7 +176,6 @@ const AllStaffPage: React.FC = () => {
         return;
       }
 
-      // Update local state with the new record ID
       setStaffRows((prev) =>
         prev.map((r) =>
           r.userId === row.userId ? { ...r, tagRecordId: (data as any).id } : r
@@ -199,14 +183,13 @@ const AllStaffPage: React.FC = () => {
       );
     }
 
-    // Update local state
     setStaffRows((prev) =>
       prev.map((r) => {
         if (r.userId !== row.userId) return r;
         return {
           ...r,
           tags: updates.tags ?? r.tags,
-          centreLocation: updates.centre_location ?? r.centreLocation,
+          centreLocations: updates.centre_locations ?? r.centreLocations,
         };
       })
     );
@@ -222,8 +205,11 @@ const AllStaffPage: React.FC = () => {
     upsertTagRecord(row, { tags: newTags });
   };
 
-  const handleCentreChange = (row: StaffRow, centre: string) => {
-    upsertTagRecord(row, { centre_location: centre });
+  const handleLocationToggle = (row: StaffRow, location: string, checked: boolean) => {
+    const newLocations = checked
+      ? [...row.centreLocations.filter((l) => l !== location), location]
+      : row.centreLocations.filter((l) => l !== location);
+    upsertTagRecord(row, { centre_locations: newLocations });
   };
 
   const filtered = staffRows.filter(
@@ -231,7 +217,7 @@ const AllStaffPage: React.FC = () => {
       `${r.firstName} ${r.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
       r.email.toLowerCase().includes(search.toLowerCase()) ||
       r.userId.toLowerCase().includes(search.toLowerCase()) ||
-      r.centreLocation.toLowerCase().includes(search.toLowerCase())
+      r.centreLocations.some((l) => l.toLowerCase().includes(search.toLowerCase()))
   );
 
   const roleBadgeVariant = (role: string) => {
@@ -240,7 +226,6 @@ const AllStaffPage: React.FC = () => {
       case "center":
         return "secondary" as const;
       case "management":
-        return "default" as const;
       case "admin":
         return "default" as const;
       default:
@@ -250,7 +235,7 @@ const AllStaffPage: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <Users className="w-6 h-6 text-primary" />
@@ -261,7 +246,6 @@ const AllStaffPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Search */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -272,7 +256,6 @@ const AllStaffPage: React.FC = () => {
           />
         </div>
 
-        {/* Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -288,7 +271,7 @@ const AllStaffPage: React.FC = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Centre Location</TableHead>
+                  <TableHead>Centre Locations</TableHead>
                   <TableHead className="text-center">Requester</TableHead>
                   <TableHead className="text-center">Approver</TableHead>
                 </TableRow>
@@ -326,23 +309,18 @@ const AllStaffPage: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={row.centreLocation || "unassigned"}
-                          onValueChange={(v) => handleCentreChange(row, v === "unassigned" ? "" : v)}
-                          disabled={saving === row.userId}
-                        >
-                          <SelectTrigger className="w-40">
-                            <SelectValue placeholder="Assign centre" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">
-                              <span className="text-muted-foreground">Unassigned</span>
-                            </SelectItem>
-                            {CENTRE_LOCATIONS.map((loc) => (
-                              <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-col gap-1.5">
+                          {CENTRE_LOCATIONS.map((loc) => (
+                            <label key={loc} className="flex items-center gap-2 text-sm cursor-pointer">
+                              <Checkbox
+                                checked={row.centreLocations.includes(loc)}
+                                onCheckedChange={(checked) => handleLocationToggle(row, loc, !!checked)}
+                                disabled={saving === row.userId}
+                              />
+                              <span className="text-foreground">{loc}</span>
+                            </label>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         <Checkbox

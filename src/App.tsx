@@ -13,6 +13,8 @@ import SettingsPage from "@/pages/SettingsPage";
 import TemplatesPage from "@/pages/TemplatesPage";
 import GlobalConfigPage from "@/pages/GlobalConfigPage";
 import AllStaffPage from "@/pages/AllStaffPage";
+import LogsPage from "@/pages/LogsPage";
+import ApiDocsPage from "@/pages/ApiDocsPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -57,6 +59,8 @@ const App = () => (
             <Route path="/settings" element={<PermissionRoute permissionKey="canAccessSettings"><SettingsPage /></PermissionRoute>} />
             <Route path="/global-config" element={<PermissionRoute permissionKey="canAccessGlobalConfig"><GlobalConfigPage /></PermissionRoute>} />
             <Route path="/all-staff" element={<PermissionRoute permissionKey="canAccessAllStaff"><AllStaffPage /></PermissionRoute>} />
+            <Route path="/logs" element={<PermissionRoute permissionKey="canAccessApprovals"><LogsPage /></PermissionRoute>} />
+            <Route path="/api-docs" element={<ProtectedRoute><ApiDocsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

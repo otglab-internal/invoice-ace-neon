@@ -35,6 +35,47 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          details: Json
+          id: string
+          invoice_id: string
+          performed_by: string
+          performed_by_name: string
+          source: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          details?: Json
+          id?: string
+          invoice_id: string
+          performed_by?: string
+          performed_by_name?: string
+          source?: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          invoice_id?: string
+          performed_by?: string
+          performed_by_name?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_logs_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_templates: {
         Row: {
           created_at: string
@@ -79,6 +120,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string | null
           line_items: Json
+          reference: string | null
           requires_approval: boolean
           status: string
           submitted_by_name: string
@@ -96,6 +138,7 @@ export type Database = {
           invoice_date: string
           invoice_number?: string | null
           line_items?: Json
+          reference?: string | null
           requires_approval?: boolean
           status?: string
           submitted_by_name?: string
@@ -113,6 +156,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: string | null
           line_items?: Json
+          reference?: string | null
           requires_approval?: boolean
           status?: string
           submitted_by_name?: string
@@ -133,7 +177,7 @@ export type Database = {
       staff_centre_assignments: {
         Row: {
           assigned_by: string | null
-          centre_location: string
+          centre_locations: string[]
           created_at: string
           id: string
           system_id: string
@@ -144,7 +188,7 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
-          centre_location?: string
+          centre_locations?: string[]
           created_at?: string
           id?: string
           system_id: string
@@ -155,7 +199,7 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
-          centre_location?: string
+          centre_locations?: string[]
           created_at?: string
           id?: string
           system_id?: string

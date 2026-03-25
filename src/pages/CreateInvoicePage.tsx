@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
 
 interface TemplateField {
   id: string;
@@ -99,6 +100,7 @@ const CreateInvoicePage: React.FC = () => {
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [reference, setReference] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
@@ -222,6 +224,7 @@ const CreateInvoicePage: React.FC = () => {
       const invoicePayload = {
         contact_name: contactName,
         invoice_date: invoiceDate,
+        reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
         submitted_by_system_id: systemId || "",
@@ -231,25 +234,48 @@ const CreateInvoicePage: React.FC = () => {
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
       };
 
-      const { error } = await supabase.from("invoices").insert(invoicePayload as any);
+      const { data: inserted, error } = await supabase.from("invoices").insert(invoicePayload as any).select().single();
 
       if (error) {
         toast.error("Failed to submit invoice");
-      } else if (willNeedApproval) {
-        toast.info("Invoice submitted for approval", {
-          description: "Your invoice requires approval before being pushed to Xero.",
-          icon: <ShieldAlert className="w-4 h-4" />,
-        });
       } else {
-        toast.success("Invoice auto-submitted to Xero", {
-          description: "Your invoice has been automatically validated and pushed.",
-          icon: <Zap className="w-4 h-4" />,
-        });
+        // Log the creation
+        try {
+          await supabase.from("invoice_logs").insert({
+            invoice_id: inserted.id,
+            action_type: "request",
+            source: "ui",
+            performed_by: systemId || "",
+            performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+            details: JSON.parse(JSON.stringify(inserted)),
+          } as any);
+        } catch (logErr) {
+          console.warn("Failed to write log:", logErr);
+        }
+
+        // Send approval notification email if needed
+        if (willNeedApproval) {
+          try {
+            await apiClient.invoices("send-approval-email", { invoiceId: inserted.id });
+          } catch (emailErr) {
+            console.warn("Failed to send approval email:", emailErr);
+          }
+          toast.info("Invoice submitted for approval", {
+            description: "Your invoice requires approval before being pushed to Xero.",
+            icon: <ShieldAlert className="w-4 h-4" />,
+          });
+        } else {
+          toast.success("Invoice auto-submitted to Xero", {
+            description: "Your invoice has been automatically validated and pushed.",
+            icon: <Zap className="w-4 h-4" />,
+          });
+        }
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setContactId("");
       setNewContactName("");
+      setReference("");
       setLineItems([createLineItem(defaultId)]);
     } catch (err) {
       toast.error("Something went wrong");
@@ -355,10 +381,23 @@ const CreateInvoicePage: React.FC = () => {
             )}
           </div>
 
-          {/* Invoice Date */}
-          <div className="bg-card border border-border rounded-xl p-5">
-            <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
-            <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+          {/* Date & Reference */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Date of Invoice</Label>
+                <Input value={invoiceDate} disabled className="mt-2 bg-muted cursor-not-allowed" />
+              </div>
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Reference</Label>
+                <Input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="e.g. PO-12345"
+                  className="mt-2"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Line Items */}

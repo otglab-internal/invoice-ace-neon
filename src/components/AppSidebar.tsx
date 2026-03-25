@@ -1,7 +1,7 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate, Wrench, Users } from "lucide-react";
+import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate, Wrench, Users, ScrollText, BookOpen } from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -19,6 +19,8 @@ const navItems: NavItem[] = [
   { to: "/settings", label: "Settings", icon: Settings, permissionKey: "canAccessSettings" },
   { to: "/global-config", label: "Global Config", icon: Wrench, permissionKey: "canAccessGlobalConfig" },
   { to: "/all-staff", label: "All Staff", icon: Users, permissionKey: "canAccessAllStaff" },
+  { to: "/logs", label: "Logs", icon: ScrollText, permissionKey: "canAccessApprovals" },
+  { to: "/api-docs", label: "API Docs", icon: BookOpen, permissionKey: null },
 ];
 
 const AppSidebar: React.FC = () => {
