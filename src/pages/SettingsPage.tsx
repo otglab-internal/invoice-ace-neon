@@ -62,12 +62,14 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
+    const { org_id, environment } = getTenantFilter();
+    const { org_id: orgIdOnly } = getOrgFilter();
     const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes] = await Promise.all([
-      supabase.from("user_approval_flags").select("*").order("user_name"),
-      supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
-      supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
-      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
-      supabase.from("global_config").select("value").eq("key", "currency").maybeSingle(),
+      supabase.from("user_approval_flags").select("*").eq("org_id", org_id).eq("environment", environment).order("user_name"),
+      supabase.from("invoice_templates").select("id, name, requires_approval").eq("org_id", org_id).eq("environment", environment).order("name"),
+      supabase.from("staff_centre_assignments").select("system_id, user_name").eq("org_id", org_id).eq("environment", environment).order("user_name"),
+      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").eq("org_id", orgIdOnly).maybeSingle(),
+      supabase.from("global_config").select("value").eq("key", "currency").eq("org_id", orgIdOnly).maybeSingle(),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
