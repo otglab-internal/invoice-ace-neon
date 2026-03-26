@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { getOrgId } from "@/lib/runtime-config";
 
 interface ConfigEntry {
   key: string;

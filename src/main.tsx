@@ -6,10 +6,12 @@ import "./index.css";
 // Load favicon from global_config on startup
 (async () => {
   try {
+    const orgId = ((window as any).__APP_CONFIG__ || {}).org_id || "";
     const { data } = await supabase
       .from("global_config")
       .select("value")
       .eq("key", "favicon_url")
+      .eq("org_id", orgId)
       .limit(1);
     const url = data?.[0]?.value;
     if (url) {
