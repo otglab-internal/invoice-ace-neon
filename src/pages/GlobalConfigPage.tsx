@@ -87,18 +87,21 @@ const GlobalConfigPage: React.FC = () => {
         "sandbox_test_email",
       ];
 
+      const orgId = getOrgId();
+
       for (const key of allKeys) {
         const value = config[key] ?? "";
         const { data, error } = await supabase
           .from("global_config")
           .update({ value, updated_at: nowGMT8() })
           .eq("key", key)
+          .eq("org_id", orgId)
           .select();
         if (error) throw error;
         if (!data || data.length === 0) {
           const { error: insertErr } = await supabase
             .from("global_config")
-            .insert({ key, value });
+            .insert({ key, value, org_id: orgId });
           if (insertErr) throw insertErr;
         }
       }
