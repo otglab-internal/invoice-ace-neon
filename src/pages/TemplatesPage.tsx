@@ -152,10 +152,13 @@ const TemplatesPage: React.FC = () => {
 
     setSaving(true);
 
+    const { org_id, environment } = getTenantFilter();
     const payload = {
       name: templateName.trim(),
       fields: JSON.parse(JSON.stringify(validFields)),
       format_string: formatString,
+      org_id,
+      environment,
     };
 
     let error;

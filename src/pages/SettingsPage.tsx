@@ -191,10 +191,12 @@ const SettingsPage: React.FC = () => {
 
   const saveCurrency = async (val: string) => {
     setCurrency(val);
+    const { org_id } = getOrgFilter();
     const { data: existing } = await supabase
       .from("global_config")
       .select("id")
       .eq("key", "currency")
+      .eq("org_id", org_id)
       .maybeSingle();
 
     let error;
@@ -202,11 +204,12 @@ const SettingsPage: React.FC = () => {
       ({ error } = await supabase
         .from("global_config")
         .update({ value: val, updated_at: nowGMT8() } as any)
-        .eq("key", "currency"));
+        .eq("key", "currency")
+        .eq("org_id", org_id));
     } else {
       ({ error } = await supabase
         .from("global_config")
-        .insert({ key: "currency", value: val } as any));
+        .insert({ key: "currency", value: val, org_id } as any));
     }
     if (error) {
       toast.error("Failed to save currency");

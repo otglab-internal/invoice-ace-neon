@@ -283,6 +283,8 @@ const CreateInvoicePage: React.FC = () => {
             performed_by: systemId || "",
             performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
             details: JSON.parse(JSON.stringify(inserted)),
+            org_id,
+            environment,
           } as any);
         } catch (logErr) {
           console.warn("Failed to write log:", logErr);

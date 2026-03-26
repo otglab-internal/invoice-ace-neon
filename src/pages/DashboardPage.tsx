@@ -53,9 +53,12 @@ const DashboardPage: React.FC = () => {
     }
 
     const fetchInvoices = async () => {
+      const { org_id, environment } = getTenantFilter();
       let query = supabase
         .from("invoices")
         .select("id, contact_name, total, status, created_at, invoice_number, submitted_by_system_id")
+        .eq("org_id", org_id)
+        .eq("environment", environment)
         .order("created_at", { ascending: false });
 
       if (permissions.viewOwnInvoicesOnly && systemId) {

@@ -163,6 +163,7 @@ const AllStaffPage: React.FC = () => {
         return;
       }
 
+      const { org_id, environment } = getTenantFilter();
       const { data, error } = await supabase
         .from("staff_centre_assignments")
         .insert({
@@ -172,6 +173,8 @@ const AllStaffPage: React.FC = () => {
           tags: newTags,
           centre_locations: newLocations,
           assigned_by: assignedBy,
+          org_id,
+          environment,
         } as any)
         .select("id")
         .single();

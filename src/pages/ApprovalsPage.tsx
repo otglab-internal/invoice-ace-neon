@@ -85,6 +85,7 @@ const ApprovalsPage: React.FC = () => {
 
   const logAction = async (invoiceId: string, actionType: string, details: any) => {
     try {
+      const { org_id, environment } = getTenantFilter();
       await supabase.from("invoice_logs").insert({
         invoice_id: invoiceId,
         action_type: actionType,
@@ -92,6 +93,8 @@ const ApprovalsPage: React.FC = () => {
         performed_by: systemId || "",
         performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
         details: JSON.parse(JSON.stringify(details)),
+        org_id,
+        environment,
       } as any);
     } catch (err) {
       console.warn("Failed to write log:", err);
