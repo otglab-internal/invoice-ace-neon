@@ -163,7 +163,7 @@ const AllStaffPage: React.FC = () => {
         return;
       }
 
-      const { org_id, environment } = getTenantFilter();
+      const { org_id: tenantOrgId, environment: tenantEnv } = getTenantFilter();
       const { data, error } = await supabase
         .from("staff_centre_assignments")
         .insert({
