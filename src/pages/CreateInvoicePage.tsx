@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
+import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
 
 interface TemplateField {
   id: string;
@@ -123,9 +124,12 @@ const CreateInvoicePage: React.FC = () => {
   useEffect(() => {
     const fetchTemplates = async () => {
       setLoadingTemplates(true);
+      const { org_id, environment } = getTenantFilter();
       const { data, error } = await supabase
         .from("invoice_templates")
         .select("*")
+        .eq("org_id", org_id)
+        .eq("environment", environment)
         .order("created_at", { ascending: true });
 
       if (error) {
@@ -170,11 +174,13 @@ const CreateInvoicePage: React.FC = () => {
   // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
     const checkFlags = async () => {
+      const { org_id, environment } = getTenantFilter();
+      const { org_id: orgIdOnly } = getOrgFilter();
       const [userRes, freeTextRes] = await Promise.all([
         systemId
-          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).maybeSingle()
+          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).eq("org_id", org_id).eq("environment", environment).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
+        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").eq("org_id", orgIdOnly).maybeSingle(),
       ]);
       setUserFlagged(userRes.data?.requires_approval === true);
       setFreeTextFlagged(freeTextRes.data?.value === "true");
@@ -246,6 +252,7 @@ const CreateInvoicePage: React.FC = () => {
 
       const finalContactId = contactMode === "select" ? contactId : "";
 
+      const { org_id, environment } = getTenantFilter();
       const invoicePayload = {
         contact_id: finalContactId || null,
         contact_name: contactName,
@@ -258,6 +265,8 @@ const CreateInvoicePage: React.FC = () => {
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
+        org_id,
+        environment,
       };
 
       const { data: inserted, error } = await supabase.from("invoices").insert(invoicePayload as any).select().single();
@@ -274,6 +283,8 @@ const CreateInvoicePage: React.FC = () => {
             performed_by: systemId || "",
             performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
             details: JSON.parse(JSON.stringify(inserted)),
+            org_id,
+            environment,
           } as any);
         } catch (logErr) {
           console.warn("Failed to write log:", logErr);

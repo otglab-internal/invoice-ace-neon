@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Loader2, RefreshCw, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface LogEntry {
   id: string;
@@ -42,9 +43,12 @@ const LogsPage: React.FC = () => {
 
   const fetchLogs = async () => {
     setLoading(true);
+    const { org_id, environment } = getTenantFilter();
     const { data, error } = await supabase
       .from("invoice_logs")
       .select("*")
+      .eq("org_id", org_id)
+      .eq("environment", environment)
       .order("created_at", { ascending: false })
       .limit(200);
 

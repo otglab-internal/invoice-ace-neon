@@ -12,6 +12,7 @@ import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus } from "lucide-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface LineItem {
   description: string;
@@ -65,10 +66,13 @@ const ApprovalsPage: React.FC = () => {
 
   const fetchInvoices = async () => {
     setLoading(true);
+    const { org_id, environment } = getTenantFilter();
     const { data, error } = await supabase
       .from("invoices")
       .select("*")
       .eq("requires_approval", true)
+      .eq("org_id", org_id)
+      .eq("environment", environment)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -81,6 +85,7 @@ const ApprovalsPage: React.FC = () => {
 
   const logAction = async (invoiceId: string, actionType: string, details: any) => {
     try {
+      const { org_id, environment } = getTenantFilter();
       await supabase.from("invoice_logs").insert({
         invoice_id: invoiceId,
         action_type: actionType,
@@ -88,6 +93,8 @@ const ApprovalsPage: React.FC = () => {
         performed_by: systemId || "",
         performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
         details: JSON.parse(JSON.stringify(details)),
+        org_id,
+        environment,
       } as any);
     } catch (err) {
       console.warn("Failed to write log:", err);

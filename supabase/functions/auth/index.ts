@@ -6,12 +6,30 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Map org_id + environment to the correct tenant database secret
+const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
+  otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
+  stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
+};
+
 function getDb(req: Request) {
   const env = req.headers.get("x-environment") || "development";
-  const url =
-    env === "production"
-      ? Deno.env.get("DATABASE_URL_PROD")!
-      : Deno.env.get("DATABASE_URL_DEV")!;
+  const isProd = env === "production";
+  const org = req.headers.get("x-org-id") || "";
+  const mapping = ORG_DB_MAP[org];
+
+  let url: string | undefined;
+  if (mapping) {
+    url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
+  }
+  if (!url) {
+    url = isProd
+      ? Deno.env.get("DATABASE_URL_PROD")
+      : Deno.env.get("DATABASE_URL_DEV");
+  }
+  if (!url) {
+    throw new Error(`No database connection configured for org="${org}" env="${env}"`);
+  }
   return neon(url);
 }
 
@@ -120,11 +138,20 @@ Deno.serve(async (req) => {
     const sql = getDb(req);
     const { action, ...body } = await req.json();
 
-    // ACTION: health-check - verify connectivity
+    // ACTION: health-check - verify connectivity and list tables
     if (action === "health-check") {
       try {
         await sql`SELECT 1`;
-        return new Response(JSON.stringify({ status: "ok", env: req.headers.get("x-environment") || "development" }), {
+        const tables = await sql`
+          SELECT table_name FROM information_schema.tables 
+          WHERE table_schema = 'public' ORDER BY table_name
+        `;
+        return new Response(JSON.stringify({ 
+          status: "ok", 
+          env: req.headers.get("x-environment") || "development",
+          org: req.headers.get("x-org-id") || "",
+          tables: tables.map((t: any) => t.table_name),
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (dbErr) {
@@ -135,7 +162,65 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ACTION: login - Step 1 of 2FA flow
+    // ACTION: init-tables - Create required tables if they don't exist
+    if (action === "init-tables") {
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            password_salt TEXT NOT NULL,
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT 'sales',
+            country TEXT NOT NULL DEFAULT '',
+            first_date TEXT,
+            expiry_date TEXT,
+            company_roles TEXT[] DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS two_factor_challenges (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            challenge_token TEXT UNIQUE NOT NULL,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS contacts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            created_by UUID REFERENCES users(id),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        // Re-check tables
+        const tables = await sql`
+          SELECT table_name FROM information_schema.tables 
+          WHERE table_schema = 'public' ORDER BY table_name
+        `;
+        return new Response(JSON.stringify({ 
+          status: "ok", 
+          message: "Tables initialized",
+          tables: tables.map((t: any) => t.table_name),
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (dbErr) {
+        return new Response(JSON.stringify({ status: "error", message: String(dbErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+
     if (action === "login") {
       const { email, password } = body;
       if (!email || !password) {

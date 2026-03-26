@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { getOrgId } from "@/lib/runtime-config";
 
 interface ConfigEntry {
   key: string;
@@ -45,9 +46,11 @@ const GlobalConfigPage: React.FC = () => {
 
   useEffect(() => {
     const fetchConfig = async () => {
+      const orgId = getOrgId();
       const { data, error } = await supabase
         .from("global_config")
-        .select("key, value");
+        .select("key, value")
+        .eq("org_id", orgId);
       if (error) {
         toast({ title: "Error loading config", description: error.message, variant: "destructive" });
       } else {
@@ -84,18 +87,21 @@ const GlobalConfigPage: React.FC = () => {
         "sandbox_test_email",
       ];
 
+      const orgId = getOrgId();
+
       for (const key of allKeys) {
         const value = config[key] ?? "";
         const { data, error } = await supabase
           .from("global_config")
           .update({ value, updated_at: nowGMT8() })
           .eq("key", key)
+          .eq("org_id", orgId)
           .select();
         if (error) throw error;
         if (!data || data.length === 0) {
           const { error: insertErr } = await supabase
             .from("global_config")
-            .insert({ key, value });
+            .insert({ key, value, org_id: orgId });
           if (insertErr) throw insertErr;
         }
       }
