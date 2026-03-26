@@ -41,7 +41,8 @@ const DashboardPage: React.FC = () => {
   const canView = permissions.canViewInvoices;
 
   useEffect(() => {
-    supabase.from("global_config").select("value").eq("key", "currency").maybeSingle()
+    const { org_id } = getOrgFilter();
+    supabase.from("global_config").select("value").eq("key", "currency").eq("org_id", org_id).maybeSingle()
       .then(({ data }) => { if (data?.value) setCurrency(data.value); });
   }, []);
 
