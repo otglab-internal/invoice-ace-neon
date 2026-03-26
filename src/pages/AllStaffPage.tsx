@@ -173,8 +173,8 @@ const AllStaffPage: React.FC = () => {
           tags: newTags,
           centre_locations: newLocations,
           assigned_by: assignedBy,
-          org_id,
-          environment,
+          org_id: tenantOrgId,
+          environment: tenantEnv,
         } as any)
         .select("id")
         .single();
