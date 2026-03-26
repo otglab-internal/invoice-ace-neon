@@ -66,10 +66,13 @@ const ApprovalsPage: React.FC = () => {
 
   const fetchInvoices = async () => {
     setLoading(true);
+    const { org_id, environment } = getTenantFilter();
     const { data, error } = await supabase
       .from("invoices")
       .select("*")
       .eq("requires_approval", true)
+      .eq("org_id", org_id)
+      .eq("environment", environment)
       .order("created_at", { ascending: false });
 
     if (error) {
