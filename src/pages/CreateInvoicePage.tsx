@@ -252,6 +252,7 @@ const CreateInvoicePage: React.FC = () => {
 
       const finalContactId = contactMode === "select" ? contactId : "";
 
+      const { org_id, environment } = getTenantFilter();
       const invoicePayload = {
         contact_id: finalContactId || null,
         contact_name: contactName,
@@ -264,6 +265,8 @@ const CreateInvoicePage: React.FC = () => {
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
+        org_id,
+        environment,
       };
 
       const { data: inserted, error } = await supabase.from("invoices").insert(invoicePayload as any).select().single();
