@@ -82,9 +82,12 @@ const AllStaffPage: React.FC = () => {
       const usersData = await usersRes.json();
       const externalUsers: ExternalUser[] = usersData.data || [];
 
+      const { org_id, environment } = getTenantFilter();
       const { data: tagRecords, error: tagError } = await supabase
         .from("staff_centre_assignments")
-        .select("id, system_id, tags, centre_locations");
+        .select("id, system_id, tags, centre_locations")
+        .eq("org_id", org_id)
+        .eq("environment", environment);
 
       if (tagError) {
         toast.error("Failed to load tag records");
