@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
 import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,12 +62,14 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
+    const { org_id, environment } = getTenantFilter();
+    const { org_id: orgIdOnly } = getOrgFilter();
     const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes] = await Promise.all([
-      supabase.from("user_approval_flags").select("*").order("user_name"),
-      supabase.from("invoice_templates").select("id, name, requires_approval").order("name"),
-      supabase.from("staff_centre_assignments").select("system_id, user_name").order("user_name"),
-      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
-      supabase.from("global_config").select("value").eq("key", "currency").maybeSingle(),
+      supabase.from("user_approval_flags").select("*").eq("org_id", org_id).eq("environment", environment).order("user_name"),
+      supabase.from("invoice_templates").select("id, name, requires_approval").eq("org_id", org_id).eq("environment", environment).order("name"),
+      supabase.from("staff_centre_assignments").select("system_id, user_name").eq("org_id", org_id).eq("environment", environment).order("user_name"),
+      supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").eq("org_id", orgIdOnly).maybeSingle(),
+      supabase.from("global_config").select("value").eq("key", "currency").eq("org_id", orgIdOnly).maybeSingle(),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
@@ -97,11 +100,14 @@ const SettingsPage: React.FC = () => {
         toast.success(`${staff.user_name} flagged for approval`);
       }
     } else {
+      const { org_id, environment } = getTenantFilter();
       const { error } = await supabase.from("user_approval_flags").insert({
         system_id: staff.system_id,
         user_name: staff.user_name,
         requires_approval: true,
         flagged_by: systemId || "",
+        org_id,
+        environment,
       } as any);
       if (error) {
         toast.error("Failed to flag user");
@@ -148,11 +154,12 @@ const SettingsPage: React.FC = () => {
   };
 
   const toggleFreeTextFlag = async (flag: boolean) => {
-    // Upsert into global_config
+    const { org_id } = getOrgFilter();
     const { data: existing } = await supabase
       .from("global_config")
       .select("id")
       .eq("key", "freetext_requires_approval")
+      .eq("org_id", org_id)
       .maybeSingle();
 
     let error;
@@ -160,11 +167,12 @@ const SettingsPage: React.FC = () => {
       ({ error } = await supabase
         .from("global_config")
         .update({ value: String(flag), updated_at: nowGMT8() } as any)
-        .eq("key", "freetext_requires_approval"));
+        .eq("key", "freetext_requires_approval")
+        .eq("org_id", org_id));
     } else {
       ({ error } = await supabase
         .from("global_config")
-        .insert({ key: "freetext_requires_approval", value: String(flag) } as any));
+        .insert({ key: "freetext_requires_approval", value: String(flag), org_id } as any));
     }
 
     if (error) {
@@ -183,10 +191,12 @@ const SettingsPage: React.FC = () => {
 
   const saveCurrency = async (val: string) => {
     setCurrency(val);
+    const { org_id } = getOrgFilter();
     const { data: existing } = await supabase
       .from("global_config")
       .select("id")
       .eq("key", "currency")
+      .eq("org_id", org_id)
       .maybeSingle();
 
     let error;
@@ -194,11 +204,12 @@ const SettingsPage: React.FC = () => {
       ({ error } = await supabase
         .from("global_config")
         .update({ value: val, updated_at: nowGMT8() } as any)
-        .eq("key", "currency"));
+        .eq("key", "currency")
+        .eq("org_id", org_id));
     } else {
       ({ error } = await supabase
         .from("global_config")
-        .insert({ key: "currency", value: val } as any));
+        .insert({ key: "currency", value: val, org_id } as any));
     }
     if (error) {
       toast.error("Failed to save currency");

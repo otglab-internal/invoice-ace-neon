@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface TemplateField {
   id: string;
@@ -72,9 +73,12 @@ const TemplatesPage: React.FC = () => {
 
   const fetchTemplates = async () => {
     setLoading(true);
+    const { org_id, environment } = getTenantFilter();
     const { data, error } = await supabase
       .from("invoice_templates")
       .select("*")
+      .eq("org_id", org_id)
+      .eq("environment", environment)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -148,10 +152,13 @@ const TemplatesPage: React.FC = () => {
 
     setSaving(true);
 
+    const { org_id, environment } = getTenantFilter();
     const payload = {
       name: templateName.trim(),
       fields: JSON.parse(JSON.stringify(validFields)),
       format_string: formatString,
+      org_id,
+      environment,
     };
 
     let error;

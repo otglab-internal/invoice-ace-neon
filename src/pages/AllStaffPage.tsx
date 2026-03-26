@@ -9,6 +9,7 @@ import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface ExternalUser {
   id: string;
@@ -81,9 +82,12 @@ const AllStaffPage: React.FC = () => {
       const usersData = await usersRes.json();
       const externalUsers: ExternalUser[] = usersData.data || [];
 
+      const { org_id: tenantOrgId, environment: tenantEnv } = getTenantFilter();
       const { data: tagRecords, error: tagError } = await supabase
         .from("staff_centre_assignments")
-        .select("id, system_id, tags, centre_locations");
+        .select("id, system_id, tags, centre_locations")
+        .eq("org_id", tenantOrgId)
+        .eq("environment", tenantEnv);
 
       if (tagError) {
         toast.error("Failed to load tag records");
@@ -159,6 +163,7 @@ const AllStaffPage: React.FC = () => {
         return;
       }
 
+      const { org_id: tenantOrgId, environment: tenantEnv } = getTenantFilter();
       const { data, error } = await supabase
         .from("staff_centre_assignments")
         .insert({
@@ -168,6 +173,8 @@ const AllStaffPage: React.FC = () => {
           tags: newTags,
           centre_locations: newLocations,
           assigned_by: assignedBy,
+          org_id: tenantOrgId,
+          environment: tenantEnv,
         } as any)
         .select("id")
         .single();

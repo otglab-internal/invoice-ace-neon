@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
 
 interface Invoice {
   id: string;
@@ -40,7 +41,8 @@ const DashboardPage: React.FC = () => {
   const canView = permissions.canViewInvoices;
 
   useEffect(() => {
-    supabase.from("global_config").select("value").eq("key", "currency").maybeSingle()
+    const { org_id } = getOrgFilter();
+    supabase.from("global_config").select("value").eq("key", "currency").eq("org_id", org_id).maybeSingle()
       .then(({ data }) => { if (data?.value) setCurrency(data.value); });
   }, []);
 
@@ -51,9 +53,12 @@ const DashboardPage: React.FC = () => {
     }
 
     const fetchInvoices = async () => {
+      const { org_id, environment } = getTenantFilter();
       let query = supabase
         .from("invoices")
         .select("id, contact_name, total, status, created_at, invoice_number, submitted_by_system_id")
+        .eq("org_id", org_id)
+        .eq("environment", environment)
         .order("created_at", { ascending: false });
 
       if (permissions.viewOwnInvoicesOnly && systemId) {
