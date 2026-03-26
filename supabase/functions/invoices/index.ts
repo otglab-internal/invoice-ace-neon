@@ -4,15 +4,39 @@ import { getSmtpConfig, getSandboxTestEmail, getApproverEmails, sendEmailViaSMTP
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-function getDb(req: Request) {
+// Map org_id + environment to the correct tenant database secret
+const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
+  otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
+  stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
+};
+
+function getDb(req: Request, orgId?: string) {
   const env = req.headers.get("x-environment") || "development";
-  const url =
-    env === "production"
-      ? Deno.env.get("DATABASE_URL_PROD")!
-      : Deno.env.get("DATABASE_URL_DEV")!;
+  const isProd = env === "production";
+
+  // Resolve org from parameter, header, or fallback
+  const org = orgId || req.headers.get("x-org-id") || "";
+  const mapping = ORG_DB_MAP[org];
+
+  let url: string | undefined;
+  if (mapping) {
+    url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
+  }
+
+  // Fallback to legacy secrets if no org mapping found
+  if (!url) {
+    url = isProd
+      ? Deno.env.get("DATABASE_URL_PROD")
+      : Deno.env.get("DATABASE_URL_DEV");
+  }
+
+  if (!url) {
+    throw new Error(`No database connection configured for org="${org}" env="${env}"`);
+  }
+
   return neon(url);
 }
 
@@ -61,7 +85,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, ...body } = await req.json();
+    const { action, org_id: bodyOrgId, ...body } = await req.json();
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
@@ -142,7 +166,7 @@ Deno.serve(async (req) => {
       // Send approval email if requires approval
       if (created.requires_approval) {
         try {
-          const dbSql = getDb(req);
+          const dbSql = getDb(req, bodyOrgId);
           const smtpConfig = await getSmtpConfig(dbSql);
           if (smtpConfig) {
             const env = req.headers.get("x-environment") || "development";
@@ -340,7 +364,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const sql = getDb(req);
+    const sql = getDb(req, bodyOrgId);
     const userId = claims.sub as string;
 
     // ACTION: create - Create a new invoice
