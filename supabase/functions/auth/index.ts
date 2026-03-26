@@ -138,11 +138,20 @@ Deno.serve(async (req) => {
     const sql = getDb(req);
     const { action, ...body } = await req.json();
 
-    // ACTION: health-check - verify connectivity
+    // ACTION: health-check - verify connectivity and list tables
     if (action === "health-check") {
       try {
         await sql`SELECT 1`;
-        return new Response(JSON.stringify({ status: "ok", env: req.headers.get("x-environment") || "development" }), {
+        const tables = await sql`
+          SELECT table_name FROM information_schema.tables 
+          WHERE table_schema = 'public' ORDER BY table_name
+        `;
+        return new Response(JSON.stringify({ 
+          status: "ok", 
+          env: req.headers.get("x-environment") || "development",
+          org: req.headers.get("x-org-id") || "",
+          tables: tables.map((t: any) => t.table_name),
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } catch (dbErr) {
