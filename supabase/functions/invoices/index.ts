@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
       // Send approval email if requires approval
       if (created.requires_approval) {
         try {
-          const dbSql = getDb(req);
+          const dbSql = getDb(req, bodyOrgId);
           const smtpConfig = await getSmtpConfig(dbSql);
           if (smtpConfig) {
             const env = req.headers.get("x-environment") || "development";
