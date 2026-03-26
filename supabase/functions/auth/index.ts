@@ -162,7 +162,65 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ACTION: login - Step 1 of 2FA flow
+    // ACTION: init-tables - Create required tables if they don't exist
+    if (action === "init-tables") {
+      try {
+        await sql`
+          CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            password_salt TEXT NOT NULL,
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT 'sales',
+            country TEXT NOT NULL DEFAULT '',
+            first_date TEXT,
+            expiry_date TEXT,
+            company_roles TEXT[] DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS two_factor_challenges (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            challenge_token TEXT UNIQUE NOT NULL,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS contacts (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            created_by UUID REFERENCES users(id),
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        // Re-check tables
+        const tables = await sql`
+          SELECT table_name FROM information_schema.tables 
+          WHERE table_schema = 'public' ORDER BY table_name
+        `;
+        return new Response(JSON.stringify({ 
+          status: "ok", 
+          message: "Tables initialized",
+          tables: tables.map((t: any) => t.table_name),
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (dbErr) {
+        return new Response(JSON.stringify({ status: "error", message: String(dbErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+
     if (action === "login") {
       const { email, password } = body;
       if (!email || !password) {
