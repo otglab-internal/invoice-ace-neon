@@ -154,11 +154,12 @@ const SettingsPage: React.FC = () => {
   };
 
   const toggleFreeTextFlag = async (flag: boolean) => {
-    // Upsert into global_config
+    const { org_id } = getOrgFilter();
     const { data: existing } = await supabase
       .from("global_config")
       .select("id")
       .eq("key", "freetext_requires_approval")
+      .eq("org_id", org_id)
       .maybeSingle();
 
     let error;
@@ -166,11 +167,12 @@ const SettingsPage: React.FC = () => {
       ({ error } = await supabase
         .from("global_config")
         .update({ value: String(flag), updated_at: nowGMT8() } as any)
-        .eq("key", "freetext_requires_approval"));
+        .eq("key", "freetext_requires_approval")
+        .eq("org_id", org_id));
     } else {
       ({ error } = await supabase
         .from("global_config")
-        .insert({ key: "freetext_requires_approval", value: String(flag) } as any));
+        .insert({ key: "freetext_requires_approval", value: String(flag), org_id } as any));
     }
 
     if (error) {
