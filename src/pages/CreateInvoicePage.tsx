@@ -174,11 +174,13 @@ const CreateInvoicePage: React.FC = () => {
   // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
     const checkFlags = async () => {
+      const { org_id, environment } = getTenantFilter();
+      const { org_id: orgIdOnly } = getOrgFilter();
       const [userRes, freeTextRes] = await Promise.all([
         systemId
-          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).maybeSingle()
+          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).eq("org_id", org_id).eq("environment", environment).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").maybeSingle(),
+        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").eq("org_id", orgIdOnly).maybeSingle(),
       ]);
       setUserFlagged(userRes.data?.requires_approval === true);
       setFreeTextFlagged(freeTextRes.data?.value === "true");
