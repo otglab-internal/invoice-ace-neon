@@ -12,6 +12,7 @@ import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus } from "lucide-
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface LineItem {
   description: string;
