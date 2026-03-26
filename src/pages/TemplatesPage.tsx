@@ -73,9 +73,12 @@ const TemplatesPage: React.FC = () => {
 
   const fetchTemplates = async () => {
     setLoading(true);
+    const { org_id, environment } = getTenantFilter();
     const { data, error } = await supabase
       .from("invoice_templates")
       .select("*")
+      .eq("org_id", org_id)
+      .eq("environment", environment)
       .order("created_at", { ascending: false });
 
     if (error) {
