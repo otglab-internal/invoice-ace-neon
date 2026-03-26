@@ -100,11 +100,14 @@ const SettingsPage: React.FC = () => {
         toast.success(`${staff.user_name} flagged for approval`);
       }
     } else {
+      const { org_id, environment } = getTenantFilter();
       const { error } = await supabase.from("user_approval_flags").insert({
         system_id: staff.system_id,
         user_name: staff.user_name,
         requires_approval: true,
         flagged_by: systemId || "",
+        org_id,
+        environment,
       } as any);
       if (error) {
         toast.error("Failed to flag user");
