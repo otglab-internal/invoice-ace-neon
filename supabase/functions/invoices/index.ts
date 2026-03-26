@@ -364,7 +364,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const sql = getDb(req);
+    const sql = getDb(req, bodyOrgId);
     const userId = claims.sub as string;
 
     // ACTION: create - Create a new invoice
