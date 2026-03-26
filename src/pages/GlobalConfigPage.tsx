@@ -46,9 +46,11 @@ const GlobalConfigPage: React.FC = () => {
 
   useEffect(() => {
     const fetchConfig = async () => {
+      const orgId = getOrgId();
       const { data, error } = await supabase
         .from("global_config")
-        .select("key, value");
+        .select("key, value")
+        .eq("org_id", orgId);
       if (error) {
         toast({ title: "Error loading config", description: error.message, variant: "destructive" });
       } else {
