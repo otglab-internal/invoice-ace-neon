@@ -120,6 +120,21 @@ Deno.serve(async (req) => {
     const sql = getDb(req);
     const { action, ...body } = await req.json();
 
+    // ACTION: health-check - verify connectivity
+    if (action === "health-check") {
+      try {
+        await sql`SELECT 1`;
+        return new Response(JSON.stringify({ status: "ok", env: req.headers.get("x-environment") || "development" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (dbErr) {
+        return new Response(JSON.stringify({ status: "error", message: String(dbErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ACTION: login - Step 1 of 2FA flow
     if (action === "login") {
       const { email, password } = body;
