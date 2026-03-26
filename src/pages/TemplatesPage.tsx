@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface TemplateField {
   id: string;
