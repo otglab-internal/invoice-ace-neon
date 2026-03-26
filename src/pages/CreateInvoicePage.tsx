@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
+import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
 
 interface TemplateField {
   id: string;
