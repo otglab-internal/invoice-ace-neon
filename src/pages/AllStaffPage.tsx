@@ -9,6 +9,7 @@ import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface ExternalUser {
   id: string;
