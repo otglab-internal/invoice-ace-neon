@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
 
 interface Invoice {
   id: string;
