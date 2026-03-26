@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { action, ...body } = await req.json();
+    const { action, org_id: bodyOrgId, ...body } = await req.json();
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
