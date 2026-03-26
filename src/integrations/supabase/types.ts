@@ -43,8 +43,10 @@ export type Database = {
           action_type: string
           created_at: string
           details: Json
+          environment: string
           id: string
           invoice_id: string
+          org_id: string
           performed_by: string
           performed_by_name: string
           source: string
@@ -53,8 +55,10 @@ export type Database = {
           action_type: string
           created_at?: string
           details?: Json
+          environment?: string
           id?: string
           invoice_id: string
+          org_id?: string
           performed_by?: string
           performed_by_name?: string
           source?: string
@@ -63,8 +67,10 @@ export type Database = {
           action_type?: string
           created_at?: string
           details?: Json
+          environment?: string
           id?: string
           invoice_id?: string
+          org_id?: string
           performed_by?: string
           performed_by_name?: string
           source?: string
@@ -83,30 +89,36 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          environment: string
           fields: Json
           format_string: string
           id: string
           name: string
+          org_id: string
           requires_approval: boolean
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
+          environment?: string
           fields?: Json
           format_string?: string
           id?: string
           name: string
+          org_id?: string
           requires_approval?: boolean
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
+          environment?: string
           fields?: Json
           format_string?: string
           id?: string
           name?: string
+          org_id?: string
           requires_approval?: boolean
           updated_at?: string
         }
@@ -120,10 +132,12 @@ export type Database = {
           contact_id: string | null
           contact_name: string
           created_at: string
+          environment: string
           id: string
           invoice_date: string
           invoice_number: string | null
           line_items: Json
+          org_id: string
           reference: string | null
           requires_approval: boolean
           status: string
@@ -139,10 +153,12 @@ export type Database = {
           contact_id?: string | null
           contact_name: string
           created_at?: string
+          environment?: string
           id?: string
           invoice_date: string
           invoice_number?: string | null
           line_items?: Json
+          org_id?: string
           reference?: string | null
           requires_approval?: boolean
           status?: string
@@ -158,10 +174,12 @@ export type Database = {
           contact_id?: string | null
           contact_name?: string
           created_at?: string
+          environment?: string
           id?: string
           invoice_date?: string
           invoice_number?: string | null
           line_items?: Json
+          org_id?: string
           reference?: string | null
           requires_approval?: boolean
           status?: string
@@ -185,7 +203,9 @@ export type Database = {
           assigned_by: string | null
           centre_locations: string[]
           created_at: string
+          environment: string
           id: string
+          org_id: string
           system_id: string
           tags: string[]
           updated_at: string
@@ -196,7 +216,9 @@ export type Database = {
           assigned_by?: string | null
           centre_locations?: string[]
           created_at?: string
+          environment?: string
           id?: string
+          org_id?: string
           system_id: string
           tags?: string[]
           updated_at?: string
@@ -207,7 +229,9 @@ export type Database = {
           assigned_by?: string | null
           centre_locations?: string[]
           created_at?: string
+          environment?: string
           id?: string
+          org_id?: string
           system_id?: string
           tags?: string[]
           updated_at?: string
@@ -219,8 +243,10 @@ export type Database = {
       user_approval_flags: {
         Row: {
           created_at: string
+          environment: string
           flagged_by: string | null
           id: string
+          org_id: string
           requires_approval: boolean
           system_id: string
           updated_at: string
@@ -228,8 +254,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          environment?: string
           flagged_by?: string | null
           id?: string
+          org_id?: string
           requires_approval?: boolean
           system_id: string
           updated_at?: string
@@ -237,8 +265,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          environment?: string
           flagged_by?: string | null
           id?: string
+          org_id?: string
           requires_approval?: boolean
           system_id?: string
           updated_at?: string
