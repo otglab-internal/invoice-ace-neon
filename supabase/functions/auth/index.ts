@@ -6,12 +6,30 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Map org_id + environment to the correct tenant database secret
+const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
+  otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
+  stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
+};
+
 function getDb(req: Request) {
   const env = req.headers.get("x-environment") || "development";
-  const url =
-    env === "production"
-      ? Deno.env.get("DATABASE_URL_PROD")!
-      : Deno.env.get("DATABASE_URL_DEV")!;
+  const isProd = env === "production";
+  const org = req.headers.get("x-org-id") || "";
+  const mapping = ORG_DB_MAP[org];
+
+  let url: string | undefined;
+  if (mapping) {
+    url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
+  }
+  if (!url) {
+    url = isProd
+      ? Deno.env.get("DATABASE_URL_PROD")
+      : Deno.env.get("DATABASE_URL_DEV");
+  }
+  if (!url) {
+    throw new Error(`No database connection configured for org="${org}" env="${env}"`);
+  }
   return neon(url);
 }
 
