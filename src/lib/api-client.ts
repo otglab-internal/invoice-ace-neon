@@ -20,6 +20,7 @@ export const apiClient = {
 
     const headers: Record<string, string> = {
       "X-Environment": getEnvironment(),
+      "x-org-id": getOrgId(),
     };
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;

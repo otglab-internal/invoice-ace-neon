@@ -10,8 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { getTenantFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
 
 interface TemplateField {
   id: string;
@@ -20,7 +19,7 @@ interface TemplateField {
   type: "text" | "number" | "date" | "select";
   required: boolean;
   placeholder: string;
-  options: string[]; // for select type
+  options: string[];
 }
 
 interface Template {
@@ -60,26 +59,22 @@ const TemplatesPage: React.FC = () => {
   const [view, setView] = useState<"list" | "create">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Builder state
   const [templateName, setTemplateName] = useState("");
   const [fields, setFields] = useState<TemplateField[]>([createField()]);
   const [formatString, setFormatString] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewValues, setPreviewValues] = useState<Record<string, string>>({});
   const [templateType, setTemplateType] = useState<TemplateType>("structured");
+
   useEffect(() => {
     fetchTemplates();
   }, []);
 
   const fetchTemplates = async () => {
     setLoading(true);
-    const { org_id, environment } = getTenantFilter();
-    const { data, error } = await supabase
-      .from("invoice_templates")
-      .select("*")
-      .eq("org_id", org_id)
-      .eq("environment", environment)
-      .order("created_at", { ascending: false });
+    const { data, error } = await neonQuery("invoice_templates", {
+      order: { column: "created_at", ascending: false },
+    });
 
     if (error) {
       toast.error("Failed to load templates");
@@ -152,23 +147,20 @@ const TemplatesPage: React.FC = () => {
 
     setSaving(true);
 
-    const { org_id, environment } = getTenantFilter();
     const payload = {
       name: templateName.trim(),
       fields: JSON.parse(JSON.stringify(validFields)),
       format_string: formatString,
-      org_id,
-      environment,
     };
 
     let error;
     if (editingId) {
-      ({ error } = await supabase
-        .from("invoice_templates")
-        .update({ ...payload, updated_at: nowGMT8() } as any)
-        .eq("id", editingId));
+      ({ error } = await neonUpdate("invoice_templates",
+        { ...payload, updated_at: nowGMT8() },
+        { id: editingId }
+      ));
     } else {
-      ({ error } = await supabase.from("invoice_templates").insert(payload as any));
+      ({ error } = await neonInsert("invoice_templates", payload));
     }
 
     if (error) {
@@ -183,7 +175,7 @@ const TemplatesPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("invoice_templates").delete().eq("id", id);
+    const { error } = await neonDelete("invoice_templates", { id });
     if (error) {
       toast.error("Failed to delete template");
     } else {
@@ -212,7 +204,6 @@ const TemplatesPage: React.FC = () => {
           </p>
 
           <div className="space-y-6">
-            {/* Template Name */}
             <Card className="p-5">
               <Label className="text-sm font-semibold font-display text-foreground">Template Name</Label>
               <Input
@@ -223,7 +214,6 @@ const TemplatesPage: React.FC = () => {
               />
             </Card>
 
-            {/* Template Type */}
             <Card className="p-5 space-y-3">
               <Label className="text-sm font-semibold font-display text-foreground">Template Type</Label>
               <div className="grid gap-2">
@@ -244,7 +234,6 @@ const TemplatesPage: React.FC = () => {
                 ))}
               </div>
             </Card>
-
 
             <Card className="p-5 space-y-4">
               <h2 className="text-sm font-semibold font-display text-foreground">Fields</h2>
@@ -331,14 +320,12 @@ const TemplatesPage: React.FC = () => {
               </Button>
             </Card>
 
-            {/* Format String */}
             <Card className="p-5 space-y-4">
               <h2 className="text-sm font-semibold font-display text-foreground">Output Format</h2>
               <p className="text-xs text-muted-foreground">
                 Define how fields are composed into the final invoice description. Use <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">{"{{field_name}}"}</code> to insert field values.
               </p>
 
-              {/* Quick-insert buttons */}
               {fields.filter((f) => f.name.trim()).length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {fields
@@ -366,7 +353,6 @@ const TemplatesPage: React.FC = () => {
                 className="font-mono text-sm"
               />
 
-              {/* Live preview */}
               {formatString.trim() && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -374,7 +360,6 @@ const TemplatesPage: React.FC = () => {
                     <span className="text-xs font-medium text-muted-foreground">Live Preview</span>
                   </div>
 
-                  {/* Preview inputs */}
                   <div className="grid grid-cols-2 gap-2">
                     {fields
                       .filter((f) => f.name.trim())
@@ -400,7 +385,6 @@ const TemplatesPage: React.FC = () => {
               )}
             </Card>
 
-            {/* Save */}
             <div className="flex justify-end gap-3 pb-8">
               <Button type="button" variant="outline" onClick={() => { resetBuilder(); setView("list"); }}>
                 Cancel
@@ -416,7 +400,6 @@ const TemplatesPage: React.FC = () => {
     );
   }
 
-  // List view
   return (
     <AppLayout>
       <div className="max-w-3xl mx-auto">
