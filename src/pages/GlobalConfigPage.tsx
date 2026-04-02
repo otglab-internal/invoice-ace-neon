@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { getOrgId } from "@/lib/runtime-config";
+import { neonQuery, neonUpsert } from "@/lib/neon-client";
 
 interface ConfigEntry {
   key: string;
@@ -46,16 +46,12 @@ const GlobalConfigPage: React.FC = () => {
 
   useEffect(() => {
     const fetchConfig = async () => {
-      const orgId = getOrgId();
-      const { data, error } = await supabase
-        .from("global_config")
-        .select("key, value")
-        .eq("org_id", orgId);
+      const { data, error } = await neonQuery("global_config", { select: "key,value" });
       if (error) {
         toast({ title: "Error loading config", description: error.message, variant: "destructive" });
       } else {
         const map: Record<string, string> = {};
-        (data as ConfigEntry[]).forEach((r) => (map[r.key] = r.value));
+        ((data as ConfigEntry[]) || []).forEach((r) => (map[r.key] = r.value));
         setConfig(map);
       }
       setLoading(false);
@@ -87,23 +83,9 @@ const GlobalConfigPage: React.FC = () => {
         "sandbox_test_email",
       ];
 
-      const orgId = getOrgId();
-
       for (const key of allKeys) {
         const value = config[key] ?? "";
-        const { data, error } = await supabase
-          .from("global_config")
-          .update({ value, updated_at: nowGMT8() })
-          .eq("key", key)
-          .eq("org_id", orgId)
-          .select();
-        if (error) throw error;
-        if (!data || data.length === 0) {
-          const { error: insertErr } = await supabase
-            .from("global_config")
-            .insert({ key, value, org_id: orgId });
-          if (insertErr) throw insertErr;
-        }
+        await neonUpsert("global_config", { key, value, updated_at: nowGMT8() }, "key");
       }
 
       // Apply favicon immediately
@@ -119,7 +101,6 @@ const GlobalConfigPage: React.FC = () => {
       }
 
       toast({ title: "Configuration saved" });
-      // Re-check xero status after saving credentials
       await checkXeroStatus();
     } catch (err: any) {
       toast({ title: "Failed to save", description: err.message, variant: "destructive" });
@@ -175,7 +156,6 @@ const GlobalConfigPage: React.FC = () => {
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
         }
-        // Clean URL
         window.history.replaceState({}, document.title, window.location.pathname);
       };
       exchangeCode();
@@ -198,7 +178,6 @@ const GlobalConfigPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Branding */}
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Branding</h2>
               {BRANDING_KEYS.map(({ key, label, icon: Icon, description, placeholder }) => (
                 <Card key={key}>
@@ -233,7 +212,6 @@ const GlobalConfigPage: React.FC = () => {
                 </Card>
               ))}
 
-              {/* Xero Integration — Admin Only */}
               {isAdmin && (
                 <>
                   <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Xero Integration</h2>
@@ -266,34 +244,16 @@ const GlobalConfigPage: React.FC = () => {
                               <Link className="w-4 h-4" />
                               <span className="font-medium">Connected to Xero</span>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleXeroDisconnect}
-                              disabled={xeroDisconnecting}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={handleXeroDisconnect} disabled={xeroDisconnecting}>
                               {xeroDisconnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Unlink className="w-3 h-3 mr-1" />}
                               Disconnect
                             </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleXeroConnect}
-                              disabled={xeroConnecting}
-                            >
+                            <Button type="button" variant="outline" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
                               Reconnect
                             </Button>
                           </>
                         ) : (
-                          <Button
-                            type="button"
-                            variant="default"
-                            size="sm"
-                            onClick={handleXeroConnect}
-                            disabled={xeroConnecting}
-                          >
+                          <Button type="button" variant="default" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
                             {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link className="w-3 h-3 mr-1" />}
                             Connect Xero
                           </Button>
@@ -304,7 +264,6 @@ const GlobalConfigPage: React.FC = () => {
                 </>
               )}
 
-              {/* SMTP */}
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">SMTP Configuration</h2>
               <Card>
                 <CardHeader className="pb-3">
@@ -331,7 +290,6 @@ const GlobalConfigPage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              {/* Sandbox Test Email */}
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Sandbox Settings</h2>
               <Card>
                 <CardHeader className="pb-3">
