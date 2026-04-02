@@ -126,6 +126,12 @@ export type Database = {
       }
       invoices: {
         Row: {
+          amendment_data: Json | null
+          amendment_note: string | null
+          amendment_requested_at: string | null
+          amendment_requested_by: string | null
+          amendment_requested_by_name: string | null
+          amendment_status: string | null
           approval_note: string | null
           approved_at: string | null
           approved_by: string | null
@@ -147,6 +153,12 @@ export type Database = {
           total: number
         }
         Insert: {
+          amendment_data?: Json | null
+          amendment_note?: string | null
+          amendment_requested_at?: string | null
+          amendment_requested_by?: string | null
+          amendment_requested_by_name?: string | null
+          amendment_status?: string | null
           approval_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
@@ -168,6 +180,12 @@ export type Database = {
           total?: number
         }
         Update: {
+          amendment_data?: Json | null
+          amendment_note?: string | null
+          amendment_requested_at?: string | null
+          amendment_requested_by?: string | null
+          amendment_requested_by_name?: string | null
+          amendment_status?: string | null
           approval_note?: string | null
           approved_at?: string | null
           approved_by?: string | null
