@@ -142,17 +142,7 @@ Deno.serve(async (req) => {
       }
 
       const invoice = rows[0];
-      return json({
-        event: "invoice_created",
-        timestamp: invoice.created_at,
-        invoice,
-        expected_response_format: {
-          action: "approve | reject | flag | request-amendment",
-          invoice_id: invoice.id,
-          reason: "Optional explanation",
-          amendment_data: null,
-        },
-      });
+      return json(buildAgentPayload(invoice));
     }
 
     // ── WEBHOOK-OUT: Forward an invoice event to the AI agent platform ──
