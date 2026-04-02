@@ -30,58 +30,77 @@ function json(data: unknown, status = 200) {
   });
 }
 
-// ── Sample payload shape (used for manual testing & documentation) ──
-function buildSamplePayload() {
+// ── Format invoice into the outbound agent payload ──
+function buildAgentPayload(invoice: Record<string, any>, eventType = "invoice_created") {
+  const ts = invoice.created_at || new Date().toISOString();
+  const total = Number(invoice.total || 0).toFixed(2);
+
+  // Build line items text
+  const lineItemsText = (invoice.line_items || [])
+    .map((li: any, i: number) => {
+      const lines = [`${i + 1}. ${li.description?.replace(/\n/g, "\n   ") || "N/A"}`];
+      lines.push(`   Quantity: ${li.quantity}`);
+      lines.push(`   Cost per unit: $${Number(li.cost || 0).toFixed(2)}`);
+      lines.push(`   Account: ${li.account || "N/A"}`);
+      lines.push(`   Center: ${li.center || "N/A"}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+
+  const description = [
+    `EVENT: ${eventType}`,
+    "",
+    "INVOICE DETAILS:",
+    `- ID: ${invoice.id}`,
+    `- Organization: ${invoice.org_id || "N/A"}`,
+    `- Environment: ${invoice.environment || "N/A"}`,
+    `- Contact: ${invoice.contact_name}`,
+    `- Invoice Date: ${invoice.invoice_date}`,
+    `- Reference: ${invoice.reference || "N/A"}`,
+    `- Status: ${invoice.status}`,
+    `- Requires Approval: ${invoice.requires_approval}`,
+    `- Total Amount: $${total}`,
+    "",
+    "SUBMITTED BY:",
+    `- Name: ${invoice.submitted_by_name || "N/A"}`,
+    `- System ID: ${invoice.submitted_by_system_id || "N/A"}`,
+    "",
+    "LINE ITEMS:",
+    lineItemsText,
+    "",
+    "TIMESTAMP:",
+    ts,
+    "",
+    "INSTRUCTION:",
+    "Review this invoice and determine whether it should be approved or rejected based on financial policies.",
+  ].join("\n");
+
   return {
-    event: "invoice_created",
-    timestamp: new Date().toISOString(),
-    invoice: {
-      id: "uuid-of-invoice",
-      org_id: "otg_lab",
-      environment: "production",
-      invoice_number: null,
-      contact_name: "Lee Music Academy",
-      contact_id: null,
-      invoice_date: "22/03/2026",
-      reference: "PO-12345",
-      status: "pending_approval",
-      requires_approval: true,
-      total: 650.0,
-      submitted_by_system_id: "user-abc-123",
-      submitted_by_name: "John Doe",
-      created_at: new Date().toISOString(),
-      line_items: [
-        {
-          description: "Piano Lesson — Grade 3\nStudent: John\nPackage: Monthly",
-          quantity: 4,
-          cost: 150.0,
-          account: "400",
-          center: "KL Center",
-        },
-        {
-          description: "Registration Fee",
-          quantity: 1,
-          cost: 50.0,
-          account: "200",
-          center: "KL Center",
-        },
-      ],
-      amendment_status: null,
-      amendment_data: null,
-    },
-    // The AI agent should respond with one of these action types:
-    expected_response_format: {
-      action: "approve | reject | flag | request-amendment",
-      invoice_id: "uuid-of-invoice",
-      reason: "Optional explanation for the decision",
-      amendment_data: {
-        _note: "Only required when action is 'request-amendment'",
-        contact_name: "Updated name",
-        reference: "Updated ref",
-        line_items: [],
-      },
-    },
+    title: `Invoice Approval Required — ${invoice.contact_name} ($${total})`,
+    description,
+    agent: "Chief Finance Officer",
   };
+}
+
+function buildSamplePayload() {
+  return buildAgentPayload({
+    id: "uuid-of-invoice",
+    org_id: "otg_lab",
+    environment: "production",
+    contact_name: "Lee Music Academy",
+    invoice_date: "22/03/2026",
+    reference: "PO-12345",
+    status: "pending_approval",
+    requires_approval: true,
+    total: 650.0,
+    submitted_by_system_id: "user-abc-123",
+    submitted_by_name: "John Doe",
+    created_at: new Date().toISOString(),
+    line_items: [
+      { description: "Piano Lesson — Grade 3\nStudent: John\nPackage: Monthly", quantity: 4, cost: 150.0, account: "400", center: "KL Center" },
+      { description: "Registration Fee", quantity: 1, cost: 50.0, account: "200", center: "KL Center" },
+    ],
+  });
 }
 
 Deno.serve(async (req) => {
