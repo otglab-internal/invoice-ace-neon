@@ -1,27 +1,37 @@
+import { neon } from "npm:@neondatabase/serverless";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-environment, x-org-id",
 };
 
-/**
- * AI Agent Integration Edge Function
- * 
- * Provides two integration patterns:
- * 1. OUTBOUND: Posts invoice events to a configured AI agent URL
- * 2. INBOUND: Receives decisions/actions from the AI agent
- * 
- * Actions:
- *   - "webhook-out"     → Forward an invoice event to the AI agent platform
- *   - "agent-action"    → Receive a decision from the AI agent (approve, reject, flag, etc.)
- *   - "get-invoice-json" → Return the full JSON shape for a given invoice (for manual testing)
- *   - "test-payload"    → Return a sample invoice payload without querying any DB
- */
-
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
   stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
 };
+
+function getDbFromParams(orgId: string, environment: string) {
+  const isProd = environment === "production";
+  const mapping = ORG_DB_MAP[orgId];
+  let url: string | undefined;
+  if (mapping) {
+    url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
+  }
+  if (!url) {
+    url = isProd ? Deno.env.get("DATABASE_URL_PROD") : Deno.env.get("DATABASE_URL_DEV");
+  }
+  if (!url) {
+    throw new Error(`No database connection for org="${orgId}" env="${environment}"`);
+  }
+  return neon(url);
+}
+
+function getDb(req: Request, bodyOrgId?: string) {
+  const env = req.headers.get("x-environment") || "development";
+  const org = bodyOrgId || req.headers.get("x-org-id") || "";
+  return getDbFromParams(org, env);
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
@@ -35,7 +45,6 @@ function buildAgentPayload(invoice: Record<string, any>, eventType = "invoice_cr
   const ts = invoice.created_at || new Date().toISOString();
   const total = Number(invoice.total || 0).toFixed(2);
 
-  // Build line items text
   const lineItemsText = (invoice.line_items || [])
     .map((li: any, i: number) => {
       const lines = [`${i + 1}. ${li.description?.replace(/\n/g, "\n   ") || "N/A"}`];
@@ -111,48 +120,33 @@ Deno.serve(async (req) => {
   try {
     const { action, ...body } = await req.json();
 
-    // ── TEST-PAYLOAD: Return the sample JSON shape ──
+    // ── TEST-PAYLOAD ──
     if (action === "test-payload") {
       return json(buildSamplePayload());
     }
 
-    // ── GET-INVOICE-JSON: Fetch a real invoice and return it in the agent format ──
+    // ── GET-INVOICE-JSON: Fetch from NeonDB ──
     if (action === "get-invoice-json") {
-      const { invoice_id, org_id } = body;
+      const { invoice_id, org_id, environment } = body;
       if (!invoice_id) {
         return json({ error: "Missing invoice_id" }, 400);
       }
 
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const sql = getDbFromParams(org_id || req.headers.get("x-org-id") || "", environment || req.headers.get("x-environment") || "development");
+      const rows = await sql`SELECT * FROM invoices WHERE id = ${invoice_id} LIMIT 1`;
 
-      const res = await fetch(
-        `${supabaseUrl}/rest/v1/invoices?id=eq.${invoice_id}&limit=1`,
-        {
-          headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-          },
-        }
-      );
-
-      const rows = await res.json();
       if (!rows || rows.length === 0) {
         return json({ error: "Invoice not found" }, 404);
       }
 
-      const invoice = rows[0];
-      return json(buildAgentPayload(invoice));
+      return json(buildAgentPayload(rows[0]));
     }
 
-    // ── WEBHOOK-OUT: Forward an invoice event to the AI agent platform ──
+    // ── WEBHOOK-OUT ──
     if (action === "webhook-out") {
       const { event_type, invoice, agent_url } = body;
-
-      // For now, agent_url is passed in the request (hardcoded by caller)
-      // Later this will come from global_config per tenant
       if (!agent_url) {
-        return json({ error: "agent_url is required (will be config-driven later)" }, 400);
+        return json({ error: "agent_url is required" }, 400);
       }
 
       const payload = buildAgentPayload(invoice, event_type || "invoice_created");
@@ -172,7 +166,6 @@ Deno.serve(async (req) => {
           return json({ error: `Agent returned ${agentStatus}`, body: agentBody }, 502);
         }
 
-        // Try to parse the agent's response as JSON
         let agentResponse;
         try {
           agentResponse = JSON.parse(agentBody);
@@ -180,20 +173,16 @@ Deno.serve(async (req) => {
           agentResponse = { raw: agentBody };
         }
 
-        return json({
-          success: true,
-          agent_status: agentStatus,
-          agent_response: agentResponse,
-        });
+        return json({ success: true, agent_status: agentStatus, agent_response: agentResponse });
       } catch (err) {
         console.error("AI agent webhook call error:", err);
         return json({ error: "Failed to reach AI agent" }, 502);
       }
     }
 
-    // ── AGENT-ACTION: Receive a decision from the AI agent ──
+    // ── AGENT-ACTION: Receive decision from AI agent, write to NeonDB ──
     if (action === "agent-action") {
-      const { agent_action, invoice_id, reason, amendment_data: amendData, org_id } = body;
+      const { agent_action, invoice_id, reason, amendment_data: amendData, org_id, environment } = body;
 
       if (!invoice_id || !agent_action) {
         return json({ error: "Missing invoice_id or agent_action" }, 400);
@@ -204,93 +193,31 @@ Deno.serve(async (req) => {
         return json({ error: `Invalid agent_action. Must be one of: ${validActions.join(", ")}` }, 400);
       }
 
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const headers = {
-        "Content-Type": "application/json",
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        Prefer: "return=representation",
-      };
-
-      // Build the update based on agent_action
-      let updateBody: Record<string, unknown> = {};
-      let logAction = "";
+      const sql = getDbFromParams(
+        org_id || req.headers.get("x-org-id") || "",
+        environment || req.headers.get("x-environment") || "production"
+      );
 
       switch (agent_action) {
         case "approve":
-          updateBody = {
-            status: "approved",
-            approved_by: "ai-agent",
-            approved_at: new Date().toISOString(),
-            approval_note: reason || "Auto-approved by AI agent",
-          };
-          logAction = "ai_agent_approved";
+          await sql`UPDATE invoices SET status = 'approved', approved_by = 'ai-agent', approved_at = NOW(), approval_note = ${reason || 'Auto-approved by AI agent'} WHERE id = ${invoice_id}`;
           break;
-
         case "reject":
-          updateBody = {
-            status: "rejected",
-            approved_by: "ai-agent",
-            approved_at: new Date().toISOString(),
-            approval_note: reason || "Rejected by AI agent",
-          };
-          logAction = "ai_agent_rejected";
+          await sql`UPDATE invoices SET status = 'rejected', approved_by = 'ai-agent', approved_at = NOW(), approval_note = ${reason || 'Rejected by AI agent'} WHERE id = ${invoice_id}`;
           break;
-
         case "flag":
-          // Flag keeps the invoice pending but logs the concern
-          updateBody = {};
-          logAction = "ai_agent_flagged";
+          // No update, just log
           break;
-
         case "request-amendment":
-          updateBody = {
-            amendment_status: "pending",
-            amendment_data: amendData || null,
-            amendment_requested_by: "ai-agent",
-            amendment_requested_by_name: "AI Agent",
-            amendment_requested_at: new Date().toISOString(),
-            amendment_note: reason || "Amendment requested by AI agent",
-          };
-          logAction = "ai_agent_amendment_requested";
+          await sql`UPDATE invoices SET amendment_status = 'pending', amendment_data = ${JSON.stringify(amendData || null)}::jsonb, amendment_requested_by = 'ai-agent', amendment_requested_by_name = 'AI Agent', amendment_requested_at = NOW(), amendment_note = ${reason || 'Amendment requested by AI agent'} WHERE id = ${invoice_id}`;
           break;
-      }
-
-      // Apply the update (skip if flag — no fields to update)
-      if (Object.keys(updateBody).length > 0) {
-        const updateRes = await fetch(
-          `${supabaseUrl}/rest/v1/invoices?id=eq.${invoice_id}`,
-          { method: "PATCH", headers, body: JSON.stringify(updateBody) }
-        );
-
-        if (!updateRes.ok) {
-          const errText = await updateRes.text();
-          console.error("Agent action update failed:", errText);
-          return json({ error: "Failed to apply agent action" }, 500);
-        }
       }
 
       // Log the action
-      await fetch(`${supabaseUrl}/rest/v1/invoice_logs`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          invoice_id,
-          action_type: logAction,
-          source: "ai-agent",
-          performed_by: "ai-agent",
-          performed_by_name: "AI Agent",
-          org_id: org_id || "",
-          details: { agent_action, reason, amendment_data: amendData || null },
-        }),
-      });
+      const logAction = `ai_agent_${agent_action === "request-amendment" ? "amendment_requested" : agent_action + (agent_action === "approve" ? "d" : "ed")}`;
+      await sql`INSERT INTO invoice_logs (invoice_id, action_type, source, performed_by, performed_by_name, details) VALUES (${invoice_id}, ${logAction}, 'ai-agent', 'ai-agent', 'AI Agent', ${JSON.stringify({ agent_action, reason, amendment_data: amendData || null })}::jsonb)`;
 
-      return json({
-        success: true,
-        action_applied: agent_action,
-        invoice_id,
-      });
+      return json({ success: true, action_applied: agent_action, invoice_id });
     }
 
     return json({ error: "Unknown action. Valid: test-payload, get-invoice-json, webhook-out, agent-action" }, 400);

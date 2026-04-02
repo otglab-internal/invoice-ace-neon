@@ -200,7 +200,89 @@ Deno.serve(async (req) => {
             created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
-        // Re-check tables
+        await sql`
+          CREATE TABLE IF NOT EXISTS invoices (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            contact_id TEXT,
+            contact_name TEXT NOT NULL,
+            invoice_date TEXT NOT NULL,
+            reference TEXT DEFAULT '',
+            line_items JSONB NOT NULL DEFAULT '[]',
+            total NUMERIC NOT NULL DEFAULT 0,
+            submitted_by_system_id TEXT NOT NULL,
+            submitted_by_name TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending_approval',
+            requires_approval BOOLEAN NOT NULL DEFAULT false,
+            template_id UUID,
+            approval_note TEXT,
+            approved_by TEXT,
+            approved_at TIMESTAMPTZ,
+            invoice_number TEXT,
+            amendment_status TEXT,
+            amendment_data JSONB,
+            amendment_requested_by TEXT,
+            amendment_requested_by_name TEXT,
+            amendment_requested_at TIMESTAMPTZ,
+            amendment_note TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS invoice_templates (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name TEXT NOT NULL,
+            fields JSONB NOT NULL DEFAULT '[]',
+            format_string TEXT NOT NULL DEFAULT '',
+            requires_approval BOOLEAN NOT NULL DEFAULT false,
+            created_by UUID,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS invoice_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            invoice_id UUID NOT NULL,
+            action_type TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'ui',
+            performed_by TEXT NOT NULL DEFAULT '',
+            performed_by_name TEXT NOT NULL DEFAULT '',
+            details JSONB NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS staff_centre_assignments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            system_id TEXT NOT NULL,
+            user_name TEXT NOT NULL DEFAULT '',
+            user_role TEXT NOT NULL DEFAULT 'sales',
+            tags TEXT[] DEFAULT '{}',
+            centre_locations TEXT[] DEFAULT '{}',
+            assigned_by TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS user_approval_flags (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            system_id TEXT NOT NULL,
+            user_name TEXT NOT NULL DEFAULT '',
+            requires_approval BOOLEAN NOT NULL DEFAULT false,
+            flagged_by TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS global_config (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            key TEXT NOT NULL UNIQUE,
+            value TEXT NOT NULL DEFAULT '',
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
         const tables = await sql`
           SELECT table_name FROM information_schema.tables 
           WHERE table_schema = 'public' ORDER BY table_name
