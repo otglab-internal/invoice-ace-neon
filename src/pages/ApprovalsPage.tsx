@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus } from "lucide-react";
+import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,10 +40,16 @@ interface Invoice {
   approved_at: string | null;
   created_at: string;
   template_id: string | null;
+  amendment_status: string | null;
+  amendment_data: any | null;
+  amendment_requested_by: string | null;
+  amendment_requested_by_name: string | null;
+  amendment_requested_at: string | null;
+  amendment_note: string | null;
 }
 
 const ApprovalsPage: React.FC = () => {
-  const { systemId, user } = useAuth();
+  const { systemId, user, role, centreLocations } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,11 +60,17 @@ const ApprovalsPage: React.FC = () => {
   const [editLineItems, setEditLineItems] = useState<LineItem[]>([]);
   const [editContactName, setEditContactName] = useState("");
   const [editReference, setEditReference] = useState("");
+  // Amendment tab
+  const [activeTab, setActiveTab] = useState<"approvals" | "amendments">("approvals");
+  const [selectedAmendmentId, setSelectedAmendmentId] = useState<string | null>(null);
+  const [amendmentNote, setAmendmentNote] = useState("");
 
   const selected = invoices.find((i) => i.id === selectedId);
+  const selectedAmendment = invoices.find((i) => i.id === selectedAmendmentId);
 
   const pendingInvoices = invoices.filter((i) => i.status === "pending_approval");
-  const processedInvoices = invoices.filter((i) => i.status === "approved" || i.status === "rejected");
+  const processedInvoices = invoices.filter((i) => (i.status === "approved" || i.status === "rejected") && !i.amendment_status);
+  const pendingAmendments = invoices.filter((i) => i.amendment_status === "pending");
 
   useEffect(() => {
     fetchInvoices();
@@ -67,12 +79,14 @@ const ApprovalsPage: React.FC = () => {
   const fetchInvoices = async () => {
     setLoading(true);
     const { org_id, environment } = getTenantFilter();
+    
+    // Fetch both pending approvals and pending amendments
     const { data, error } = await supabase
       .from("invoices")
       .select("*")
-      .eq("requires_approval", true)
       .eq("org_id", org_id)
       .eq("environment", environment)
+      .or("requires_approval.eq.true,amendment_status.eq.pending")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -180,7 +194,6 @@ const ApprovalsPage: React.FC = () => {
       const invoice = invoices.find((i) => i.id === id);
       await logAction(id, "approved", { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null });
 
-      // Send approval notification email
       try {
         await apiClient.invoices("send-approval-email", { invoiceId: id });
       } catch (err) {
@@ -239,6 +252,90 @@ const ApprovalsPage: React.FC = () => {
     setProcessing(false);
   };
 
+  // Amendment approval: apply the amendment data to the invoice and clear amendment fields
+  const handleApproveAmendment = async (id: string) => {
+    setProcessing(true);
+    const invoice = invoices.find((i) => i.id === id);
+    if (!invoice?.amendment_data) {
+      toast.error("No amendment data found");
+      setProcessing(false);
+      return;
+    }
+
+    const aData = invoice.amendment_data;
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        contact_name: aData.contact_name,
+        contact_id: aData.contact_id || null,
+        reference: aData.reference || "",
+        line_items: JSON.parse(JSON.stringify(aData.line_items)),
+        total: aData.total,
+        amendment_status: "approved",
+        amendment_data: null,
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to approve amendment");
+    } else {
+      await logAction(id, "amendment_approved", {
+        approved_by: systemId,
+        amendment_data: aData,
+        note: amendmentNote,
+      });
+
+      // Auto-resubmit to Xero via webhook
+      try {
+        await apiClient.invoices("notify-approval", {
+          invoice: {
+            ...invoice,
+            contact_name: aData.contact_name,
+            contact_id: aData.contact_id || invoice.contact_id,
+            reference: aData.reference,
+            line_items: aData.line_items,
+            total: aData.total,
+            status: "approved",
+            amendment_approved: true,
+          },
+        });
+        toast.success("Amendment approved and resubmitted to Xero");
+      } catch {
+        toast.success("Amendment approved (Xero resubmit may have failed)");
+      }
+
+      setSelectedAmendmentId(null);
+      setAmendmentNote("");
+      fetchInvoices();
+    }
+    setProcessing(false);
+  };
+
+  const handleRejectAmendment = async (id: string) => {
+    setProcessing(true);
+    const { error } = await supabase
+      .from("invoices")
+      .update({
+        amendment_status: "rejected",
+        amendment_data: null,
+      } as any)
+      .eq("id", id);
+
+    if (error) {
+      toast.error("Failed to reject amendment");
+    } else {
+      await logAction(id, "amendment_rejected", {
+        rejected_by: systemId,
+        note: amendmentNote,
+      });
+      toast.error("Amendment rejected");
+      setSelectedAmendmentId(null);
+      setAmendmentNote("");
+      fetchInvoices();
+    }
+    setProcessing(false);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending_approval":
@@ -285,6 +382,41 @@ const ApprovalsPage: React.FC = () => {
     </table>
   );
 
+  const AmendmentTable: React.FC<{ items: Invoice[]; onSelect: (id: string) => void; selectedId: string | null }> = ({ items, onSelect, selectedId: selId }) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-border bg-muted/50">
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Invoice ID</th>
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Contact</th>
+          <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">Requested By</th>
+          <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Current</th>
+          <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Amended</th>
+          <th className="text-right py-3 px-4 text-xs font-medium text-muted-foreground">Requested</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-border">
+        {items.map((inv) => (
+          <tr
+            key={inv.id}
+            className={`cursor-pointer hover:bg-muted/50 transition-colors ${selId === inv.id ? "bg-muted/50" : ""}`}
+            onClick={() => onSelect(inv.id)}
+          >
+            <td className="py-3 px-4">
+              <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
+            </td>
+            <td className="py-3 px-4 text-xs text-foreground">{inv.amendment_data?.contact_name || inv.contact_name}</td>
+            <td className="py-3 px-4 text-xs text-muted-foreground">{inv.amendment_requested_by_name || "Unknown"}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.amendment_data?.total || 0).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs text-muted-foreground">
+              {inv.amendment_requested_at ? new Date(inv.amendment_requested_at).toLocaleDateString("en-MY") : "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <AppLayout>
       <div className="w-full">
@@ -292,7 +424,10 @@ const ApprovalsPage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Approvals</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {pendingInvoices.length} invoice{pendingInvoices.length !== 1 ? "s" : ""} pending approval
+              {pendingInvoices.length} invoice{pendingInvoices.length !== 1 ? "s" : ""} pending
+              {pendingAmendments.length > 0 && (
+                <span className="ml-2">• {pendingAmendments.length} amendment{pendingAmendments.length !== 1 ? "s" : ""} pending</span>
+              )}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchInvoices} className="gap-1.5">
@@ -300,9 +435,110 @@ const ApprovalsPage: React.FC = () => {
           </Button>
         </div>
 
+        {/* Tabs */}
+        {pendingAmendments.length > 0 && (
+          <div className="flex gap-1 mb-4 bg-muted/50 p-1 rounded-lg w-fit">
+            <button
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "approvals" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("approvals")}
+            >
+              Approvals ({pendingInvoices.length})
+            </button>
+            <button
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === "amendments" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => setActiveTab("amendments")}
+            >
+              <span className="flex items-center gap-1.5">
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                Amendments ({pendingAmendments.length})
+              </span>
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : activeTab === "amendments" && pendingAmendments.length > 0 ? (
+          /* ===== AMENDMENTS TAB ===== */
+          <div className="flex gap-4">
+            <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+              <AmendmentTable items={pendingAmendments} onSelect={(id) => { setSelectedAmendmentId(id); setAmendmentNote(""); }} selectedId={selectedAmendmentId} />
+            </div>
+
+            <div className="shrink-0 bg-card border border-border rounded-xl p-5 overflow-y-auto max-h-[80vh]" style={{ width: 768 }}>
+              {selectedAmendment ? (
+                <div className="space-y-4 animate-fade-in">
+                  <h3 className="font-semibold font-display text-foreground text-sm">
+                    Amendment: {selectedAmendment.invoice_number || selectedAmendment.id.slice(0, 8).toUpperCase()}
+                  </h3>
+
+                  <div className="text-xs text-muted-foreground">
+                    Requested by <span className="text-foreground font-medium">{selectedAmendment.amendment_requested_by_name}</span>
+                    {selectedAmendment.amendment_note && (
+                      <p className="mt-1 italic">"{selectedAmendment.amendment_note}"</p>
+                    )}
+                  </div>
+
+                  {/* Diff view: current vs proposed */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Current</p>
+                      <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-xs">
+                        <p><span className="text-muted-foreground">Contact:</span> {selectedAmendment.contact_name}</p>
+                        <p><span className="text-muted-foreground">Reference:</span> {selectedAmendment.reference || "—"}</p>
+                        <p><span className="text-muted-foreground">Total:</span> RM {Number(selectedAmendment.total).toFixed(2)}</p>
+                        <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.line_items?.length || 0})</p>
+                        {(selectedAmendment.line_items || []).map((li: any, idx: number) => (
+                          <div key={idx} className="pl-2 border-l-2 border-border mt-1">
+                            <p>{li.description}</p>
+                            <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-primary mb-1">Proposed</p>
+                      <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1 text-xs">
+                        <p><span className="text-muted-foreground">Contact:</span> {selectedAmendment.amendment_data?.contact_name}</p>
+                        <p><span className="text-muted-foreground">Reference:</span> {selectedAmendment.amendment_data?.reference || "—"}</p>
+                        <p><span className="text-muted-foreground">Total:</span> RM {Number(selectedAmendment.amendment_data?.total || 0).toFixed(2)}</p>
+                        <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.amendment_data?.line_items?.length || 0})</p>
+                        {(selectedAmendment.amendment_data?.line_items || []).map((li: any, idx: number) => (
+                          <div key={idx} className="pl-2 border-l-2 border-primary/30 mt-1">
+                            <p>{li.description}</p>
+                            <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Textarea
+                    value={amendmentNote}
+                    onChange={(e) => setAmendmentNote(e.target.value)}
+                    placeholder="Notes (optional)..."
+                    rows={2}
+                    className="text-xs"
+                  />
+
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleApproveAmendment(selectedAmendment.id)} className="flex-1 gap-1" size="sm" disabled={processing}>
+                      {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      Approve Amendment
+                    </Button>
+                    <Button onClick={() => handleRejectAmendment(selectedAmendment.id)} variant="destructive" className="flex-1 gap-1" size="sm" disabled={processing}>
+                      <X className="w-3 h-3" /> Reject
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+                  Select a pending amendment
+                </div>
+              )}
+            </div>
           </div>
         ) : pendingInvoices.length === 0 && processedInvoices.length === 0 ? (
           <div className="bg-card border border-border rounded-xl p-12 text-center">
@@ -315,12 +551,10 @@ const ApprovalsPage: React.FC = () => {
             {/* Pending section */}
             {pendingInvoices.length > 0 && (
               <div className="flex gap-4">
-                {/* List */}
                 <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
                   <InvoiceTable items={pendingInvoices} onSelect={(id) => { setSelectedId(id); cancelEditing(); }} selectedId={selectedId} />
                 </div>
 
-                {/* Selection pane - 768px */}
                 <div className="shrink-0 bg-card border border-border rounded-xl p-5 overflow-y-auto max-h-[80vh]" style={{ width: 768 }}>
                   {selected && selected.status === "pending_approval" ? (
                     <div className="space-y-4 animate-fade-in">
@@ -341,7 +575,6 @@ const ApprovalsPage: React.FC = () => {
                       </div>
 
                       {editing ? (
-                        /* Editing mode */
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -416,7 +649,6 @@ const ApprovalsPage: React.FC = () => {
                           </div>
                         </div>
                       ) : (
-                        /* View mode */
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
@@ -425,7 +657,6 @@ const ApprovalsPage: React.FC = () => {
                             {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
                           </div>
 
-                          {/* Line items preview */}
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground font-medium">Line Items ({selected.line_items?.length || 0})</p>
                             {(selected.line_items || []).map((item: any, idx: number) => (
