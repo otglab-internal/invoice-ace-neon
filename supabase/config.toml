@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.get-users-proxy]
 verify_jwt = false
+
+[functions.data-proxy]
+verify_jwt = false
+
+[functions.ai-agent]
+verify_jwt = false
