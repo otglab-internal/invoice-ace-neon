@@ -155,17 +155,7 @@ Deno.serve(async (req) => {
         return json({ error: "agent_url is required (will be config-driven later)" }, 400);
       }
 
-      const payload = {
-        event: event_type || "invoice_created",
-        timestamp: new Date().toISOString(),
-        invoice,
-        expected_response_format: {
-          action: "approve | reject | flag | request-amendment",
-          invoice_id: invoice?.id,
-          reason: "Optional explanation",
-          amendment_data: null,
-        },
-      };
+      const payload = buildAgentPayload(invoice, event_type || "invoice_created");
 
       try {
         const agentRes = await fetch(agent_url, {
