@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
       query += " RETURNING *";
 
-      const rows = await sql(query, params);
+      const rows = await sql.query(query, params);
       return ok({ rows });
     }
 
