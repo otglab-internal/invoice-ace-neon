@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         query += ` LIMIT $${params.length}`;
       }
 
-      const rows = await sql(query, params);
+      const rows = await sql.query(query, params);
       return ok({ rows: maybeSingle ? (rows[0] || null) : rows });
     }
 
