@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         .join(", ");
 
       const query = `INSERT INTO ${tbl} (${colList}) VALUES (${valList}) ON CONFLICT (${safeCK}) DO UPDATE SET ${updateList} RETURNING *`;
-      const rows = await sql(query, vals);
+      const rows = await sql.query(query, vals);
       return ok({ row: rows[0] });
     }
 
