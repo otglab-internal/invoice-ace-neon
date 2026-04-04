@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         query += ` LIMIT $${params.length}`;
       }
 
-      const rows = await sql(query, params);
+      const rows = await sql.query(query, params);
       return ok({ rows: maybeSingle ? (rows[0] || null) : rows });
     }
 
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       const placeholders = values.map((_, i) => `$${i + 1}`);
 
       const query = `INSERT INTO ${tbl} (${keys.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-      const rows = await sql(query, values);
+      const rows = await sql.query(query, values);
       return ok({ row: rows[0] });
     }
 
@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
       query += " RETURNING *";
 
-      const rows = await sql(query, params);
+      const rows = await sql.query(query, params);
       return ok({ rows });
     }
 
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
       let query = `DELETE FROM ${tbl}`;
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
 
-      await sql(query, params);
+      await sql.query(query, params);
       return ok({ success: true });
     }
 
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         .join(", ");
 
       const query = `INSERT INTO ${tbl} (${colList}) VALUES (${valList}) ON CONFLICT (${safeCK}) DO UPDATE SET ${updateList} RETURNING *`;
-      const rows = await sql(query, vals);
+      const rows = await sql.query(query, vals);
       return ok({ row: rows[0] });
     }
 
