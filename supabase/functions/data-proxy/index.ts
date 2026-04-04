@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
       let query = `DELETE FROM ${tbl}`;
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
 
-      await sql(query, params);
+      await sql.query(query, params);
       return ok({ success: true });
     }
 
