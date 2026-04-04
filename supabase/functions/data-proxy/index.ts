@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       const placeholders = values.map((_, i) => `$${i + 1}`);
 
       const query = `INSERT INTO ${tbl} (${keys.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-      const rows = await sql(query, values);
+      const rows = await sql.query(query, values);
       return ok({ row: rows[0] });
     }
 
