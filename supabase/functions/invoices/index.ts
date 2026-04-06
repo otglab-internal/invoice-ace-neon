@@ -160,12 +160,21 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Enrich line items with line_amount
+        const enrichedInvoice = {
+          ...invoice,
+          line_items: (invoice?.line_items || []).map((li: any) => ({
+            ...li,
+            line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
+          })),
+        };
+
         const webhookResponse = await fetch(n8nWebhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             event: "invoice_approved",
-            invoice,
+            invoice: enrichedInvoice,
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
           }),
@@ -330,10 +339,17 @@ Deno.serve(async (req) => {
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
       if (n8nWebhookUrl) {
         try {
+          const enrichedApproved = {
+            ...approvedInvoice,
+            line_items: (approvedInvoice.line_items || []).map((li: any) => ({
+              ...li,
+              line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
+            })),
+          };
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: approvedInvoice, approved_by: userId, approved_at: approvedInvoice.approved_at }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
