@@ -5,8 +5,7 @@ import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
 import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery } from "@/lib/neon-client";
 
 interface Invoice {
   id: string;
@@ -56,26 +55,22 @@ const DashboardPage: React.FC = () => {
   const isRequester = permissions.canCreateInvoice;
 
   useEffect(() => {
-    const { org_id } = getOrgFilter();
-    supabase.from("global_config").select("value").eq("key", "currency").eq("org_id", org_id).maybeSingle()
-      .then(({ data }) => { if (data?.value) setCurrency(data.value); });
+    neonQuery("global_config", { select: "value", filters: { key: "currency" }, maybeSingle: true })
+      .then(({ data }) => { if ((data as any)?.value) setCurrency((data as any).value); });
   }, []);
 
   const fetchInvoices = async () => {
-    const { org_id, environment } = getTenantFilter();
-    let query = supabase
-      .from("invoices")
-      .select("id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status")
-      .eq("org_id", org_id)
-      .eq("environment", environment)
-      .order("created_at", { ascending: false });
-
+    const filters: Record<string, any> = {};
     if (permissions.viewOwnInvoicesOnly && systemId) {
-      query = query.eq("submitted_by_system_id", systemId);
+      filters.submitted_by_system_id = systemId;
     }
 
-    const { data, error } = await query;
-    if (!error && data) setInvoices(data as unknown as Invoice[]);
+    const { data, error } = await neonQuery("invoices", {
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status",
+      filters,
+      order: { column: "created_at", ascending: false },
+    });
+    if (!error && data) setInvoices(data as Invoice[]);
     setLoading(false);
   };
 
@@ -87,17 +82,12 @@ const DashboardPage: React.FC = () => {
     fetchInvoices();
   }, [systemId, permissions, centreLocations, role, canView]);
 
-  // Check if current user can amend a given invoice
-  // Requesters can amend invoices within their centre
   const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
-    // Only approved invoices (not yet paid) can be amended
     if (inv.status !== "approved" && inv.status !== "submitted" && inv.status !== "pushed") return false;
-    // Don't allow if amendment already pending
     if (inv.amendment_status === "pending") return false;
-    // Check if any line item centre matches user's assigned centres
     const invoiceCentres = (inv.line_items || []).map((li: any) => li.center).filter(Boolean);
-    if (invoiceCentres.length === 0) return true; // no centre restriction
+    if (invoiceCentres.length === 0) return true;
     return invoiceCentres.some((c: string) => centreLocations.includes(c));
   };
 

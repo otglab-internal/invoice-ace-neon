@@ -10,9 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTenantFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
 
 interface LineItem {
   description: string;
@@ -60,7 +59,6 @@ const ApprovalsPage: React.FC = () => {
   const [editLineItems, setEditLineItems] = useState<LineItem[]>([]);
   const [editContactName, setEditContactName] = useState("");
   const [editReference, setEditReference] = useState("");
-  // Amendment tab
   const [activeTab, setActiveTab] = useState<"approvals" | "amendments">("approvals");
   const [selectedAmendmentId, setSelectedAmendmentId] = useState<string | null>(null);
   const [amendmentNote, setAmendmentNote] = useState("");
@@ -78,16 +76,13 @@ const ApprovalsPage: React.FC = () => {
 
   const fetchInvoices = async () => {
     setLoading(true);
-    const { org_id, environment } = getTenantFilter();
-    
-    // Fetch both pending approvals and pending amendments
-    const { data, error } = await supabase
-      .from("invoices")
-      .select("*")
-      .eq("org_id", org_id)
-      .eq("environment", environment)
-      .or("requires_approval.eq.true,amendment_status.eq.pending")
-      .order("created_at", { ascending: false });
+    const { data, error } = await neonQuery("invoices", {
+      orFilters: [
+        { requires_approval: true },
+        { amendment_status: "pending" },
+      ],
+      order: { column: "created_at", ascending: false },
+    });
 
     if (error) {
       toast.error("Failed to load invoices");
@@ -99,17 +94,14 @@ const ApprovalsPage: React.FC = () => {
 
   const logAction = async (invoiceId: string, actionType: string, details: any) => {
     try {
-      const { org_id, environment } = getTenantFilter();
-      await supabase.from("invoice_logs").insert({
+      await neonInsert("invoice_logs", {
         invoice_id: invoiceId,
         action_type: actionType,
         source: "ui",
         performed_by: systemId || "",
         performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
         details: JSON.parse(JSON.stringify(details)),
-        org_id,
-        environment,
-      } as any);
+      });
     } catch (err) {
       console.warn("Failed to write log:", err);
     }
@@ -139,15 +131,12 @@ const ApprovalsPage: React.FC = () => {
 
   const saveEdits = async (id: string) => {
     const newTotal = editLineItems.reduce((s, li) => s + li.quantity * li.cost, 0);
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        contact_name: editContactName,
-        reference: editReference,
-        line_items: JSON.parse(JSON.stringify(editLineItems)),
-        total: newTotal,
-      } as any)
-      .eq("id", id);
+    const { error } = await neonUpdate("invoices", {
+      contact_name: editContactName,
+      reference: editReference,
+      line_items: JSON.parse(JSON.stringify(editLineItems)),
+      total: newTotal,
+    }, { id });
 
     if (error) {
       toast.error("Failed to save edits");
@@ -178,15 +167,12 @@ const ApprovalsPage: React.FC = () => {
     setProcessing(true);
     const approvedAt = nowGMT8();
     const approvedBy = systemId || "";
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        status: "approved",
-        approval_note: adjustmentNote || null,
-        approved_by: approvedBy,
-        approved_at: approvedAt,
-      } as any)
-      .eq("id", id);
+    const { error } = await neonUpdate("invoices", {
+      status: "approved",
+      approval_note: adjustmentNote || null,
+      approved_by: approvedBy,
+      approved_at: approvedAt,
+    }, { id });
 
     if (error) {
       toast.error("Failed to approve invoice");
@@ -228,15 +214,12 @@ const ApprovalsPage: React.FC = () => {
 
   const handleReject = async (id: string) => {
     setProcessing(true);
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        status: "rejected",
-        approval_note: adjustmentNote || null,
-        approved_by: systemId || "",
-        approved_at: nowGMT8(),
-      } as any)
-      .eq("id", id);
+    const { error } = await neonUpdate("invoices", {
+      status: "rejected",
+      approval_note: adjustmentNote || null,
+      approved_by: systemId || "",
+      approved_at: nowGMT8(),
+    }, { id });
 
     if (error) {
       toast.error("Failed to reject invoice");
@@ -252,7 +235,6 @@ const ApprovalsPage: React.FC = () => {
     setProcessing(false);
   };
 
-  // Amendment approval: apply the amendment data to the invoice and clear amendment fields
   const handleApproveAmendment = async (id: string) => {
     setProcessing(true);
     const invoice = invoices.find((i) => i.id === id);
@@ -263,18 +245,15 @@ const ApprovalsPage: React.FC = () => {
     }
 
     const aData = invoice.amendment_data;
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        contact_name: aData.contact_name,
-        contact_id: aData.contact_id || null,
-        reference: aData.reference || "",
-        line_items: JSON.parse(JSON.stringify(aData.line_items)),
-        total: aData.total,
-        amendment_status: "approved",
-        amendment_data: null,
-      } as any)
-      .eq("id", id);
+    const { error } = await neonUpdate("invoices", {
+      contact_name: aData.contact_name,
+      contact_id: aData.contact_id || null,
+      reference: aData.reference || "",
+      line_items: JSON.parse(JSON.stringify(aData.line_items)),
+      total: aData.total,
+      amendment_status: "approved",
+      amendment_data: null,
+    }, { id });
 
     if (error) {
       toast.error("Failed to approve amendment");
@@ -285,7 +264,6 @@ const ApprovalsPage: React.FC = () => {
         note: amendmentNote,
       });
 
-      // Auto-resubmit to Xero via webhook
       try {
         await apiClient.invoices("notify-approval", {
           invoice: {
@@ -313,13 +291,10 @@ const ApprovalsPage: React.FC = () => {
 
   const handleRejectAmendment = async (id: string) => {
     setProcessing(true);
-    const { error } = await supabase
-      .from("invoices")
-      .update({
-        amendment_status: "rejected",
-        amendment_data: null,
-      } as any)
-      .eq("id", id);
+    const { error } = await neonUpdate("invoices", {
+      amendment_status: "rejected",
+      amendment_data: null,
+    }, { id });
 
     if (error) {
       toast.error("Failed to reject amendment");
@@ -435,7 +410,6 @@ const ApprovalsPage: React.FC = () => {
           </Button>
         </div>
 
-        {/* Tabs */}
         {pendingAmendments.length > 0 && (
           <div className="flex gap-1 mb-4 bg-muted/50 p-1 rounded-lg w-fit">
             <button
@@ -461,7 +435,6 @@ const ApprovalsPage: React.FC = () => {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : activeTab === "amendments" && pendingAmendments.length > 0 ? (
-          /* ===== AMENDMENTS TAB ===== */
           <div className="flex gap-4">
             <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
               <AmendmentTable items={pendingAmendments} onSelect={(id) => { setSelectedAmendmentId(id); setAmendmentNote(""); }} selectedId={selectedAmendmentId} />
@@ -481,7 +454,6 @@ const ApprovalsPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Diff view: current vs proposed */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-xs font-medium text-muted-foreground mb-1">Current</p>
@@ -548,7 +520,6 @@ const ApprovalsPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Pending section */}
             {pendingInvoices.length > 0 && (
               <div className="flex gap-4">
                 <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
@@ -695,7 +666,6 @@ const ApprovalsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Processed section */}
             {processedInvoices.length > 0 && (
               <div>
                 <h2 className="text-sm font-semibold text-muted-foreground mb-2">Processed</h2>
@@ -708,7 +678,6 @@ const ApprovalsPage: React.FC = () => {
         )}
       </div>
 
-      {/* Full detail dialog */}
       <Dialog open={!!detailInvoice} onOpenChange={() => setDetailInvoice(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

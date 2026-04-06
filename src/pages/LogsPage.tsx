@@ -4,9 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, RefreshCw, Eye } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { getTenantFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery } from "@/lib/neon-client";
 
 interface LogEntry {
   id: string;
@@ -43,19 +42,15 @@ const LogsPage: React.FC = () => {
 
   const fetchLogs = async () => {
     setLoading(true);
-    const { org_id, environment } = getTenantFilter();
-    const { data, error } = await supabase
-      .from("invoice_logs")
-      .select("*")
-      .eq("org_id", org_id)
-      .eq("environment", environment)
-      .order("created_at", { ascending: false })
-      .limit(200);
+    const { data, error } = await neonQuery("invoice_logs", {
+      order: { column: "created_at", ascending: false },
+      limit: 200,
+    });
 
     if (error) {
       toast.error("Failed to load logs");
     } else {
-      setLogs((data as unknown as LogEntry[]) || []);
+      setLogs((data as LogEntry[]) || []);
     }
     setLoading(false);
   };

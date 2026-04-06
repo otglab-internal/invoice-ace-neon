@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { neonUpdate, neonInsert } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTenantFilter } from "@/hooks/use-tenant-filter";
 
 interface LineItem {
   description: string;
@@ -96,34 +95,32 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         total,
       };
 
-      const { org_id, environment } = getTenantFilter();
-      const { error } = await supabase
-        .from("invoices")
-        .update({
+      const { error } = await neonUpdate(
+        "invoices",
+        {
           amendment_status: "pending",
           amendment_data: JSON.parse(JSON.stringify(amendmentData)),
           amendment_requested_by: systemId || "",
           amendment_requested_by_name: user ? `${user.firstName} ${user.lastName}` : "",
           amendment_requested_at: new Date().toISOString(),
           amendment_note: note || null,
-        } as any)
-        .eq("id", invoice.id);
+        },
+        { id: invoice.id }
+      );
 
       if (error) {
         toast.error("Failed to submit amendment");
       } else {
         // Log the amendment request
         try {
-          await supabase.from("invoice_logs").insert({
+          await neonInsert("invoice_logs", {
             invoice_id: invoice.id,
             action_type: "amendment_requested",
             source: "ui",
             performed_by: systemId || "",
             performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
             details: JSON.parse(JSON.stringify({ amendment_data: amendmentData, note })),
-            org_id,
-            environment,
-          } as any);
+          });
         } catch (logErr) {
           console.warn("Failed to write log:", logErr);
         }
@@ -151,7 +148,6 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Contact & Reference */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs text-muted-foreground">Contact Name</Label>
@@ -163,7 +159,6 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
             </div>
           </div>
 
-          {/* Line Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <Label className="text-xs text-muted-foreground font-medium">Line Items</Label>
@@ -217,7 +212,6 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
             New Total: RM {total.toFixed(2)}
           </div>
 
-          {/* Amendment Note */}
           <div>
             <Label className="text-xs text-muted-foreground">Reason for Amendment</Label>
             <Textarea
@@ -229,7 +223,6 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
             />
           </div>
 
-          {/* Submit */}
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSubmit} disabled={submitting || !contactName.trim() || lineItems.length === 0} className="flex-1">
               {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}

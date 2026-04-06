@@ -7,9 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { getTenantFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
 
 interface ExternalUser {
   id: string;
@@ -28,7 +27,6 @@ interface TagRecord {
   centre_locations: string[];
 }
 
-/** Merged view of an external user + their local tag record (if any) */
 interface StaffRow {
   userId: string;
   firstName: string;
@@ -82,12 +80,9 @@ const AllStaffPage: React.FC = () => {
       const usersData = await usersRes.json();
       const externalUsers: ExternalUser[] = usersData.data || [];
 
-      const { org_id: tenantOrgId, environment: tenantEnv } = getTenantFilter();
-      const { data: tagRecords, error: tagError } = await supabase
-        .from("staff_centre_assignments")
-        .select("id, system_id, tags, centre_locations")
-        .eq("org_id", tenantOrgId)
-        .eq("environment", tenantEnv);
+      const { data: tagRecords, error: tagError } = await neonQuery("staff_centre_assignments", {
+        select: "id,system_id,tags,centre_locations",
+      });
 
       if (tagError) {
         toast.error("Failed to load tag records");
@@ -140,14 +135,11 @@ const AllStaffPage: React.FC = () => {
     const assignedBy = user ? `${user.firstName} ${user.lastName}` : null;
 
     if (row.tagRecordId) {
-      const { error } = await supabase
-        .from("staff_centre_assignments")
-        .update({
-          ...updates,
-          assigned_by: assignedBy,
-          updated_at: new Date().toISOString(),
-        } as any)
-        .eq("id", row.tagRecordId);
+      const { error } = await neonUpdate("staff_centre_assignments", {
+        ...updates,
+        assigned_by: assignedBy,
+        updated_at: new Date().toISOString(),
+      }, { id: row.tagRecordId });
 
       if (error) {
         toast.error("Failed to update");
@@ -163,21 +155,14 @@ const AllStaffPage: React.FC = () => {
         return;
       }
 
-      const { org_id: tenantOrgId, environment: tenantEnv } = getTenantFilter();
-      const { data, error } = await supabase
-        .from("staff_centre_assignments")
-        .insert({
-          system_id: row.userId,
-          user_name: `${row.firstName} ${row.lastName}`,
-          user_role: row.role,
-          tags: newTags,
-          centre_locations: newLocations,
-          assigned_by: assignedBy,
-          org_id: tenantOrgId,
-          environment: tenantEnv,
-        } as any)
-        .select("id")
-        .single();
+      const { data, error } = await neonInsert("staff_centre_assignments", {
+        system_id: row.userId,
+        user_name: `${row.firstName} ${row.lastName}`,
+        user_role: row.role,
+        tags: newTags,
+        centre_locations: newLocations,
+        assigned_by: assignedBy,
+      });
 
       if (error) {
         toast.error("Failed to save");
@@ -187,7 +172,7 @@ const AllStaffPage: React.FC = () => {
 
       setStaffRows((prev) =>
         prev.map((r) =>
-          r.userId === row.userId ? { ...r, tagRecordId: (data as any).id } : r
+          r.userId === row.userId ? { ...r, tagRecordId: (data as any)?.id || null } : r
         )
       );
     }

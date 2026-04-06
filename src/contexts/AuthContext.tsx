@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { neonQuery } from "@/lib/neon-client";
 import { normalizeRole, getPermissions, type AppRole, type StaffTag, type Permissions } from "@/lib/permissions";
 import { getOrgId } from "@/lib/runtime-config";
 
@@ -46,19 +47,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchTags = useCallback(async (sysId: string, env?: string) => {
-    const orgId = (() => { try { return getOrgId(); } catch { return ""; } })();
-    const environment = env || localStorage.getItem("auth_environment") || "production";
-    const { data } = await supabase
-      .from("staff_centre_assignments")
-      .select("tags, centre_locations")
-      .eq("system_id", sysId)
-      .eq("org_id", orgId)
-      .eq("environment", environment)
-      .limit(1);
+  const fetchTags = useCallback(async (sysId: string, _env?: string) => {
+    const { data } = await neonQuery("staff_centre_assignments", {
+      select: "tags, centre_locations",
+      filters: { system_id: sysId },
+      limit: 1,
+    });
 
-    if (data && data.length > 0) {
-      const row = data[0] as any;
+    const rows = data as any[];
+    if (rows && rows.length > 0) {
+      const row = rows[0];
       const rawTags: string[] = row.tags || [];
       setTags(rawTags.filter((t: string) => t === "requester" || t === "approver") as StaffTag[]);
       setCentreLocations(row.centre_locations || []);

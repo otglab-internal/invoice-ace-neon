@@ -7,7 +7,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Map org_id + environment to the correct tenant database secret
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
   stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
@@ -16,8 +15,6 @@ const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
 function getDb(req: Request, orgId?: string) {
   const env = req.headers.get("x-environment") || "development";
   const isProd = env === "production";
-
-  // Resolve org from parameter, header, or fallback
   const org = orgId || req.headers.get("x-org-id") || "";
   const mapping = ORG_DB_MAP[org];
 
@@ -25,18 +22,12 @@ function getDb(req: Request, orgId?: string) {
   if (mapping) {
     url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
   }
-
-  // Fallback to legacy secrets if no org mapping found
   if (!url) {
-    url = isProd
-      ? Deno.env.get("DATABASE_URL_PROD")
-      : Deno.env.get("DATABASE_URL_DEV");
+    url = isProd ? Deno.env.get("DATABASE_URL_PROD") : Deno.env.get("DATABASE_URL_DEV");
   }
-
   if (!url) {
     throw new Error(`No database connection configured for org="${org}" env="${env}"`);
   }
-
   return neon(url);
 }
 
@@ -48,11 +39,8 @@ async function verifyJwt(token: string): Promise<Record<string, unknown> | null>
     const [header, body, signature] = token.split(".");
 
     const key = await crypto.subtle.importKey(
-      "raw",
-      enc.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"]
+      "raw", enc.encode(secret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
     );
 
     const sigStr = signature.replace(/-/g, "+").replace(/_/g, "/");
@@ -106,77 +94,33 @@ Deno.serve(async (req) => {
       }
 
       const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
+      const dbSql = getDb(req, bodyOrgId);
 
-      // Use Supabase client to insert (respects RLS with anon)
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const result = await dbSql`
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, requires_approval, status)
+        VALUES (${contact_id || null}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${'API:' + user_id}, ${true}, ${'pending_approval'})
+        RETURNING *
+      `;
+      const created = result[0];
 
-      const insertRes = await fetch(`${supabaseUrl}/rest/v1/invoices`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          contact_id: contact_id || null,
-          contact_name,
-          invoice_date,
-          reference: reference || "",
-          line_items,
-          total,
-          submitted_by_system_id: system_id,
-          submitted_by_name: `API:${user_id}`,
-          requires_approval: true,
-          status: "pending_approval",
-          template_id: null,
-        }),
-      });
+      // Log
+      await dbSql`
+        INSERT INTO invoice_logs (invoice_id, action_type, source, performed_by, performed_by_name, details)
+        VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
+      `;
 
-      if (!insertRes.ok) {
-        const errBody = await insertRes.text();
-        console.error("API submit insert failed:", errBody);
-        return new Response(JSON.stringify({ error: "Failed to create invoice" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const [created] = await insertRes.json();
-
-      // Log this action
-      await fetch(`${supabaseUrl}/rest/v1/invoice_logs`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-        body: JSON.stringify({
-          invoice_id: created.id,
-          action_type: "request",
-          source: "api",
-          performed_by: user_id,
-          performed_by_name: `API:${user_id}`,
-          details: created,
-        }),
-      });
-
-      // Send approval email if requires approval
+      // Send approval email
       if (created.requires_approval) {
         try {
-          const dbSql = getDb(req, bodyOrgId);
           const smtpConfig = await getSmtpConfig(dbSql);
           if (smtpConfig) {
             const env = req.headers.get("x-environment") || "development";
             const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
-            
+
             let recipients: string[];
             if (sandboxEmail) {
               recipients = [sandboxEmail];
             } else {
-              // Determine center from line items
               const centers = (created.line_items || []).map((li: any) => li.center).filter(Boolean);
               recipients = await getApproverEmails(dbSql, centers);
             }
@@ -203,7 +147,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // notify-approval is a webhook proxy — skip auth but fail loudly on delivery errors
+    // notify-approval — webhook proxy
     if (action === "notify-approval") {
       const { invoice } = body;
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
@@ -254,22 +198,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // send-approval-email — send email to approvers for an invoice (no auth required for internal use)
+    // send-approval-email — fetch invoice & approvers from NeonDB
     if (action === "send-approval-email") {
       const { invoiceId } = body;
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const supaHeaders = {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-      };
+      const dbSql = getDb(req, bodyOrgId);
 
-      // Fetch invoice from Supabase REST API
-      const invoiceFetch = await fetch(
-        `${supabaseUrl}/rest/v1/invoices?id=eq.${invoiceId}&limit=1`,
-        { headers: supaHeaders }
-      );
-      const invoiceRows = await invoiceFetch.json();
+      const invoiceRows = await dbSql`SELECT * FROM invoices WHERE id = ${invoiceId} LIMIT 1`;
       if (invoiceRows.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found" }), {
           status: 404,
@@ -278,66 +212,23 @@ Deno.serve(async (req) => {
       }
       const invoice = invoiceRows[0];
 
-      // Fetch SMTP config from global_config via Supabase REST API
-      const configFetch = await fetch(
-        `${supabaseUrl}/rest/v1/global_config?key=in.(smtp_host,smtp_port,smtp_user,smtp_pass,smtp_from_email,smtp_from_name)`,
-        { headers: supaHeaders }
-      );
-      const configRows = await configFetch.json();
-      const configMap: Record<string, string> = {};
-      for (const r of configRows) configMap[r.key] = r.value;
-
-      if (!configMap.smtp_host || !configMap.smtp_user || !configMap.smtp_pass) {
+      const smtpConfig = await getSmtpConfig(dbSql);
+      if (!smtpConfig) {
         return new Response(JSON.stringify({ error: "SMTP not configured" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const smtpConfig = {
-        host: configMap.smtp_host,
-        port: Number(configMap.smtp_port) || 587,
-        user: configMap.smtp_user,
-        pass: configMap.smtp_pass,
-        from_email: configMap.smtp_from_email || configMap.smtp_user,
-        from_name: configMap.smtp_from_name || "Invoice Center",
-      };
-
       const env = req.headers.get("x-environment") || "development";
-      let sandboxEmail: string | null = null;
-      if (env !== "production") {
-        const sbFetch = await fetch(
-          `${supabaseUrl}/rest/v1/global_config?key=eq.sandbox_test_email&select=value`,
-          { headers: supaHeaders }
-        );
-        const sbRows = await sbFetch.json();
-        sandboxEmail = sbRows[0]?.value?.trim() || null;
-      }
+      const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
 
       let recipients: string[];
       if (sandboxEmail) {
         recipients = [sandboxEmail];
       } else {
-        // Fetch approvers from staff_centre_assignments via Supabase REST API
-        const approverFetch = await fetch(
-          `${supabaseUrl}/rest/v1/staff_centre_assignments?tags=cs.{approver}&select=system_id,centre_locations,user_role`,
-          { headers: supaHeaders }
-        );
-        const approvers = await approverFetch.json();
         const centers = (invoice.line_items || []).map((li: any) => li.center).filter(Boolean);
-        const matchingIds: string[] = [];
-        for (const a of approvers) {
-          const role = (a.user_role || "").toLowerCase();
-          if (role === "admin" || role === "management") {
-            matchingIds.push(a.system_id);
-          } else {
-            const aLocations: string[] = a.centre_locations || [];
-            if (centers.some((loc: string) => aLocations.includes(loc))) {
-              matchingIds.push(a.system_id);
-            }
-          }
-        }
-        recipients = matchingIds;
+        recipients = await getApproverEmails(dbSql, centers);
       }
 
       if (recipients.length === 0) {
@@ -367,38 +258,19 @@ Deno.serve(async (req) => {
     const sql = getDb(req, bodyOrgId);
     const userId = claims.sub as string;
 
-    // ACTION: create - Create a new invoice
+    // ACTION: create
     if (action === "create") {
-      const {
-        contactId, contactName, contactMode,
-        description, quantity, cost,
-        accountCode, centerId, descriptionMode,
-        studentName, age, packageName, firstLesson,
-      } = body;
+      const { contactId, contactName, contactMode, description, quantity, cost, accountCode, centerId, descriptionMode, studentName, age, packageName, firstLesson } = body;
 
-      // If creating new contact, insert first
       let finalContactId = contactId;
       if (contactMode === "new" && contactName) {
-        const result = await sql`
-          INSERT INTO contacts (name, created_by)
-          VALUES (${contactName}, ${userId})
-          RETURNING id
-        `;
+        const result = await sql`INSERT INTO contacts (name, created_by) VALUES (${contactName}, ${userId}) RETURNING id`;
         finalContactId = result[0].id;
       }
 
       const result = await sql`
-        INSERT INTO invoices (
-          contact_id, description, description_mode,
-          student_name, age, package_name, first_lesson,
-          quantity, unit_cost, account_code, center_id,
-          status, created_by, invoice_date
-        ) VALUES (
-          ${finalContactId}, ${description}, ${descriptionMode || "structured"},
-          ${studentName || null}, ${age || null}, ${packageName || null}, ${firstLesson || null},
-          ${quantity}, ${cost}, ${accountCode}, ${centerId},
-          'pending', ${userId}, CURRENT_DATE
-        )
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, status, requires_approval)
+        VALUES (${finalContactId}, ${contactName || ''}, ${body.invoice_date || new Date().toISOString().split('T')[0]}, ${body.reference || ''}, ${JSON.stringify(body.line_items || [])}::jsonb, ${body.total || 0}, ${userId}, ${body.submitted_by_name || ''}, ${'pending_approval'}, ${true})
         RETURNING *
       `;
 
@@ -407,111 +279,64 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: list - List invoices
+    // ACTION: list
     if (action === "list") {
       const { status, limit = 50, offset = 0 } = body;
       let invoices;
-
       if (status) {
-        invoices = await sql`
-          SELECT i.*, c.name as contact_name
-          FROM invoices i
-          LEFT JOIN contacts c ON c.id = i.contact_id
-          WHERE i.status = ${status}
-          ORDER BY i.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
+        invoices = await sql`SELECT * FROM invoices WHERE status = ${status} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
       } else {
-        invoices = await sql`
-          SELECT i.*, c.name as contact_name
-          FROM invoices i
-          LEFT JOIN contacts c ON c.id = i.contact_id
-          ORDER BY i.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
+        invoices = await sql`SELECT * FROM invoices ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
       }
-
       return new Response(JSON.stringify({ invoices }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ACTION: get - Get single invoice
+    // ACTION: get
     if (action === "get") {
       const { invoiceId } = body;
-      const result = await sql`
-        SELECT i.*, c.name as contact_name
-        FROM invoices i
-        LEFT JOIN contacts c ON c.id = i.contact_id
-        WHERE i.id = ${invoiceId}
-        LIMIT 1
-      `;
-
+      const result = await sql`SELECT * FROM invoices WHERE id = ${invoiceId} LIMIT 1`;
       if (result.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       return new Response(JSON.stringify({ invoice: result[0] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ACTION: approve - Approve invoice (accountant only)
+    // ACTION: approve
     if (action === "approve") {
       const { invoiceId, notes } = body;
       const role = claims.role as string;
-
       if (role !== "accountant" && role !== "admin") {
         return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       const result = await sql`
-        UPDATE invoices
-        SET status = 'approved', approval_notes = ${notes || null}, approved_by = ${userId}, approved_at = NOW()
-        WHERE id = ${invoiceId} AND status = 'pending'
-        RETURNING *
+        UPDATE invoices SET status = 'approved', approval_note = ${notes || null}, approved_by = ${userId}, approved_at = NOW()
+        WHERE id = ${invoiceId} AND status = 'pending_approval' RETURNING *
       `;
-
       if (result.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found or already processed" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const approvedInvoice = result[0];
-
-      // Send approved invoice data to n8n webhook (fire-and-forget)
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
       if (n8nWebhookUrl) {
         try {
-          // Fetch contact name for the webhook payload
-          const contactRows = await sql`
-            SELECT c.name as contact_name
-            FROM contacts c WHERE c.id = ${approvedInvoice.contact_id}
-            LIMIT 1
-          `;
-          const contactName = contactRows.length > 0 ? contactRows[0].contact_name : null;
-
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              event: "invoice_approved",
-              invoice: { ...approvedInvoice, contact_name: contactName },
-              approved_by: userId,
-              approved_at: approvedInvoice.approved_at,
-            }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: approvedInvoice, approved_by: userId, approved_at: approvedInvoice.approved_at }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
-          // Don't fail the approval if webhook fails
         }
       }
 
@@ -520,126 +345,50 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: reject - Reject invoice
+    // ACTION: reject
     if (action === "reject") {
       const { invoiceId, reason } = body;
       const role = claims.role as string;
-
       if (role !== "accountant" && role !== "admin") {
         return new Response(JSON.stringify({ error: "Insufficient permissions" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       const result = await sql`
-        UPDATE invoices
-        SET status = 'rejected', rejection_reason = ${reason || null}, approved_by = ${userId}, approved_at = NOW()
-        WHERE id = ${invoiceId} AND status = 'pending'
-        RETURNING *
+        UPDATE invoices SET status = 'rejected', approval_note = ${reason || null}, approved_by = ${userId}, approved_at = NOW()
+        WHERE id = ${invoiceId} AND status = 'pending_approval' RETURNING *
       `;
-
       if (result.length === 0) {
         return new Response(JSON.stringify({ error: "Invoice not found or already processed" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       return new Response(JSON.stringify({ invoice: result[0] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ACTION: push-to-xero - Push approved invoice to Xero
-    if (action === "push-to-xero") {
-      const { invoiceId } = body;
-
-      const invoices = await sql`
-        SELECT i.*, c.name as contact_name
-        FROM invoices i
-        LEFT JOIN contacts c ON c.id = i.contact_id
-        WHERE i.id = ${invoiceId}
-        LIMIT 1
-      `;
-
-      if (invoices.length === 0) {
-        return new Response(JSON.stringify({ error: "Invoice not found" }), {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const invoice = invoices[0];
-
-      // TODO: Replace with actual Xero API integration
-      // For now, simulate the Xero push and mark as pushed
-      const xeroInvoiceId = `XERO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-
-      await sql`
-        UPDATE invoices
-        SET status = 'pushed', xero_invoice_id = ${xeroInvoiceId}, pushed_at = NOW()
-        WHERE id = ${invoiceId}
-      `;
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          xeroInvoiceId,
-          message: `Invoice pushed to Xero as ${xeroInvoiceId}`,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ACTION: stats - Dashboard statistics
+    // ACTION: stats
     if (action === "stats") {
       const result = await sql`
-        SELECT
-          COUNT(*)::int as total,
-          COUNT(*) FILTER (WHERE status = 'pending')::int as pending,
-          COUNT(*) FILTER (WHERE status = 'pushed')::int as pushed,
-          COUNT(*) FILTER (WHERE status = 'rejected')::int as failed
+        SELECT COUNT(*)::int as total,
+          COUNT(*) FILTER (WHERE status = 'pending_approval')::int as pending,
+          COUNT(*) FILTER (WHERE status = 'approved')::int as approved,
+          COUNT(*) FILTER (WHERE status = 'rejected')::int as rejected
         FROM invoices
       `;
-
       return new Response(JSON.stringify({ stats: result[0] }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ACTION: contacts - List contacts
+    // ACTION: contacts
     if (action === "contacts") {
       const contacts = await sql`SELECT id, name FROM contacts ORDER BY name`;
       return new Response(JSON.stringify({ contacts }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // ACTION: settings - Get/update settings
-    if (action === "get-settings") {
-      const settings = await sql`
-        SELECT key, value FROM app_settings WHERE key IN ('invoice_mode')
-      `;
-      const map: Record<string, string> = {};
-      for (const s of settings) map[s.key] = s.value;
-      return new Response(JSON.stringify({ settings: map }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (action === "update-settings") {
-      const { key, value } = body;
-      await sql`
-        INSERT INTO app_settings (key, value) VALUES (${key}, ${value})
-        ON CONFLICT (key) DO UPDATE SET value = ${value}, updated_at = NOW()
-      `;
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // notify-approval is handled before auth check above
 
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,

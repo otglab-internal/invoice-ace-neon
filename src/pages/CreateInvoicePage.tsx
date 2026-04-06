@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
-import { getTenantFilter, getOrgFilter } from "@/hooks/use-tenant-filter";
+import { neonQuery, neonInsert } from "@/lib/neon-client";
 
 interface TemplateField {
   id: string;
@@ -37,8 +37,8 @@ const FREETEXT_ID = "__freetext__";
 
 interface LineItem {
   id: string;
-  templateId: string; // template id or FREETEXT_ID
-  fieldValues: Record<string, string>; // keyed by field name
+  templateId: string;
+  fieldValues: Record<string, string>;
   freeDescription: string;
   quantity: string;
   cost: string;
@@ -57,7 +57,6 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   center: "",
 });
 
-// Contacts fetched from Xero
 interface XeroContact {
   id: string;
   name: string;
@@ -124,19 +123,15 @@ const CreateInvoicePage: React.FC = () => {
   useEffect(() => {
     const fetchTemplates = async () => {
       setLoadingTemplates(true);
-      const { org_id, environment } = getTenantFilter();
-      const { data, error } = await supabase
-        .from("invoice_templates")
-        .select("*")
-        .eq("org_id", org_id)
-        .eq("environment", environment)
-        .order("created_at", { ascending: true });
+      const { data, error } = await neonQuery("invoice_templates", {
+        order: { column: "created_at", ascending: true },
+      });
 
       if (error) {
         toast.error("Failed to load templates");
         setTemplates([]);
       } else {
-        const parsed = (data || []).map((t: any) => ({
+        const parsed = ((data as any[]) || []).map((t: any) => ({
           id: t.id,
           name: t.name,
           fields: (typeof t.fields === "string" ? JSON.parse(t.fields) : t.fields) as TemplateField[],
@@ -150,7 +145,7 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
-  // Fetch Xero contacts
+  // Fetch Xero contacts (still uses supabase edge function)
   useEffect(() => {
     const fetchContacts = async () => {
       setLoadingContacts(true);
@@ -174,16 +169,14 @@ const CreateInvoicePage: React.FC = () => {
   // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
     const checkFlags = async () => {
-      const { org_id, environment } = getTenantFilter();
-      const { org_id: orgIdOnly } = getOrgFilter();
       const [userRes, freeTextRes] = await Promise.all([
         systemId
-          ? supabase.from("user_approval_flags").select("requires_approval").eq("system_id", systemId).eq("org_id", org_id).eq("environment", environment).maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase.from("global_config").select("value").eq("key", "freetext_requires_approval").eq("org_id", orgIdOnly).maybeSingle(),
+          ? neonQuery("user_approval_flags", { select: "requires_approval", filters: { system_id: systemId }, maybeSingle: true })
+          : Promise.resolve({ data: null, error: null }),
+        neonQuery("global_config", { select: "value", filters: { key: "freetext_requires_approval" }, maybeSingle: true }),
       ]);
-      setUserFlagged(userRes.data?.requires_approval === true);
-      setFreeTextFlagged(freeTextRes.data?.value === "true");
+      setUserFlagged((userRes.data as any)?.requires_approval === true);
+      setFreeTextFlagged((freeTextRes.data as any)?.value === "true");
     };
     checkFlags();
   }, [systemId]);
@@ -224,7 +217,6 @@ const CreateInvoicePage: React.FC = () => {
     return sum + q * c;
   }, 0);
 
-  // Compute whether this invoice will need approval
   const hasFreeText = lineItems.some((i) => i.templateId === FREETEXT_ID);
   const selectedTemplateIds = [...new Set(lineItems.map((i) => i.templateId).filter((id) => id !== FREETEXT_ID))];
   const templateFlagged = templates.some((t) => selectedTemplateIds.includes(t.id) && t.requires_approval);
@@ -252,7 +244,6 @@ const CreateInvoicePage: React.FC = () => {
 
       const finalContactId = contactMode === "select" ? contactId : "";
 
-      const { org_id, environment } = getTenantFilter();
       const invoicePayload = {
         contact_id: finalContactId || null,
         contact_name: contactName,
@@ -265,27 +256,23 @@ const CreateInvoicePage: React.FC = () => {
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
-        org_id,
-        environment,
       };
 
-      const { data: inserted, error } = await supabase.from("invoices").insert(invoicePayload as any).select().single();
+      const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
 
       if (error) {
         toast.error("Failed to submit invoice");
       } else {
         // Log the creation
         try {
-          await supabase.from("invoice_logs").insert({
-            invoice_id: inserted.id,
+          await neonInsert("invoice_logs", {
+            invoice_id: (inserted as any).id,
             action_type: "request",
             source: "ui",
             performed_by: systemId || "",
             performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
             details: JSON.parse(JSON.stringify(inserted)),
-            org_id,
-            environment,
-          } as any);
+          });
         } catch (logErr) {
           console.warn("Failed to write log:", logErr);
         }
@@ -293,7 +280,7 @@ const CreateInvoicePage: React.FC = () => {
         // Send approval notification email if needed
         if (willNeedApproval) {
           try {
-            await apiClient.invoices("send-approval-email", { invoiceId: inserted.id });
+            await apiClient.invoices("send-approval-email", { invoiceId: (inserted as any).id });
           } catch (emailErr) {
             console.warn("Failed to send approval email:", emailErr);
           }
@@ -450,13 +437,11 @@ const CreateInvoicePage: React.FC = () => {
             />
           ))}
 
-          {/* Add Line Item Button */}
           <Button type="button" variant="outline" className="w-full gap-2 border-dashed" onClick={addLineItem}>
             <Plus className="w-4 h-4" />
             Add Line Item
           </Button>
 
-          {/* Approval Status Indicator */}
           {willNeedApproval ? (
             <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2">
@@ -480,7 +465,6 @@ const CreateInvoicePage: React.FC = () => {
             </div>
           )}
 
-          {/* Sticky Submit */}
           <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center">
             <div className="text-sm text-muted-foreground">
               {total > 0 ? (
@@ -534,7 +518,6 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
         )}
       </div>
 
-      {/* Template selector */}
       <div>
         <Label className="text-xs text-muted-foreground mb-2 block">Template</Label>
         <Select value={item.templateId} onValueChange={handleTemplateChange}>
@@ -548,7 +531,6 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
         </Select>
       </div>
 
-      {/* Template fields or free text */}
       {item.templateId === FREETEXT_ID ? (
         <div className="animate-fade-in">
           <Textarea
@@ -589,7 +571,6 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
             </div>
           ))}
 
-          {/* Preview */}
           {desc.trim() && (
             <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
               <p className="text-xs text-muted-foreground mb-1 font-medium">Preview:</p>
@@ -599,7 +580,6 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
         </div>
       ) : null}
 
-      {/* Quantity, Cost, Account, Center */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="text-xs text-muted-foreground">Quantity</Label>
