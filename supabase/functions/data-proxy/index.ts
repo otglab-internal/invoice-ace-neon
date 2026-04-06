@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
       const { updates, filters = {} } = body;
       if (!updates || typeof updates !== "object") return err(400, "Missing updates");
 
-      const { org_id: _o, environment: _e, ...cleanUpdates } = updates;
+      const { org_id: _o2, environment: _e2, ...cleanUpdates } = updates;
       const params: unknown[] = [];
       const setClauses: string[] = [];
 
