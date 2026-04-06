@@ -160,12 +160,21 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Enrich line items with line_amount
+        const enrichedInvoice = {
+          ...invoice,
+          line_items: (invoice?.line_items || []).map((li: any) => ({
+            ...li,
+            line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
+          })),
+        };
+
         const webhookResponse = await fetch(n8nWebhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             event: "invoice_approved",
-            invoice,
+            invoice: enrichedInvoice,
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
           }),
