@@ -44,6 +44,23 @@ function safeName(name: string): string {
   return name;
 }
 
+const PG_ARRAY_COLUMNS = new Set([
+  "tags", "centre_locations",
+]);
+
+function toPgValue(key: string, v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (Array.isArray(v)) {
+    if (PG_ARRAY_COLUMNS.has(key)) {
+      // Convert JS array to Postgres array literal: {a,b,c}
+      return `{${v.map((item: unknown) => `"${String(item).replace(/"/g, '\\"')}"`).join(",")}}`;
+    }
+    return JSON.stringify(v);
+  }
+  if (typeof v === "object") return JSON.stringify(v);
+  return v;
+}
+
 function safeSelect(select: string): string {
   if (!select || select === "*") return "*";
   return select.split(",").map(s => safeName(s.trim())).join(", ");
