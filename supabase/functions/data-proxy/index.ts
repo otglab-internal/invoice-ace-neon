@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
       const setClauses: string[] = [];
 
       for (const [key, value] of Object.entries(cleanUpdates)) {
-        params.push((typeof value === "object" && value !== null) ? JSON.stringify(value) : value);
+        params.push(toPgValue(key, value));
         setClauses.push(`${safeName(key)} = $${params.length}`);
       }
 
