@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
 
       const result = await dbSql`
         INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, requires_approval, status)
-        VALUES (${contact_id || null}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${'API:' + user_id}, ${true}, ${'pending_approval'})
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${'API:' + user_id}, ${true}, ${'pending_approval'})
         RETURNING *
       `;
       const created = result[0];
