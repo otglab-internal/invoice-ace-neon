@@ -206,8 +206,9 @@ Deno.serve(async (req) => {
       if (!row || !conflictKey) return err(400, "Missing row or conflictKey");
 
       const { org_id: _o3, environment: _e3, ...cleanRow } = row;
-      const keys = Object.keys(cleanRow);
-      const vals = Object.values(cleanRow).map(v => (typeof v === "object" && v !== null) ? JSON.stringify(v) : v);
+      const entries = Object.entries(cleanRow);
+      const keys = entries.map(([k]) => k);
+      const vals = entries.map(([k, v]) => toPgValue(k, v));
       const safeCK = safeName(conflictKey);
 
       const colList = keys.map(k => safeName(k)).join(", ");
