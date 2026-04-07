@@ -44,6 +44,23 @@ function safeName(name: string): string {
   return name;
 }
 
+const PG_ARRAY_COLUMNS = new Set([
+  "tags", "centre_locations",
+]);
+
+function toPgValue(key: string, v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (Array.isArray(v)) {
+    if (PG_ARRAY_COLUMNS.has(key)) {
+      // Convert JS array to Postgres array literal: {a,b,c}
+      return `{${v.map((item: unknown) => `"${String(item).replace(/"/g, '\\"')}"`).join(",")}}`;
+    }
+    return JSON.stringify(v);
+  }
+  if (typeof v === "object") return JSON.stringify(v);
+  return v;
+}
+
 function safeSelect(select: string): string {
   if (!select || select === "*") return "*";
   return select.split(",").map(s => safeName(s.trim())).join(", ");
@@ -127,8 +144,9 @@ Deno.serve(async (req) => {
 
       // Strip tenant fields that no longer exist in NeonDB tables
       const { org_id: _o, environment: _e, ...cleanRow } = row;
-      const keys = Object.keys(cleanRow).map(k => safeName(k));
-      const values = Object.values(cleanRow);
+      const entries = Object.entries(cleanRow);
+      const keys = entries.map(([k]) => safeName(k));
+      const values = entries.map(([k, v]) => toPgValue(k, v));
       const placeholders = values.map((_, i) => `$${i + 1}`);
 
       const query = `INSERT INTO ${tbl} (${keys.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
@@ -141,12 +159,12 @@ Deno.serve(async (req) => {
       const { updates, filters = {} } = body;
       if (!updates || typeof updates !== "object") return err(400, "Missing updates");
 
-      const { org_id: _o, environment: _e, ...cleanUpdates } = updates;
+      const { org_id: _o2, environment: _e2, ...cleanUpdates } = updates;
       const params: unknown[] = [];
       const setClauses: string[] = [];
 
       for (const [key, value] of Object.entries(cleanUpdates)) {
-        params.push(value);
+        params.push(toPgValue(key, value));
         setClauses.push(`${safeName(key)} = $${params.length}`);
       }
 
@@ -187,9 +205,10 @@ Deno.serve(async (req) => {
       const { row, conflictKey } = body;
       if (!row || !conflictKey) return err(400, "Missing row or conflictKey");
 
-      const { org_id: _o, environment: _e, ...cleanRow } = row;
-      const keys = Object.keys(cleanRow);
-      const vals = Object.values(cleanRow);
+      const { org_id: _o3, environment: _e3, ...cleanRow } = row;
+      const entries = Object.entries(cleanRow);
+      const keys = entries.map(([k]) => k);
+      const vals = entries.map(([k, v]) => toPgValue(k, v));
       const safeCK = safeName(conflictKey);
 
       const colList = keys.map(k => safeName(k)).join(", ");
