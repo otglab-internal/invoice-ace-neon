@@ -693,6 +693,13 @@ const ApprovalsPage: React.FC = () => {
               {detailInvoice.reference && <p><span className="text-muted-foreground">Reference:</span> {detailInvoice.reference}</p>}
               <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
               {detailInvoice.approval_note && <p><span className="text-muted-foreground">Note:</span> {detailInvoice.approval_note}</p>}
+              {detailInvoice.invoice_pdf_url && (
+                <a href={detailInvoice.invoice_pdf_url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="gap-1.5 mt-1">
+                    <FileText className="w-3.5 h-3.5" /> View Xero PDF
+                  </Button>
+                </a>
+              )}
               <div>
                 <p className="text-muted-foreground mb-1">Line Items:</p>
                 <div className="space-y-2">
