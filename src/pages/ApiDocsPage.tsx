@@ -209,6 +209,58 @@ const ApiDocsPage: React.FC = () => {
   }'`}
           </pre>
         </Card>
+
+        {/* PDF Webhook */}
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Badge className="text-xs bg-blue-600">POST</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">Invoice PDF Webhook (n8n → App)</h2>
+          </div>
+          <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">
+            {`${SUPABASE_URL}/functions/v1/invoice-pdf-webhook`}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            n8n calls this endpoint after pushing the invoice to Xero to attach the generated PDF.
+            Supports <strong>multipart/form-data</strong> or <strong>JSON with base64</strong>.
+          </p>
+
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">Option A: Multipart Form Data</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`curl -X POST \\
+  "${SUPABASE_URL}/functions/v1/invoice-pdf-webhook" \\
+  -H "apikey: <your-anon-key>" \\
+  -F "invoice_id=<uuid>" \\
+  -F "pdf=@/path/to/invoice.pdf"`}
+            </pre>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">Option B: JSON with Base64</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`curl -X POST \\
+  "${SUPABASE_URL}/functions/v1/invoice-pdf-webhook" \\
+  -H "apikey: <your-anon-key>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "invoice_id": "<uuid>",
+    "pdf_base64": "<base64-encoded-pdf>",
+    "filename": "INV-001.pdf"
+  }'`}
+            </pre>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">Response</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`{
+  "success": true,
+  "invoice_id": "<uuid>",
+  "pdf_url": "https://...storage.../invoice-pdfs/<uuid>/invoice.pdf"
+}`}
+            </pre>
+          </div>
+        </Card>
       </div>
     </AppLayout>
   );
