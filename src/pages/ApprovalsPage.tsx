@@ -12,6 +12,7 @@ import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LineItem {
   description: string;
