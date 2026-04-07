@@ -707,7 +707,7 @@ const ApprovalsPage: React.FC = () => {
                     if (data?.signedUrl) {
                       window.open(data.signedUrl, "_blank");
                     } else {
-                      toast({ title: "Failed to get PDF URL", description: error?.message, variant: "destructive" });
+                      toast.error("Failed to get PDF URL: " + (error?.message || "Unknown error"));
                     }
                   }}
                 >
