@@ -695,11 +695,23 @@ const ApprovalsPage: React.FC = () => {
               <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
               {detailInvoice.approval_note && <p><span className="text-muted-foreground">Note:</span> {detailInvoice.approval_note}</p>}
               {detailInvoice.invoice_pdf_url && (
-                <a href={detailInvoice.invoice_pdf_url} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm" className="gap-1.5 mt-1">
-                    <FileText className="w-3.5 h-3.5" /> View Xero PDF
-                  </Button>
-                </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 mt-1"
+                  onClick={async () => {
+                    const { data, error } = await supabase.storage
+                      .from("invoice-pdfs")
+                      .createSignedUrl(detailInvoice.invoice_pdf_url!, 300);
+                    if (data?.signedUrl) {
+                      window.open(data.signedUrl, "_blank");
+                    } else {
+                      toast({ title: "Failed to get PDF URL", description: error?.message, variant: "destructive" });
+                    }
+                  }}
+                >
+                  <FileText className="w-3.5 h-3.5" /> View Xero PDF
+                </Button>
               )}
               <div>
                 <p className="text-muted-foreground mb-1">Line Items:</p>
