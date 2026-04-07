@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft } from "lucide-react";
+import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
