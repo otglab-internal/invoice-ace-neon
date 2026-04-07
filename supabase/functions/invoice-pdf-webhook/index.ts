@@ -80,22 +80,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("invoice-pdfs")
-      .getPublicUrl(storagePath);
-
-    const pdfUrl = urlData.publicUrl;
-
-    // Update invoices table with the PDF URL
+    // Store the storage path (not public URL) since the bucket is private
     const { error: updateError } = await supabase
       .from("invoices")
-      .update({ invoice_pdf_url: pdfUrl })
+      .update({ invoice_pdf_url: storagePath })
       .eq("id", invoiceId);
 
     if (updateError) {
       console.error("DB update error:", updateError);
-      return new Response(JSON.stringify({ error: "PDF uploaded but failed to update invoice record", pdf_url: pdfUrl }), {
+      return new Response(JSON.stringify({ error: "PDF uploaded but failed to update invoice record", storage_path: storagePath }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -104,7 +97,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       invoice_id: invoiceId,
-      pdf_url: pdfUrl,
+      storage_path: storagePath,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
