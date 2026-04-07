@@ -45,6 +45,7 @@ interface Invoice {
   amendment_requested_by_name: string | null;
   amendment_requested_at: string | null;
   amendment_note: string | null;
+  invoice_pdf_url: string | null;
 }
 
 const ApprovalsPage: React.FC = () => {
