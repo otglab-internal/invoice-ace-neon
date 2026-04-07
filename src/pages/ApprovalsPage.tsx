@@ -346,6 +346,7 @@ const ApprovalsPage: React.FC = () => {
           >
             <td className="py-3 px-4">
               <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
+              {inv.invoice_pdf_url && <FileText className="w-3 h-3 inline ml-1.5 text-primary" />}
             </td>
             <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
             <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
