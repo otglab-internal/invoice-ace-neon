@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft } from "lucide-react";
+import { Check, X, Eye, Loader2, RefreshCw, Pencil, Trash2, Plus, ArrowRightLeft, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
@@ -45,6 +45,7 @@ interface Invoice {
   amendment_requested_by_name: string | null;
   amendment_requested_at: string | null;
   amendment_note: string | null;
+  invoice_pdf_url: string | null;
 }
 
 const ApprovalsPage: React.FC = () => {
@@ -345,6 +346,7 @@ const ApprovalsPage: React.FC = () => {
           >
             <td className="py-3 px-4">
               <code className="text-xs text-foreground">{inv.invoice_number || inv.id.slice(0, 8).toUpperCase()}</code>
+              {inv.invoice_pdf_url && <FileText className="w-3 h-3 inline ml-1.5 text-primary" />}
             </td>
             <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
             <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
@@ -692,6 +694,13 @@ const ApprovalsPage: React.FC = () => {
               {detailInvoice.reference && <p><span className="text-muted-foreground">Reference:</span> {detailInvoice.reference}</p>}
               <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
               {detailInvoice.approval_note && <p><span className="text-muted-foreground">Note:</span> {detailInvoice.approval_note}</p>}
+              {detailInvoice.invoice_pdf_url && (
+                <a href={detailInvoice.invoice_pdf_url} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="gap-1.5 mt-1">
+                    <FileText className="w-3.5 h-3.5" /> View Xero PDF
+                  </Button>
+                </a>
+              )}
               <div>
                 <p className="text-muted-foreground mb-1">Line Items:</p>
                 <div className="space-y-2">

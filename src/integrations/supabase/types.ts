@@ -142,6 +142,7 @@ export type Database = {
           id: string
           invoice_date: string
           invoice_number: string | null
+          invoice_pdf_url: string | null
           line_items: Json
           org_id: string
           reference: string | null
@@ -169,6 +170,7 @@ export type Database = {
           id?: string
           invoice_date: string
           invoice_number?: string | null
+          invoice_pdf_url?: string | null
           line_items?: Json
           org_id?: string
           reference?: string | null
@@ -196,6 +198,7 @@ export type Database = {
           id?: string
           invoice_date?: string
           invoice_number?: string | null
+          invoice_pdf_url?: string | null
           line_items?: Json
           org_id?: string
           reference?: string | null
