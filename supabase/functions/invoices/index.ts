@@ -349,7 +349,7 @@ Deno.serve(async (req) => {
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
