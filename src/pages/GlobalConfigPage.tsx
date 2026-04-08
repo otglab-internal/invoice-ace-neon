@@ -10,6 +10,7 @@ import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } 
 import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert } from "@/lib/neon-client";
+import { invalidateBrandingCache } from "@/hooks/use-branding";
 
 interface ConfigEntry {
   key: string;
@@ -100,6 +101,7 @@ const GlobalConfigPage: React.FC = () => {
         link.href = faviconUrl;
       }
 
+      invalidateBrandingCache();
       toast({ title: "Configuration saved" });
       await checkXeroStatus();
     } catch (err: any) {
