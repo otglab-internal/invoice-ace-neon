@@ -2,6 +2,7 @@ import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LayoutDashboard, FilePlus, CheckSquare, Settings, LogOut, FileText, LayoutTemplate, Wrench, Users, ScrollText, BookOpen } from "lucide-react";
+import { useBranding } from "@/hooks/use-branding";
 
 interface NavItem {
   to: string;
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
 const AppSidebar: React.FC = () => {
   const { user, logout, permissions } = useAuth();
   const navigate = useNavigate();
+  const { logoUrl } = useBranding();
 
   const visibleNavItems = navItems.filter((item) => {
     if (!item.permissionKey) return true;
@@ -41,7 +43,11 @@ const AppSidebar: React.FC = () => {
     <aside className="fixed left-0 top-0 h-screen w-60 bg-sidebar flex flex-col border-r border-sidebar-border z-50">
       <div className="p-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <FileText className="w-6 h-6 text-sidebar-primary" />
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
+          ) : (
+            <FileText className="w-6 h-6 text-sidebar-primary" />
+          )}
           <span className="font-display font-bold text-lg text-sidebar-foreground">Invoice Center</span>
         </div>
       </div>
