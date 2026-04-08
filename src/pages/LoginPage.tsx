@@ -9,22 +9,32 @@ import { useBranding } from "@/hooks/use-branding";
 
 const friendlyError = (msg: string): string => {
   const lower = msg.toLowerCase();
-  if (lower.includes("invalid") || lower.includes("credentials") || lower.includes("incorrect"))
+  if (lower.includes("invalid login") || lower.includes("invalid credentials"))
     return "Incorrect email or password. Please try again.";
-  if (lower.includes("not found") || lower.includes("no user"))
+  if (lower.includes("invalid api key") || lower.includes("api key"))
+    return "Service configuration error. Please contact your administrator.";
+  if (lower.includes("not found") || lower.includes("no user") || lower.includes("user not found"))
     return "No account found with that email address.";
-  if (lower.includes("expired"))
+  if (lower.includes("expired") || lower.includes("session"))
     return "Your session has expired. Please sign in again.";
-  if (lower.includes("too many") || lower.includes("rate"))
+  if (lower.includes("too many") || lower.includes("rate") || lower.includes("throttle"))
     return "Too many attempts. Please wait a moment and try again.";
-  if (lower.includes("network") || lower.includes("fetch"))
+  if (lower.includes("network") || lower.includes("fetch") || lower.includes("failed to fetch"))
     return "Unable to connect. Please check your internet connection.";
-  if (lower.includes("api key"))
-    return "Service temporarily unavailable. Please try again later.";
-  if (lower.includes("two-factor") || lower.includes("2fa"))
-    return "Two-factor authentication error. Please try again.";
-  if (lower.includes("verification failed") || lower.includes("invalid code") || lower.includes("totp"))
+  if (lower.includes("not configured"))
+    return "This environment is not yet configured. Please contact your administrator.";
+  if (lower.includes("disabled") || lower.includes("blocked") || lower.includes("locked"))
+    return "This account has been disabled. Please contact your administrator.";
+  if (lower.includes("two-factor") || lower.includes("2fa") || lower.includes("not enabled"))
+    return "Two-factor authentication is required but not enabled for this account. Please contact your administrator.";
+  if (lower.includes("verification failed") || lower.includes("invalid code") || lower.includes("totp") || lower.includes("invalid totp"))
     return "Invalid verification code. Please check and try again.";
+  if (lower.includes("password"))
+    return "Incorrect password. Please try again.";
+  if (lower.includes("email"))
+    return "Please check your email address and try again.";
+  if (lower.includes("internal server"))
+    return "Something went wrong on our end. Please try again shortly.";
   if (msg) return msg;
   return "Something went wrong. Please try again.";
 };

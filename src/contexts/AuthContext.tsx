@@ -93,9 +93,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      const bodyError = data?.error || data?.message;
-      if (bodyError) throw new Error(bodyError);
-      throw new Error("Login failed");
+      // The edge function may return error details in data even on failure
+      const bodyError = data?.error || data?.message || error?.message;
+      throw new Error(bodyError || "Login failed. Please try again.");
     }
     if (data?.error) throw new Error(data.message || data.error);
 
@@ -114,9 +114,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      const bodyError = data?.error || data?.message;
-      if (bodyError) throw new Error(bodyError);
-      throw new Error("Verification failed");
+      const bodyError = data?.error || data?.message || error?.message;
+      throw new Error(bodyError || "Verification failed. Please try again.");
     }
     if (data?.error) throw new Error(data.message || data.error);
     if (!data.success || !data.user) throw new Error("Verification failed");
