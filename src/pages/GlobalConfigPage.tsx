@@ -89,19 +89,10 @@ const GlobalConfigPage: React.FC = () => {
         await neonUpsert("global_config", { key, value, updated_at: nowGMT8() }, "key");
       }
 
-      // Apply favicon immediately
-      const faviconUrl = config["favicon_url"];
-      if (faviconUrl) {
-        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement("link");
-          link.rel = "icon";
-          document.head.appendChild(link);
-        }
-        link.href = faviconUrl;
-      }
-
-      invalidateBrandingCache();
+      invalidateBrandingCache({
+        logoUrl: config["logo_url"]?.trim() || null,
+        faviconUrl: config["favicon_url"]?.trim() || null,
+      });
       toast({ title: "Configuration saved" });
       await checkXeroStatus();
     } catch (err: any) {
