@@ -82,7 +82,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => 
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
           {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-14 w-auto object-contain mb-4" />
+            <img src={logoUrl} alt="Logo" className="h-14 w-auto object-contain mb-4 mx-auto" />
           ) : (
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary mb-4">
               <ShieldCheck className="w-7 h-7 text-primary-foreground" />
