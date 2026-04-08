@@ -7,7 +7,46 @@ interface Branding {
   loading: boolean;
 }
 
-let cachedBranding: { logoUrl: string | null; faviconUrl: string | null } | null = null;
+type BrandingData = { logoUrl: string | null; faviconUrl: string | null };
+
+const BRANDING_UPDATED_EVENT = "branding:updated";
+
+let cachedBranding: BrandingData | null = null;
+
+function applyFavicon(faviconUrl: string | null) {
+  if (typeof document === "undefined" || !faviconUrl) return;
+
+  let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  link.href = faviconUrl;
+}
+
+async function fetchBranding(): Promise<BrandingData> {
+  const { data } = await neonQuery<{ key: string; value: string }>("global_config", {
+    select: "key,value",
+  });
+
+  const map: Record<string, string> = {};
+  if (Array.isArray(data)) {
+    data.forEach((row) => {
+      map[row.key] = row.value;
+    });
+  }
+
+  return {
+    logoUrl: map["logo_url"]?.trim() || null,
+    faviconUrl: map["favicon_url"]?.trim() || null,
+  };
+}
+
+function notifyBrandingUpdated() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(BRANDING_UPDATED_EVENT));
+}
 
 export function useBranding(): Branding {
   const [branding, setBranding] = useState<Branding>({
@@ -17,42 +56,51 @@ export function useBranding(): Branding {
   });
 
   useEffect(() => {
-    if (cachedBranding) return;
+    let active = true;
 
-    const fetch = async () => {
-      const { data } = await neonQuery<{ key: string; value: string }>("global_config", {
-        select: "key,value",
-        filters: { key: ["logo_url", "favicon_url"] },
-      });
-
-      const map: Record<string, string> = {};
-      if (Array.isArray(data)) {
-        data.forEach((r) => (map[r.key] = r.value));
+    const syncBranding = async () => {
+      if (cachedBranding) {
+        applyFavicon(cachedBranding.faviconUrl);
+        if (active) {
+          setBranding({ ...cachedBranding, loading: false });
+        }
+        return;
       }
 
-      const result = { logoUrl: map["logo_url"]?.trim() || null, faviconUrl: map["favicon_url"]?.trim() || null };
-      cachedBranding = result;
-      setBranding({ ...result, loading: false });
+      if (active) {
+        setBranding((current) => ({ ...current, loading: true }));
+      }
 
-      // Apply favicon
-      if (result.faviconUrl) {
-        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-        if (!link) {
-          link = document.createElement("link");
-          link.rel = "icon";
-          document.head.appendChild(link);
-        }
-        link.href = result.faviconUrl;
+      const result = await fetchBranding();
+      cachedBranding = result;
+      applyFavicon(result.faviconUrl);
+
+      if (active) {
+        setBranding({ ...result, loading: false });
       }
     };
 
-    fetch();
+    const handleBrandingUpdated = () => {
+      void syncBranding();
+    };
+
+    void syncBranding();
+    window.addEventListener(BRANDING_UPDATED_EVENT, handleBrandingUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener(BRANDING_UPDATED_EVENT, handleBrandingUpdated);
+    };
   }, []);
 
   return branding;
 }
 
 /** Reset cache (e.g. after saving new branding in GlobalConfig) */
-export function invalidateBrandingCache() {
-  cachedBranding = null;
+export function invalidateBrandingCache(nextBranding?: BrandingData) {
+  cachedBranding = nextBranding ?? null;
+  if (nextBranding) {
+    applyFavicon(nextBranding.faviconUrl);
+  }
+  notifyBrandingUpdated();
 }
