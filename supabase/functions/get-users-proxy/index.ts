@@ -17,10 +17,11 @@ Deno.serve(async (req) => {
     const environment = url.searchParams.get("environment") || "production";
     const orgId = url.searchParams.get("org_id") || "";
 
-    // Resolve API key based on environment
-    const apiKey = environment === "sandbox"
-      ? Deno.env.get("AUTH_API_KEY_SANDBOX") || ""
-      : Deno.env.get("AUTH_API_KEY_PROD") || "";
+    // Resolve API key based on org + environment
+    const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+    const envSuffix = environment === "sandbox" ? "SB" : "PROD";
+    const apiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_${envSuffix}`) ||
+                   Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
 
     if (!apiKey) {
       return new Response(
