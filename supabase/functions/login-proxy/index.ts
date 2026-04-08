@@ -42,12 +42,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Login action — resolve api_key from secrets
-    if (environment === "sandbox") {
-      apiKey = Deno.env.get("AUTH_API_KEY_SANDBOX") || "";
-    } else {
-      apiKey = Deno.env.get("AUTH_API_KEY_PROD") || "";
-    }
+    // Login action — resolve api_key from secrets per org + environment
+    const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+    const envSuffix = environment === "sandbox" ? "SB" : "PROD";
+    const specificKey = `AUTH_API_KEY_${orgUpper}_${envSuffix}`;
+    const fallbackKey = environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD";
+    apiKey = Deno.env.get(specificKey) || Deno.env.get(fallbackKey) || "";
+    console.log(`[login-proxy] org=${orgId}, env=${environment}, keyName=${specificKey}, keyFound=${!!Deno.env.get(specificKey)}, fallbackFound=${!!Deno.env.get(fallbackKey)}, keyLength=${apiKey.length}`);
 
     if (!apiKey) {
       return new Response(
