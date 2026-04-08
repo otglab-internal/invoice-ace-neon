@@ -35,6 +35,7 @@ interface LoginPageProps {
 
 const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => {
   const { login, verify2FA } = useAuth();
+  const { logoUrl } = useBranding();
   const [step, setStep] = useState<"credentials" | "2fa">("credentials");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,9 +81,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => 
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary mb-4">
-            <ShieldCheck className="w-7 h-7 text-primary-foreground" />
-          </div>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-14 w-auto object-contain mb-4" />
+          ) : (
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary mb-4">
+              <ShieldCheck className="w-7 h-7 text-primary-foreground" />
+            </div>
+          )}
           <h1 className="text-2xl font-bold font-display text-foreground">Invoice Center</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {isSandbox ? "Sandbox Environment Login" : "Secure access to your invoicing platform"}
