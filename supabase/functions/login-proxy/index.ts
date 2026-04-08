@@ -42,11 +42,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Login action — resolve api_key from secrets
+    // Login action — resolve api_key from secrets per org + environment
+    const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
     if (environment === "sandbox") {
-      apiKey = Deno.env.get("AUTH_API_KEY_SANDBOX") || "";
+      apiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_SB`) || Deno.env.get("AUTH_API_KEY_SANDBOX") || "";
     } else {
-      apiKey = Deno.env.get("AUTH_API_KEY_PROD") || "";
+      apiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_PROD`) || Deno.env.get("AUTH_API_KEY_PROD") || "";
     }
 
     if (!apiKey) {
