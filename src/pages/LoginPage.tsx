@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Mail, ShieldCheck, Loader2 } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { useBranding } from "@/hooks/use-branding";
 
 const friendlyError = (msg: string): string => {
   const lower = msg.toLowerCase();
