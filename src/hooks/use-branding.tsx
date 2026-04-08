@@ -30,7 +30,7 @@ export function useBranding(): Branding {
         data.forEach((r) => (map[r.key] = r.value));
       }
 
-      const result = { logoUrl: map["logo_url"] || null, faviconUrl: map["favicon_url"] || null };
+      const result = { logoUrl: map["logo_url"]?.trim() || null, faviconUrl: map["favicon_url"]?.trim() || null };
       cachedBranding = result;
       setBranding({ ...result, loading: false });
 
