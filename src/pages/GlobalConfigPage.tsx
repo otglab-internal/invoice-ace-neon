@@ -73,6 +73,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       const { data } = await supabase.functions.invoke("xero", {
         body: { action: "status" },
+        headers: getXeroHeaders(),
       });
       if (data) {
         setXeroStatus({ connected: data.connected, hasCredentials: data.hasCredentials });
