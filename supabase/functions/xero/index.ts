@@ -316,6 +316,134 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ACTION: tracking-categories
+    if (action === "tracking-categories") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+      );
+
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected", categories: [] }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+
+      let res = await fetch(`${XERO_API_URL}/TrackingCategories`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Xero-Tenant-Id": config.xero_tenant_id,
+          Accept: "application/json",
+        },
+      });
+
+      if (res.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect.", categories: [] }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        res = await fetch(`${XERO_API_URL}/TrackingCategories`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Xero-Tenant-Id": config.xero_tenant_id,
+            Accept: "application/json",
+          },
+        });
+      }
+
+      if (!res.ok) {
+        console.error("Xero tracking categories fetch failed:", await res.text());
+        return new Response(JSON.stringify({ error: "Failed to fetch tracking categories", categories: [] }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await res.json();
+      const categories = (data.TrackingCategories || []).map((tc: any) => ({
+        id: tc.TrackingCategoryID,
+        name: tc.Name,
+        options: (tc.Options || []).map((o: any) => ({
+          id: o.TrackingOptionID,
+          name: o.Name,
+          status: o.Status,
+        })),
+      }));
+
+      return new Response(JSON.stringify({ categories }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ACTION: accounts (chart of accounts)
+    if (action === "accounts") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+      );
+
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected", accounts: [] }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+
+      let res = await fetch(`${XERO_API_URL}/Accounts?where=Status=="ACTIVE"&order=Code`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Xero-Tenant-Id": config.xero_tenant_id,
+          Accept: "application/json",
+        },
+      });
+
+      if (res.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect.", accounts: [] }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        res = await fetch(`${XERO_API_URL}/Accounts?where=Status=="ACTIVE"&order=Code`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Xero-Tenant-Id": config.xero_tenant_id,
+            Accept: "application/json",
+          },
+        });
+      }
+
+      if (!res.ok) {
+        console.error("Xero accounts fetch failed:", await res.text());
+        return new Response(JSON.stringify({ error: "Failed to fetch accounts", accounts: [] }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await res.json();
+      const accounts = (data.Accounts || []).map((a: any) => ({
+        code: a.Code,
+        name: a.Name,
+        type: a.Type,
+      }));
+
+      return new Response(JSON.stringify({ accounts }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

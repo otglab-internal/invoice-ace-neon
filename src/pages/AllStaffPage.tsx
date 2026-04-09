@@ -40,13 +40,6 @@ interface StaffRow {
   tagRecordId: string | null;
 }
 
-const CENTRE_LOCATIONS = [
-  "KL Center",
-  "PJ Center",
-  "JB Center",
-  "Penang Center",
-  "Ipoh Center",
-];
 
 const AllStaffPage: React.FC = () => {
   const { user, environment } = useAuth();
@@ -54,6 +47,30 @@ const AllStaffPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [centreLocations, setCentreLocations] = useState<string[]>([]);
+
+  // Fetch centers from collections API
+  useEffect(() => {
+    const fetchCenters = async () => {
+      try {
+        const env = environment || "production";
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const orgId = getOrgId();
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?action=get&name=center&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
+          { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
+        );
+        const data = await res.json();
+        if (data?.data && Array.isArray(data.data)) {
+          setCentreLocations(data.data.map((item: any) => item.name || item.label || item));
+        }
+      } catch (err) {
+        console.warn("Failed to fetch centers from collections:", err);
+      }
+    };
+    fetchCenters();
+  }, [environment]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -304,7 +321,7 @@ const AllStaffPage: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1.5">
-                          {CENTRE_LOCATIONS.map((loc) => (
+                          {centreLocations.map((loc) => (
                             <label key={loc} className="flex items-center gap-2 text-sm cursor-pointer">
                               <Checkbox
                                 checked={row.centreLocations.includes(loc)}
