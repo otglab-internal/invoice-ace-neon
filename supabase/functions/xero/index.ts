@@ -15,16 +15,13 @@ interface ConfigMap {
   [key: string]: string;
 }
 
-type DbClient = {
-  query: (query: string, params?: unknown[]) => Promise<any[]>;
-};
 
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
   stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
 };
 
-function getDb(orgId: string, environment: string): DbClient {
+function getDb(orgId: string, environment: string) {
   const isProd = environment === "production";
   const mapping = ORG_DB_MAP[orgId];
 
