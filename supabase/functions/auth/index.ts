@@ -228,6 +228,9 @@ Deno.serve(async (req) => {
             created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
+        // Add columns that may be missing from older schemas
+        await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`;
+        await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`;
         await sql`
           CREATE TABLE IF NOT EXISTS invoice_templates (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
