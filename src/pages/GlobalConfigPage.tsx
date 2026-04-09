@@ -158,9 +158,9 @@ const GlobalConfigPage: React.FC = () => {
   const handleClearData = async () => {
     setClearing(true);
     try {
-      const tables = ["invoices", "invoice_logs", "staff_centre_assignments", "user_approval_flags", "invoice_templates"];
+      const tables = ["invoice_logs", "invoices", "staff_centre_assignments", "user_approval_flags", "invoice_templates"];
       for (const table of tables) {
-        const { error } = await neonDelete(table, { _all: true });
+        const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
       toast({ title: "All data cleared", description: "Invoices, logs, staff, flags, and templates have been deleted." });
