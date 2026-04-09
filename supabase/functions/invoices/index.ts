@@ -346,8 +346,8 @@ Deno.serve(async (req) => {
               line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
             })),
           };
-          const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("SUPABASE_API_URL") || "";
-          const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
+          const supabaseUrl = Deno.env.get("WEBHOOK_SUPABASE_URL") || Deno.env.get("SUPABASE_URL") || "";
+          const supabaseAnonKey = Deno.env.get("WEBHOOK_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
           console.log("Webhook payload supabase_url present:", !!supabaseUrl, "supabase_anon_key present:", !!supabaseAnonKey);
           await fetch(n8nWebhookUrl, {
             method: "POST",
