@@ -727,13 +727,19 @@ const ApprovalsPage: React.FC = () => {
                   size="sm"
                   className="gap-1.5 mt-1"
                   onClick={async () => {
-                    const { data, error } = await supabase.storage
-                      .from("invoice-pdfs")
-                      .createSignedUrl(detailInvoice.invoice_pdf_url!, 300);
-                    if (data?.signedUrl) {
-                      window.open(data.signedUrl, "_blank");
-                    } else {
-                      toast.error("Failed to get PDF URL: " + (error?.message || "Unknown error"));
+                    try {
+                      const res = await fetch(
+                        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoice-pdf-webhook?path=${encodeURIComponent(detailInvoice.invoice_pdf_url!)}`,
+                        { headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } }
+                      );
+                      const result = await res.json();
+                      if (result.signedUrl) {
+                        window.open(result.signedUrl, "_blank");
+                      } else {
+                        toast.error("Failed to get PDF URL: " + (result.error || "Unknown error"));
+                      }
+                    } catch (e: any) {
+                      toast.error("Failed to get PDF URL: " + e.message);
                     }
                   }}
                 >
