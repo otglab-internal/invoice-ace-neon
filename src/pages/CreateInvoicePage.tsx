@@ -645,7 +645,7 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
           <Select value={item.account} onValueChange={(v) => update({ account: v })}>
             <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
             <SelectContent>
-              {demoAccounts.map((a) => (
+              {accounts.map((a) => (
                 <SelectItem key={a.code} value={a.code}>{a.code} - {a.name}</SelectItem>
               ))}
             </SelectContent>
@@ -656,8 +656,8 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
           <Select value={item.center} onValueChange={(v) => update({ center: v })}>
             <SelectTrigger><SelectValue placeholder="Select center" /></SelectTrigger>
             <SelectContent>
-              {demoCenters.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              {centers.map((c) => (
+                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
