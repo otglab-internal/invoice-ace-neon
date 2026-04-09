@@ -54,6 +54,7 @@ const AllStaffPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [centreLocations, setCentreLocations] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -147,9 +147,9 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
-  // Fetch Xero contacts, tracking categories, and accounts
+  // Fetch Xero contacts and accounts, and centers from collections
   useEffect(() => {
-    const headers = {
+    const xeroHeaders = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
     };
@@ -159,7 +159,7 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const { data } = await supabase.functions.invoke("xero", {
           body: { action: "contacts" },
-          headers,
+          headers: xeroHeaders,
         });
         if (data?.contacts) setContacts(data.contacts);
       } catch (err) {
@@ -168,24 +168,25 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(false);
     };
 
-    const fetchTrackingCategories = async () => {
+    const fetchCenters = async () => {
       try {
-        const { data } = await supabase.functions.invoke("xero", {
-          body: { action: "tracking-categories" },
-          headers,
-        });
-        if (data?.categories) {
-          const centerCat = data.categories.find((c: any) => c.name === "Center" || c.name === "Centre");
-          if (centerCat) {
-            setXeroCenters(
-              centerCat.options
-                .filter((o: any) => o.status === "ACTIVE")
-                .map((o: any) => ({ id: o.name, name: o.name }))
-            );
-          }
+        const env = localStorage.getItem("auth_environment") || "production";
+        const orgId = getOrgId();
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const res = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?action=get&name=center&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
+          { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
+        );
+        const data = await res.json();
+        if (data?.data && Array.isArray(data.data)) {
+          setXeroCenters(data.data.map((item: any) => ({
+            id: item.name || item.id || item,
+            name: item.name || item.label || item,
+          })));
         }
       } catch (err) {
-        console.warn("Failed to fetch Xero tracking categories:", err);
+        console.warn("Failed to fetch centers from collections:", err);
       }
     };
 
@@ -193,7 +194,7 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const { data } = await supabase.functions.invoke("xero", {
           body: { action: "accounts" },
-          headers,
+          headers: xeroHeaders,
         });
         if (data?.accounts) setXeroAccounts(data.accounts);
       } catch (err) {
@@ -202,7 +203,7 @@ const CreateInvoicePage: React.FC = () => {
     };
 
     fetchContacts();
-    fetchTrackingCategories();
+    fetchCenters();
     fetchAccounts();
   }, []);
 
