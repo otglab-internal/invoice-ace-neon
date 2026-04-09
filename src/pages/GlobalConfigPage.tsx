@@ -116,6 +116,7 @@ const GlobalConfigPage: React.FC = () => {
       const redirectUri = `${window.location.origin}/global-config`;
       const { data, error } = await supabase.functions.invoke("xero", {
         body: { action: "get-auth-url", redirectUri },
+        headers: getXeroHeaders(),
       });
       if (error || data?.error) {
         toast({ title: "Failed to start Xero OAuth", description: data?.error || "Please save Xero Client ID & Secret first", variant: "destructive" });
