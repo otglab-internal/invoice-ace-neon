@@ -472,6 +472,8 @@ const CreateInvoicePage: React.FC = () => {
               index={index}
               canRemove={lineItems.length > 1}
               templates={templates}
+              accounts={xeroAccounts}
+              centers={xeroCenters}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
             />
