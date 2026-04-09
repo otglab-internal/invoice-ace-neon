@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2 } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { nowGMT8 } from "@/lib/utils";
 import {
   AlertDialog,
@@ -202,6 +203,36 @@ const GlobalConfigPage: React.FC = () => {
             <h1 className="text-2xl font-display font-bold text-foreground">Global Configuration</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, Xero, and environment settings.</p>
           </div>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-primary" />
+                <CardTitle className="text-base">Environment Info</CardTitle>
+              </div>
+              <CardDescription className="text-xs">Current session details and runtime configuration.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Environment:</span>
+                <Badge variant={localStorage.getItem("auth_environment") === "sandbox" ? "outline" : "default"}>
+                  {localStorage.getItem("auth_environment") || "production"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Organization:</span>
+                <Badge variant="secondary" className="font-mono">
+                  {(() => { try { return getOrgId(); } catch { return "Not configured"; } })()}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Config source:</span>
+                <code className="text-xs bg-muted px-2 py-1 rounded">
+                  {JSON.stringify((window as any).__APP_CONFIG__ || null)}
+                </code>
+              </div>
+            </CardContent>
+          </Card>
 
           {loading ? (
             <div className="flex items-center justify-center py-16">
