@@ -6,8 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2 } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
