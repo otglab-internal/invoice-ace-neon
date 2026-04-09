@@ -346,10 +346,13 @@ Deno.serve(async (req) => {
               line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
             })),
           };
+          const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("SUPABASE_API_URL") || "";
+          const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "";
+          console.log("Webhook payload supabase_url present:", !!supabaseUrl, "supabase_anon_key present:", !!supabaseAnonKey);
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, supabase_anon_key: supabaseAnonKey, supabase_url: supabaseUrl }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
