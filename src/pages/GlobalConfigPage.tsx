@@ -204,6 +204,36 @@ const GlobalConfigPage: React.FC = () => {
             <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, Xero, and environment settings.</p>
           </div>
 
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 text-primary" />
+                <CardTitle className="text-base">Environment Info</CardTitle>
+              </div>
+              <CardDescription className="text-xs">Current session details and runtime configuration.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Environment:</span>
+                <Badge variant={localStorage.getItem("auth_environment") === "sandbox" ? "outline" : "default"}>
+                  {localStorage.getItem("auth_environment") || "production"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Organization:</span>
+                <Badge variant="secondary" className="font-mono">
+                  {(() => { try { return getOrgId(); } catch { return "Not configured"; } })()}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground w-28">Config source:</span>
+                <code className="text-xs bg-muted px-2 py-1 rounded">
+                  {JSON.stringify((window as any).__APP_CONFIG__ || null)}
+                </code>
+              </div>
+            </CardContent>
+          </Card>
+
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
