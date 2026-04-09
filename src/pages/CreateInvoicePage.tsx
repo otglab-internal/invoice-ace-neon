@@ -534,11 +534,13 @@ interface LineItemCardProps {
   index: number;
   canRemove: boolean;
   templates: Template[];
+  accounts: XeroAccount[];
+  centers: XeroCenter[];
   onUpdate: (id: string, updates: Partial<LineItem>) => void;
   onRemove: (id: string) => void;
 }
 
-const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, onUpdate, onRemove }) => {
+const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, accounts, centers, onUpdate, onRemove }) => {
   const update = (updates: Partial<LineItem>) => onUpdate(item.id, updates);
   const selectedTemplate = templates.find((t) => t.id === item.templateId);
   const desc = getGeneratedDescription(item, templates);
