@@ -331,6 +331,50 @@ const GlobalConfigPage: React.FC = () => {
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Configuration
               </Button>
+
+              {isAdmin && (
+                <>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Danger Zone</h2>
+                  <Card className="border-destructive/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                        <CardTitle className="text-base">Clear All Data</CardTitle>
+                      </div>
+                      <CardDescription className="text-xs">
+                        Permanently delete all invoices, invoice logs, staff assignments, approval flags, and templates for the current environment. Configuration settings will be preserved.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" disabled={clearing}>
+                            {clearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                            Clear All Data
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete <strong>all invoices, logs, staff assignments, approval flags, and templates</strong> for the current environment. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleClearData}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Yes, delete everything
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </>
           )}
         </div>
