@@ -38,8 +38,17 @@ Deno.serve(async (req) => {
         pdfBlob = new Blob([bytes], { type: "application/pdf" });
         pdfFilename = body.filename || "invoice.pdf";
       }
+    } else if (contentType.includes("application/pdf") || contentType.includes("application/octet-stream")) {
+      // Raw binary PDF — invoice_id must come from query param or header
+      const url = new URL(req.url);
+      invoiceId = url.searchParams.get("invoice_id") || req.headers.get("x-invoice-id");
+      pdfFilename = url.searchParams.get("filename") || req.headers.get("x-filename") || "invoice.pdf";
+      const arrayBuffer = await req.arrayBuffer();
+      if (arrayBuffer.byteLength > 0) {
+        pdfBlob = new Blob([arrayBuffer], { type: "application/pdf" });
+      }
     } else {
-      return new Response(JSON.stringify({ error: "Unsupported content type" }), {
+      return new Response(JSON.stringify({ error: "Unsupported content type. Use multipart/form-data, application/json, or application/pdf" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
