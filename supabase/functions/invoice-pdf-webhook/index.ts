@@ -25,6 +25,45 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Handle GET requests for signed URL generation
+  if (req.method === "GET") {
+    try {
+      const url = new URL(req.url);
+      const storagePath = url.searchParams.get("path");
+      if (!storagePath) {
+        return new Response(JSON.stringify({ error: "Missing 'path' query param" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, serviceKey);
+
+      const { data, error } = await supabase.storage
+        .from("invoice-pdfs")
+        .createSignedUrl(storagePath, 300);
+
+      if (error || !data?.signedUrl) {
+        return new Response(JSON.stringify({ error: error?.message || "Failed to generate signed URL" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ signedUrl: data.signedUrl }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ error: String(err) }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
   try {
     const contentType = req.headers.get("content-type") || "";
     const url = new URL(req.url);
