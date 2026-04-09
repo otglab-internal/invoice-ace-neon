@@ -147,29 +147,63 @@ const CreateInvoicePage: React.FC = () => {
     fetchTemplates();
   }, []);
 
-  // Fetch Xero contacts (still uses supabase edge function)
+  // Fetch Xero contacts, tracking categories, and accounts
   useEffect(() => {
+    const headers = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+
     const fetchContacts = async () => {
       setLoadingContacts(true);
       try {
-        const { data, error } = await supabase.functions.invoke("xero", {
+        const { data } = await supabase.functions.invoke("xero", {
           body: { action: "contacts" },
-          headers: {
-            "x-org-id": getOrgId(),
-            "x-environment": localStorage.getItem("auth_environment") || "production",
-          },
+          headers,
         });
-        if (data?.contacts) {
-          setContacts(data.contacts);
-        } else {
-          console.warn("No Xero contacts returned:", data?.error || error);
-        }
+        if (data?.contacts) setContacts(data.contacts);
       } catch (err) {
         console.warn("Failed to fetch Xero contacts:", err);
       }
       setLoadingContacts(false);
     };
+
+    const fetchTrackingCategories = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "tracking-categories" },
+          headers,
+        });
+        if (data?.categories) {
+          const centerCat = data.categories.find((c: any) => c.name === "Center" || c.name === "Centre");
+          if (centerCat) {
+            setXeroCenters(
+              centerCat.options
+                .filter((o: any) => o.status === "ACTIVE")
+                .map((o: any) => ({ id: o.name, name: o.name }))
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Xero tracking categories:", err);
+      }
+    };
+
+    const fetchAccounts = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "accounts" },
+          headers,
+        });
+        if (data?.accounts) setXeroAccounts(data.accounts);
+      } catch (err) {
+        console.warn("Failed to fetch Xero accounts:", err);
+      }
+    };
+
     fetchContacts();
+    fetchTrackingCategories();
+    fetchAccounts();
   }, []);
 
   // Check if the current user is flagged and if free text is flagged
