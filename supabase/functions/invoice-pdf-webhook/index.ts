@@ -1,10 +1,35 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { neon } from "npm:@neondatabase/serverless";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id",
+    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-invoice-id, x-filename",
 };
+
+const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
+  otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
+  stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
+};
+
+function getNeonDb(orgId: string, environment: string) {
+  const isProd = environment === "production";
+  const mapping = ORG_DB_MAP[orgId];
+
+  let url: string | undefined;
+  if (mapping) {
+    url = Deno.env.get(isProd ? mapping.prod : mapping.sb);
+  }
+  if (!url) {
+    url = isProd
+      ? Deno.env.get("DATABASE_URL_PROD")
+      : Deno.env.get("DATABASE_URL_DEV");
+  }
+  if (!url) {
+    throw new Error(`No database connection configured for org="${orgId}" env="${environment}"`);
+  }
+  return neon(url);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -13,6 +38,11 @@ Deno.serve(async (req) => {
 
   try {
     const contentType = req.headers.get("content-type") || "";
+    const url = new URL(req.url);
+
+    // Resolve org and environment from headers or query params
+    const orgId = req.headers.get("x-org-id") || url.searchParams.get("org_id") || "otg_lab";
+    const environment = req.headers.get("x-environment") || url.searchParams.get("environment") || "production";
 
     let invoiceId: string | null = null;
     let pdfBlob: Blob | null = null;
@@ -39,8 +69,6 @@ Deno.serve(async (req) => {
         pdfFilename = body.filename || "invoice.pdf";
       }
     } else if (contentType.includes("application/pdf") || contentType.includes("application/octet-stream")) {
-      // Raw binary PDF — invoice_id must come from query param or header
-      const url = new URL(req.url);
       invoiceId = url.searchParams.get("invoice_id") || req.headers.get("x-invoice-id");
       pdfFilename = url.searchParams.get("filename") || req.headers.get("x-filename") || "invoice.pdf";
       const arrayBuffer = await req.arrayBuffer();
@@ -68,11 +96,11 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Upload PDF to Supabase Storage
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Upload PDF to storage
     const storagePath = `${invoiceId}/${pdfFilename}`;
     const { error: uploadError } = await supabase.storage
       .from("invoice-pdfs")
@@ -89,15 +117,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Store the storage path (not public URL) since the bucket is private
-    const { error: updateError } = await supabase
-      .from("invoices")
-      .update({ invoice_pdf_url: storagePath })
-      .eq("id", invoiceId);
-
-    if (updateError) {
-      console.error("DB update error:", updateError);
-      return new Response(JSON.stringify({ error: "PDF uploaded but failed to update invoice record", storage_path: storagePath }), {
+    // Update invoice record in Neon DB (where invoices actually live)
+    try {
+      const sql = getNeonDb(orgId, environment);
+      await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath} WHERE id = ${invoiceId}::uuid`;
+      console.log(`Updated invoice ${invoiceId} with pdf path ${storagePath} in Neon (${orgId}/${environment})`);
+    } catch (dbErr) {
+      console.error("Neon DB update error:", dbErr);
+      return new Response(JSON.stringify({ error: "PDF uploaded but failed to update invoice record in database", storage_path: storagePath }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
