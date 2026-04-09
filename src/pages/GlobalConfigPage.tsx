@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2 } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { nowGMT8 } from "@/lib/utils";
 import {
   AlertDialog,
