@@ -63,7 +63,7 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; hasCredentials: boolean }>({ connected: false, hasCredentials: false });
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
-
+  const [clearing, setClearing] = useState(false);
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await neonQuery("global_config", { select: "key,value" });
