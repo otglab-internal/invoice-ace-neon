@@ -20,7 +20,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { neonQuery, neonUpsert } from "@/lib/neon-client";
+import { neonQuery, neonUpsert, neonDelete } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
 import { getOrgId } from "@/lib/runtime-config";
 
