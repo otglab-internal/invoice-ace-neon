@@ -114,8 +114,16 @@ Deno.serve(async (req) => {
       }
 
       const state = crypto.randomUUID();
-      const scopes =
-        "openid profile email offline_access accounting.contacts.read accounting.invoices accounting.payments accounting.attachments";
+      const scopes = [
+        "openid",
+        "profile",
+        "email",
+        "offline_access",
+        "accounting.contacts.read",
+        "accounting.invoices",
+        "accounting.payments",
+        "accounting.attachments",
+      ].join(" ");
       const url = `${XERO_AUTH_URL}?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
 
       return new Response(JSON.stringify({ url, state }), {
