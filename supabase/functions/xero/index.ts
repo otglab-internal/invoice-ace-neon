@@ -15,19 +15,22 @@ interface ConfigMap {
 async function getConfigMap(keys: string[], orgId: string): Promise<ConfigMap> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const res = await fetch(`${supabaseUrl}/rest/v1/global_config?key=in.(${keys.join(",")})&org_id=eq.${encodeURIComponent(orgId)}`, {
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/global_config?key=in.(${keys.join(",")})&org_id=eq.${encodeURIComponent(orgId)}`,
+    {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
     },
-  });
+  );
   const rows = await res.json();
   const map: ConfigMap = {};
   for (const r of rows) map[r.key] = r.value;
   return map;
 }
 
-async function upsertConfig(key: string, value: string) {
+async function upsertConfig(key: string, value: string, orgId: string) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const headers = {
@@ -38,27 +41,29 @@ async function upsertConfig(key: string, value: string) {
   };
 
   // Try update first
-  const updateRes = await fetch(`${supabaseUrl}/rest/v1/global_config?key=eq.${key}`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ value, updated_at: new Date().toISOString() }),
-  });
+  const updateRes = await fetch(
+    `${supabaseUrl}/rest/v1/global_config?key=eq.${key}&org_id=eq.${encodeURIComponent(orgId)}`,
+    {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ value, updated_at: new Date().toISOString() }),
+    },
+  );
 
   // If no rows updated, insert
   if (updateRes.status === 200) {
     const text = await updateRes.text();
-    // Check if it was empty (no match)
     if (!text || text === "[]") {
       await fetch(`${supabaseUrl}/rest/v1/global_config`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ key, value }),
+        body: JSON.stringify({ key, value, org_id: orgId }),
       });
     }
   }
 }
 
-async function refreshAccessToken(config: ConfigMap): Promise<{ access_token: string; refresh_token: string } | null> {
+async function refreshAccessToken(config: ConfigMap, orgId: string): Promise<{ access_token: string; refresh_token: string } | null> {
   const clientId = config.xero_client_id;
   const clientSecret = config.xero_client_secret;
   const refreshToken = config.xero_refresh_token;
@@ -85,8 +90,8 @@ async function refreshAccessToken(config: ConfigMap): Promise<{ access_token: st
   const data = await res.json();
 
   // Save new tokens
-  await upsertConfig("xero_access_token", data.access_token);
-  await upsertConfig("xero_refresh_token", data.refresh_token);
+  await upsertConfig("xero_access_token", data.access_token, orgId);
+  await upsertConfig("xero_refresh_token", data.refresh_token, orgId);
 
   return { access_token: data.access_token, refresh_token: data.refresh_token };
 }
@@ -97,12 +102,20 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const orgId = req.headers.get("x-org-id") || "";
     const { action, ...body } = await req.json();
 
-    // ACTION: get-auth-url — Generate OAuth2 authorization URL
+    if (!orgId) {
+      return new Response(JSON.stringify({ error: "Missing x-org-id header" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ACTION: get-auth-url
     if (action === "get-auth-url") {
       const { redirectUri } = body;
-      const config = await getConfigMap(["xero_client_id"]);
+      const config = await getConfigMap(["xero_client_id"], orgId);
       const clientId = config.xero_client_id;
 
       if (!clientId) {
@@ -130,10 +143,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: callback — Exchange auth code for tokens
+    // ACTION: callback
     if (action === "callback") {
       const { code, redirectUri } = body;
-      const config = await getConfigMap(["xero_client_id", "xero_client_secret"]);
+      const config = await getConfigMap(["xero_client_id", "xero_client_secret"], orgId);
 
       if (!config.xero_client_id || !config.xero_client_secret) {
         return new Response(JSON.stringify({ error: "Xero credentials not configured" }), {
@@ -166,17 +179,15 @@ Deno.serve(async (req) => {
 
       const tokenData = await tokenRes.json();
 
-      // Save tokens
-      await upsertConfig("xero_access_token", tokenData.access_token);
-      await upsertConfig("xero_refresh_token", tokenData.refresh_token);
+      await upsertConfig("xero_access_token", tokenData.access_token, orgId);
+      await upsertConfig("xero_refresh_token", tokenData.refresh_token, orgId);
 
-      // Get tenant ID
       const connRes = await fetch(XERO_CONNECTIONS_URL, {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       });
       const connections = await connRes.json();
       if (connections.length > 0) {
-        await upsertConfig("xero_tenant_id", connections[0].tenantId);
+        await upsertConfig("xero_tenant_id", connections[0].tenantId, orgId);
       }
 
       return new Response(JSON.stringify({ success: true, tenant: connections[0]?.tenantName || "Connected" }), {
@@ -184,14 +195,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ACTION: status — Check if Xero is connected
+    // ACTION: status
     if (action === "status") {
-      const config = await getConfigMap([
-        "xero_client_id",
-        "xero_client_secret",
-        "xero_access_token",
-        "xero_tenant_id",
-      ]);
+      const config = await getConfigMap(
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id"],
+        orgId,
+      );
       const connected = !!(config.xero_access_token && config.xero_tenant_id);
 
       return new Response(
@@ -200,32 +209,27 @@ Deno.serve(async (req) => {
           hasCredentials: !!(config.xero_client_id && config.xero_client_secret),
           tenantId: config.xero_tenant_id || null,
         }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // ACTION: disconnect — Clear Xero tokens
+    // ACTION: disconnect
     if (action === "disconnect") {
-      await upsertConfig("xero_access_token", "");
-      await upsertConfig("xero_refresh_token", "");
-      await upsertConfig("xero_tenant_id", "");
+      await upsertConfig("xero_access_token", "", orgId);
+      await upsertConfig("xero_refresh_token", "", orgId);
+      await upsertConfig("xero_tenant_id", "", orgId);
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ACTION: contacts — Fetch contacts from Xero
+    // ACTION: contacts
     if (action === "contacts") {
-      const config = await getConfigMap([
-        "xero_client_id",
-        "xero_client_secret",
-        "xero_access_token",
-        "xero_refresh_token",
-        "xero_tenant_id",
-      ]);
+      const config = await getConfigMap(
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+        orgId,
+      );
 
       if (!config.xero_access_token || !config.xero_tenant_id) {
         return new Response(JSON.stringify({ error: "Xero not connected", contacts: [] }), {
@@ -236,7 +240,6 @@ Deno.serve(async (req) => {
 
       let accessToken = config.xero_access_token;
 
-      // Try fetching contacts
       let contactsRes = await fetch(`${XERO_API_URL}/Contacts?where=ContactStatus=="ACTIVE"&order=Name`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -245,9 +248,8 @@ Deno.serve(async (req) => {
         },
       });
 
-      // If 401, try refreshing token
       if (contactsRes.status === 401) {
-        const refreshed = await refreshAccessToken(config);
+        const refreshed = await refreshAccessToken(config, orgId);
         if (!refreshed) {
           return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect.", contacts: [] }), {
             status: 401,
