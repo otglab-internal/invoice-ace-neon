@@ -224,6 +224,7 @@ Deno.serve(async (req) => {
             amendment_requested_by_name TEXT,
             amendment_requested_at TIMESTAMPTZ,
             amendment_note TEXT,
+            invoice_pdf_url TEXT,
             created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
