@@ -6,10 +6,21 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2 } from "lucide-react";
 import { nowGMT8 } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { neonQuery, neonUpsert } from "@/lib/neon-client";
+import { neonQuery, neonUpsert, neonDelete } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
 import { getOrgId } from "@/lib/runtime-config";
 
@@ -52,7 +63,7 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; hasCredentials: boolean }>({ connected: false, hasCredentials: false });
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
-
+  const [clearing, setClearing] = useState(false);
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await neonQuery("global_config", { select: "key,value" });
@@ -142,6 +153,21 @@ const GlobalConfigPage: React.FC = () => {
       toast({ title: "Failed to disconnect Xero", variant: "destructive" });
     }
     setXeroDisconnecting(false);
+  };
+
+  const handleClearData = async () => {
+    setClearing(true);
+    try {
+      const tables = ["invoice_logs", "invoices", "staff_centre_assignments", "user_approval_flags", "invoice_templates"];
+      for (const table of tables) {
+        const { error } = await neonDelete(table, {});
+        if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
+      }
+      toast({ title: "All data cleared", description: "Invoices, logs, staff, flags, and templates have been deleted." });
+    } catch (err: any) {
+      toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
+    }
+    setClearing(false);
   };
 
   // Handle OAuth callback
@@ -320,6 +346,50 @@ const GlobalConfigPage: React.FC = () => {
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 Save Configuration
               </Button>
+
+              {isAdmin && (
+                <>
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Danger Zone</h2>
+                  <Card className="border-destructive/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                        <CardTitle className="text-base">Clear All Data</CardTitle>
+                      </div>
+                      <CardDescription className="text-xs">
+                        Permanently delete all invoices, invoice logs, staff assignments, approval flags, and templates for the current environment. Configuration settings will be preserved.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" disabled={clearing}>
+                            {clearing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                            Clear All Data
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete <strong>all invoices, logs, staff assignments, approval flags, and templates</strong> for the current environment. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleClearData}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Yes, delete everything
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </>
           )}
         </div>
