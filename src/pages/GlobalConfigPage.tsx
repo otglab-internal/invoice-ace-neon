@@ -134,6 +134,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       await supabase.functions.invoke("xero", {
         body: { action: "disconnect" },
+        headers: getXeroHeaders(),
       });
       setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
       toast({ title: "Xero disconnected" });
@@ -152,6 +153,7 @@ const GlobalConfigPage: React.FC = () => {
         const redirectUri = `${window.location.origin}/global-config`;
         const { data } = await supabase.functions.invoke("xero", {
           body: { action: "callback", code, redirectUri },
+          headers: getXeroHeaders(),
         });
         if (data?.success) {
           toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });

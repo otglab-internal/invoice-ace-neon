@@ -152,6 +152,10 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const { data, error } = await supabase.functions.invoke("xero", {
           body: { action: "contacts" },
+          headers: {
+            "x-org-id": getOrgId(),
+            "x-environment": localStorage.getItem("auth_environment") || "production",
+          },
         });
         if (data?.contacts) {
           setContacts(data.contacts);
