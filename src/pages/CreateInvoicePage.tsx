@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
+import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
 
 interface TemplateField {
@@ -152,6 +153,10 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const { data, error } = await supabase.functions.invoke("xero", {
           body: { action: "contacts" },
+          headers: {
+            "x-org-id": getOrgId(),
+            "x-environment": localStorage.getItem("auth_environment") || "production",
+          },
         });
         if (data?.contacts) {
           setContacts(data.contacts);

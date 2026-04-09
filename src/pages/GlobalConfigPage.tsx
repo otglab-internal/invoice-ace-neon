@@ -11,6 +11,14 @@ import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
+import { getOrgId } from "@/lib/runtime-config";
+
+function getXeroHeaders(): Record<string, string> {
+  return {
+    "x-org-id": getOrgId(),
+    "x-environment": localStorage.getItem("auth_environment") || "production",
+  };
+}
 
 interface ConfigEntry {
   key: string;
@@ -65,6 +73,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       const { data } = await supabase.functions.invoke("xero", {
         body: { action: "status" },
+        headers: getXeroHeaders(),
       });
       if (data) {
         setXeroStatus({ connected: data.connected, hasCredentials: data.hasCredentials });
@@ -107,6 +116,7 @@ const GlobalConfigPage: React.FC = () => {
       const redirectUri = `${window.location.origin}/global-config`;
       const { data, error } = await supabase.functions.invoke("xero", {
         body: { action: "get-auth-url", redirectUri },
+        headers: getXeroHeaders(),
       });
       if (error || data?.error) {
         toast({ title: "Failed to start Xero OAuth", description: data?.error || "Please save Xero Client ID & Secret first", variant: "destructive" });
@@ -124,6 +134,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       await supabase.functions.invoke("xero", {
         body: { action: "disconnect" },
+        headers: getXeroHeaders(),
       });
       setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
       toast({ title: "Xero disconnected" });
@@ -142,6 +153,7 @@ const GlobalConfigPage: React.FC = () => {
         const redirectUri = `${window.location.origin}/global-config`;
         const { data } = await supabase.functions.invoke("xero", {
           body: { action: "callback", code, redirectUri },
+          headers: getXeroHeaders(),
         });
         if (data?.success) {
           toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });

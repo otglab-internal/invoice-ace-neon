@@ -2,8 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-environment, x-org-id",
 };
 
 Deno.serve(async (req) => {
@@ -38,6 +37,19 @@ Deno.serve(async (req) => {
         pdfBlob = new Blob([bytes], { type: "application/pdf" });
         pdfFilename = body.filename || "invoice.pdf";
       }
+    } else if (contentType.includes("application/pdf")) {
+      invoiceId = req.headers.get("x-invoice-id");
+
+      if (!invoiceId) {
+        return new Response(JSON.stringify({ error: "Missing x-invoice-id header" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const buffer = await req.arrayBuffer();
+      pdfBlob = new Blob([buffer], { type: "application/pdf" });
+      pdfFilename = "invoice.pdf";
     } else {
       return new Response(JSON.stringify({ error: "Unsupported content type" }), {
         status: 400,
@@ -53,10 +65,13 @@ Deno.serve(async (req) => {
     }
 
     if (!pdfBlob) {
-      return new Response(JSON.stringify({ error: "Missing PDF data (use 'pdf' field for multipart or 'pdf_base64' for JSON)" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing PDF data (use 'pdf' field for multipart or 'pdf_base64' for JSON)" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -65,12 +80,10 @@ Deno.serve(async (req) => {
 
     // Upload PDF to storage
     const storagePath = `${invoiceId}/${pdfFilename}`;
-    const { error: uploadError } = await supabase.storage
-      .from("invoice-pdfs")
-      .upload(storagePath, pdfBlob, {
-        contentType: "application/pdf",
-        upsert: true,
-      });
+    const { error: uploadError } = await supabase.storage.from("invoice-pdfs").upload(storagePath, pdfBlob, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
@@ -88,20 +101,26 @@ Deno.serve(async (req) => {
 
     if (updateError) {
       console.error("DB update error:", updateError);
-      return new Response(JSON.stringify({ error: "PDF uploaded but failed to update invoice record", storage_path: storagePath }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "PDF uploaded but failed to update invoice record", storage_path: storagePath }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      invoice_id: invoiceId,
-      storage_path: storagePath,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        invoice_id: invoiceId,
+        storage_path: storagePath,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (err) {
     console.error("invoice-pdf-webhook error:", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {

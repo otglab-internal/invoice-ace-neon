@@ -641,6 +641,26 @@ const ApprovalsPage: React.FC = () => {
                             ))}
                           </div>
 
+                          {selected.invoice_pdf_url && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 w-full"
+                              onClick={async () => {
+                                const { data, error } = await supabase.storage
+                                  .from("invoice-pdfs")
+                                  .createSignedUrl(selected.invoice_pdf_url!, 300);
+                                if (data?.signedUrl) {
+                                  window.open(data.signedUrl, "_blank");
+                                } else {
+                                  toast.error("Failed to get PDF URL: " + (error?.message || "Unknown error"));
+                                }
+                              }}
+                            >
+                              <FileText className="w-3.5 h-3.5" /> View Xero PDF
+                            </Button>
+                          )}
+
                           <Textarea
                             value={adjustmentNote}
                             onChange={(e) => setAdjustmentNote(e.target.value)}
