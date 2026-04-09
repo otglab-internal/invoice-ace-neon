@@ -3,7 +3,7 @@ import { getOrgId } from "@/lib/runtime-config";
 
 
 const getEnvironment = (): string => {
-  return import.meta.env.MODE === "production" ? "production" : "development";
+  return localStorage.getItem("auth_environment") || "production";
 };
 
 export const apiClient = {
