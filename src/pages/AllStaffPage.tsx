@@ -40,13 +40,6 @@ interface StaffRow {
   tagRecordId: string | null;
 }
 
-const CENTRE_LOCATIONS = [
-  "KL Center",
-  "PJ Center",
-  "JB Center",
-  "Penang Center",
-  "Ipoh Center",
-];
 
 const AllStaffPage: React.FC = () => {
   const { user, environment } = useAuth();
