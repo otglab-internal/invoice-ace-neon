@@ -12,11 +12,10 @@ interface ConfigMap {
   [key: string]: string;
 }
 
-async function getConfigMap(keys: string[]): Promise<ConfigMap> {
+async function getConfigMap(keys: string[], orgId: string): Promise<ConfigMap> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-  const keyList = keys.map((k) => `"${k}"`).join(",");
-  const res = await fetch(`${supabaseUrl}/rest/v1/global_config?key=in.(${keys.join(",")})`, {
+  const res = await fetch(`${supabaseUrl}/rest/v1/global_config?key=in.(${keys.join(",")})&org_id=eq.${encodeURIComponent(orgId)}`, {
     headers: {
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
