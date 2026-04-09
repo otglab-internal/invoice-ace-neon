@@ -321,7 +321,7 @@ const AllStaffPage: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1.5">
-                          {CENTRE_LOCATIONS.map((loc) => (
+                          {centreLocations.map((loc) => (
                             <label key={loc} className="flex items-center gap-2 text-sm cursor-pointer">
                               <Checkbox
                                 checked={row.centreLocations.includes(loc)}
