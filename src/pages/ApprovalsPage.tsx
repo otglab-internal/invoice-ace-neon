@@ -648,12 +648,6 @@ const ApprovalsPage: React.FC = () => {
                               className="gap-1.5 w-full"
                               onClick={async () => {
                                 try {
-                                  const { data } = await supabase.functions.invoke("invoice-pdf-webhook", {
-                                    method: "GET",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: null,
-                                  } as any);
-                                  // Use fetch GET with query param instead
                                   const res = await fetch(
                                     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invoice-pdf-webhook?path=${encodeURIComponent(selected.invoice_pdf_url!)}`,
                                     { headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY } }
