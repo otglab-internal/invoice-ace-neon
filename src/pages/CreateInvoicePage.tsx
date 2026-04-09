@@ -63,17 +63,16 @@ interface XeroContact {
   name: string;
 }
 
-const demoAccounts = [
-  { code: "200", name: "Sales" },
-  { code: "400", name: "Tuition Revenue" },
-  { code: "260", name: "Other Revenue" },
-];
+interface XeroAccount {
+  code: string;
+  name: string;
+  type: string;
+}
 
-const demoCenters = [
-  { id: "c1", name: "KL Center" },
-  { id: "c2", name: "PJ Center" },
-  { id: "c3", name: "JB Center" },
-];
+interface XeroCenter {
+  id: string;
+  name: string;
+}
 
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
