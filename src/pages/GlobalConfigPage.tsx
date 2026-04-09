@@ -11,6 +11,14 @@ import { nowGMT8 } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
+import { getOrgId } from "@/lib/runtime-config";
+
+function getXeroHeaders(): Record<string, string> {
+  return {
+    "x-org-id": getOrgId(),
+    "x-environment": localStorage.getItem("auth_environment") || "production",
+  };
+}
 
 interface ConfigEntry {
   key: string;
