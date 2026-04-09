@@ -145,6 +145,7 @@ Deno.serve(async (req) => {
         "accounting.invoices",
         "accounting.payments",
         "accounting.attachments",
+        "accounting.settings.read",
       ].join(" ");
       const url = `${XERO_AUTH_URL}?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
 
