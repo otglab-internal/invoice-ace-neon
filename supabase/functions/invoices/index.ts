@@ -346,19 +346,10 @@ Deno.serve(async (req) => {
               line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
             })),
           };
-          const supabaseUrl = Deno.env.get("WEBHOOK_SUPABASE_URL") || Deno.env.get("SUPABASE_URL") || "";
-          const supabaseAnonKey = Deno.env.get("WEBHOOK_SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
-          console.log("WEBHOOK_SUPABASE_URL raw:", Deno.env.get("WEBHOOK_SUPABASE_URL"));
-          console.log("SUPABASE_URL raw:", Deno.env.get("SUPABASE_URL"));
-          console.log("WEBHOOK_SUPABASE_ANON_KEY raw:", Deno.env.get("WEBHOOK_SUPABASE_ANON_KEY"));
-          console.log("SUPABASE_ANON_KEY raw:", Deno.env.get("SUPABASE_ANON_KEY"));
-          console.log("Final supabaseUrl:", supabaseUrl, "Final supabaseAnonKey length:", supabaseAnonKey.length);
-          const webhookPayload = { event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, supabase_anon_key: supabaseAnonKey, supabase_url: supabaseUrl };
-          console.log("Full webhook payload keys:", Object.keys(webhookPayload));
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(webhookPayload),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
