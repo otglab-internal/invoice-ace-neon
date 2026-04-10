@@ -63,7 +63,7 @@ const AllStaffPage: React.FC = () => {
         );
         const data = await res.json();
         if (data?.data && Array.isArray(data.data)) {
-          setCentreLocations(data.data.map((item: any) => item.name || item.label || item));
+          setCentreLocations(data.data.map((item: any) => item["Centre Name"] || item.name || item.label || item));
         }
       } catch (err) {
         console.warn("Failed to fetch centers from collections:", err);

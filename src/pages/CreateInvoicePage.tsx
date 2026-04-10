@@ -181,8 +181,8 @@ const CreateInvoicePage: React.FC = () => {
         const data = await res.json();
         if (data?.data && Array.isArray(data.data)) {
           setXeroCenters(data.data.map((item: any) => ({
-            id: item.name || item.id || item,
-            name: item.name || item.label || item,
+            id: item["Centre Name"] || item.name || item.id || item,
+            name: item["Centre Name"] || item.name || item.label || item,
           })));
         }
       } catch (err) {
