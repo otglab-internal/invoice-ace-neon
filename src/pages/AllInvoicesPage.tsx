@@ -64,7 +64,6 @@ const AllInvoicesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { logoUrl } = useBranding();
-  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const isAdmin = permissions.isSystemAdmin;
   const isCentre = role === "centre";
