@@ -11,6 +11,9 @@ export function sanitizeString(value: string): string {
     .replace(/<[^>]*>/g, "") // strip HTML tags
     .replace(/javascript:/gi, "") // strip JS protocol
     .replace(/on\w+\s*=/gi, "") // strip inline event handlers
+    .replace(/\r\n/g, "\\n")  // convert CRLF to literal \n
+    .replace(/\r/g, "\\n")    // convert CR to literal \n
+    .replace(/\n/g, "\\n")    // convert LF to literal \n
     .trim();
 }
 
