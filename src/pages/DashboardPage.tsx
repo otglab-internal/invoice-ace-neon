@@ -6,7 +6,6 @@ import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye } fro
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { neonQuery } from "@/lib/neon-client";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface Invoice {
