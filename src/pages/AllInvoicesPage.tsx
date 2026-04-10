@@ -136,7 +136,28 @@ const AllInvoicesPage: React.FC = () => {
     }
   }, []);
 
-  const canAmendInvoice = (inv: Invoice) => {
+  const handleDownloadReceipt = useCallback(async (inv: Invoice) => {
+    setLoadingReceipt(inv.id);
+    try {
+      await generateReceiptPdf({
+        invoiceNumber: inv.invoice_number,
+        contactName: inv.contact_name,
+        invoiceDate: inv.invoice_date,
+        reference: inv.reference,
+        total: inv.total,
+        lineItems: inv.line_items,
+        submittedByName: inv.submitted_by_name,
+        currency,
+        logoUrl,
+      });
+    } catch {
+      toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
+    } finally {
+      setLoadingReceipt(null);
+    }
+  }, [currency, logoUrl]);
+
+
     if (!isRequester) return false;
     if (inv.status === "paid") return false;
     if (!["approved", "submitted", "pushed"].includes(inv.status)) return false;
