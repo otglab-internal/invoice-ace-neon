@@ -331,6 +331,10 @@ Deno.serve(async (req) => {
           [localInvoice.id],
         );
       }
+
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid${newPdfPath ? " + PDF updated" : ""}`);
+
+      try {
         await sql.query(
           `INSERT INTO invoice_logs (invoice_id, action_type, performed_by, performed_by_name, source, details)
            VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -340,7 +344,7 @@ Deno.serve(async (req) => {
             "xero-webhook",
             "Xero Webhook",
             "webhook",
-            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber }),
+            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath }),
           ],
         );
       } catch (logErr) {
