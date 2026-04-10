@@ -1,5 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
-import { SMTPClient } from "npm:emailjs@4.0.4";
+import { SMTPClient } from "npm:emailjs@4.0.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
