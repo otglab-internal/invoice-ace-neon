@@ -8,6 +8,7 @@ import { Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { neonUpdate, neonInsert } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
+import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
 
 interface LineItem {
   description: string;
@@ -87,13 +88,13 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
     setSubmitting(true);
 
     try {
-      const amendmentData = {
+      const amendmentData = sanitizeObject({
         contact_name: contactName,
         contact_id: invoice.contact_id,
         reference,
         line_items: lineItems,
         total,
-      };
+      });
 
       const { error } = await neonUpdate(
         "invoices",

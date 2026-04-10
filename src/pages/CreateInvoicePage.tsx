@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
+import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
 
 interface TemplateField {
   id: string;
@@ -285,7 +286,7 @@ const CreateInvoicePage: React.FC = () => {
 
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
 
-      const invoicePayload = {
+      const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
         contact_name: contactName,
         invoice_date: invoiceDate,
@@ -297,7 +298,7 @@ const CreateInvoicePage: React.FC = () => {
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
-      };
+      });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
 
