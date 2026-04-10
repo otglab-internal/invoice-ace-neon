@@ -287,6 +287,19 @@ Deno.serve(async (req) => {
             updated_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
+        await sql`
+          CREATE TABLE IF NOT EXISTS activity_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            action_type TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'system',
+            performed_by TEXT NOT NULL DEFAULT '',
+            performed_by_name TEXT NOT NULL DEFAULT '',
+            details JSONB NOT NULL DEFAULT '{}',
+            org_id TEXT NOT NULL DEFAULT '',
+            environment TEXT NOT NULL DEFAULT 'production',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `;
         const tables = await sql`
           SELECT table_name FROM information_schema.tables 
           WHERE table_schema = 'public' ORDER BY table_name

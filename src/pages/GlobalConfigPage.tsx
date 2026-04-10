@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert, neonDelete } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
 import { getOrgId } from "@/lib/runtime-config";
+import { logActivity } from "@/lib/activity-logger";
 
 function getXeroHeaders(): Record<string, string> {
   return {
@@ -57,7 +58,9 @@ const XERO_KEYS = [
 ];
 
 const GlobalConfigPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -90,6 +93,7 @@ const GlobalConfigPage: React.FC = () => {
         setTestEmailError(errMsg);
         toast({ title: "Failed to send test email", description: data.error, variant: "destructive" });
       } else {
+        await logActivity("test_email_sent", "email", performerId, performerName, { to: testEmailTo });
         toast({ title: "Test email sent!", description: `Sent to ${testEmailTo}` });
         setTestEmailError(null);
       }
@@ -149,6 +153,7 @@ const GlobalConfigPage: React.FC = () => {
         logoUrl: config["logo_url"]?.trim() || null,
         faviconUrl: config["favicon_url"]?.trim() || null,
       });
+      await logActivity("config_saved", "config", performerId, performerName, { keys: allKeys });
       toast({ title: "Configuration saved" });
       await checkXeroStatus();
     } catch (err: any) {
@@ -184,6 +189,7 @@ const GlobalConfigPage: React.FC = () => {
         headers: getXeroHeaders(),
       });
       setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
+      await logActivity("xero_disconnected", "config", performerId, performerName);
       toast({ title: "Xero disconnected" });
     } catch {
       toast({ title: "Failed to disconnect Xero", variant: "destructive" });
@@ -199,6 +205,7 @@ const GlobalConfigPage: React.FC = () => {
         const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
+      await logActivity("data_cleared", "system", performerId, performerName, { tables: ["invoice_logs", "invoices", "user_approval_flags"] });
       toast({ title: "All data cleared", description: "Invoices, logs, and approval flags have been deleted." });
     } catch (err: any) {
       toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
@@ -220,6 +227,7 @@ const GlobalConfigPage: React.FC = () => {
         if (data?.success) {
           toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });
           setXeroStatus({ connected: true, hasCredentials: true });
+          logActivity("xero_connected", "config", performerId, performerName, { tenant: data.tenant });
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
         }

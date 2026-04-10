@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
 import { supabase } from "@/integrations/supabase/client";
+import { logActivity } from "@/lib/activity-logger";
 
 interface LineItem {
   description: string;
@@ -143,6 +144,8 @@ const ApprovalsPage: React.FC = () => {
     if (error) {
       toast.error("Failed to save edits");
     } else {
+      const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+      await logActivity("invoice_edited", "invoice", systemId || "", performerName, { invoice_id: id, contact_name: editContactName, total: newTotal });
       toast.success("Invoice updated");
       setEditing(false);
       fetchInvoices();

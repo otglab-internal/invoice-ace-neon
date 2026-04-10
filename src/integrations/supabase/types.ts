@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action_type: string
+          category: string
+          created_at: string
+          details: Json
+          environment: string
+          id: string
+          org_id: string
+          performed_by: string
+          performed_by_name: string
+        }
+        Insert: {
+          action_type: string
+          category?: string
+          created_at?: string
+          details?: Json
+          environment?: string
+          id?: string
+          org_id?: string
+          performed_by?: string
+          performed_by_name?: string
+        }
+        Update: {
+          action_type?: string
+          category?: string
+          created_at?: string
+          details?: Json
+          environment?: string
+          id?: string
+          org_id?: string
+          performed_by?: string
+          performed_by_name?: string
+        }
+        Relationships: []
+      }
       global_config: {
         Row: {
           id: string
