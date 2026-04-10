@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate, neonUpsert } from "@/lib/neon-client";
+import { logActivity } from "@/lib/activity-logger";
 import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 

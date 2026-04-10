@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logActivity } from "@/lib/activity-logger";
 
 interface TemplateField {
   id: string;

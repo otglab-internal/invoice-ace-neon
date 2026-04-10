@@ -9,6 +9,7 @@ import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
+import { logActivity } from "@/lib/activity-logger";
 
 interface ExternalUser {
   id: string;

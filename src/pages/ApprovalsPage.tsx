@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
 import { supabase } from "@/integrations/supabase/client";
+import { logActivity } from "@/lib/activity-logger";
 
 interface LineItem {
   description: string;
