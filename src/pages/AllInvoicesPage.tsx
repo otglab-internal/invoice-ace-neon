@@ -60,7 +60,10 @@ const AllInvoicesPage: React.FC = () => {
   const [currency, setCurrency] = useState("RM");
   const [amendInvoice, setAmendInvoice] = useState<Invoice | null>(null);
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { logoUrl } = useBranding();
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const isAdmin = permissions.isSystemAdmin;
