@@ -1,5 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { uploadToR2 } from "../_shared/r2-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
