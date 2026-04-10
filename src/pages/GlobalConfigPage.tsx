@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert, neonDelete } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
 import { getOrgId } from "@/lib/runtime-config";
+import { logActivity } from "@/lib/activity-logger";
 
 function getXeroHeaders(): Record<string, string> {
   return {
