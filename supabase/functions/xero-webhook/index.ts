@@ -1,5 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
+import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../invoices/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -342,6 +343,46 @@ Deno.serve(async (req) => {
         );
       } catch (logErr) {
         console.error("xero-webhook: Failed to log status change:", logErr);
+      }
+
+      // Send payment notification email to the invoice requester
+      try {
+        const invoiceRows = await sql.query(
+          `SELECT submitted_by_system_id, submitted_by_name, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
+          [localInvoice.id],
+        );
+        if (invoiceRows.length > 0) {
+          const inv = invoiceRows[0];
+          const requesterEmail = inv.submitted_by_system_id as string;
+          const smtpConfig = await getSmtpConfig(sql);
+
+          if (smtpConfig && requesterEmail) {
+            // Check sandbox override
+            const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+            const toEmail = sandboxEmail || requesterEmail;
+
+            const htmlBody = `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                <h2 style="color:#16a34a;">Payment Received</h2>
+                <p style="color:#6b7280;">Great news! A payment has been recorded for an invoice you submitted.</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                  <tr><td style="padding:4px 0;color:#6b7280;">Invoice #:</td><td style="padding:4px 0;font-weight:600;">${xeroInvoiceNumber}</td></tr>
+                  <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
+                  <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
+                  <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
+                  <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
+                  <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
+                </table>
+                <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
+              </div>
+            `;
+
+            await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
+            console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
+          }
+        }
+      } catch (emailErr) {
+        console.error(`xero-webhook: Failed to send payment email for ${xeroInvoiceNumber}:`, emailErr);
       }
     }
 

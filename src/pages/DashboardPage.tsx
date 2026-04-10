@@ -2,11 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye } from "lucide-react";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
+import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
+import { useBranding } from "@/hooks/use-branding";
 
 interface Invoice {
   id: string;
@@ -79,6 +81,27 @@ const DashboardPage: React.FC = () => {
       setLoadingPdf(null);
     }
   }, []);
+
+  const handleDownloadReceipt = useCallback(async (inv: Invoice) => {
+    setLoadingReceipt(inv.id);
+    try {
+      await generateReceiptPdf({
+        invoiceNumber: inv.invoice_number,
+        contactName: inv.contact_name,
+        invoiceDate: inv.invoice_date,
+        reference: inv.reference,
+        total: inv.total,
+        lineItems: inv.line_items,
+        submittedByName: inv.submitted_by_name,
+        currency,
+        logoUrl,
+      });
+    } catch {
+      toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
+    } finally {
+      setLoadingReceipt(null);
+    }
+  }, [currency, logoUrl]);
 
   const canView = permissions.canViewInvoices;
   const isRequester = permissions.canCreateInvoice;
@@ -218,7 +241,18 @@ const DashboardPage: React.FC = () => {
                         onClick={() => handleViewPdf(inv)}
                         disabled={loadingPdf === inv.id}
                       >
-                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "INV PDF"}
+                      <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "INV PDF"}
+                      </Button>
+                    )}
+                    {inv.status === "paid" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 gap-1 text-xs"
+                        onClick={() => handleDownloadReceipt(inv)}
+                        disabled={loadingReceipt === inv.id}
+                      >
+                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt PDF"}
                       </Button>
                     )}
                     {canAmendInvoice(inv) && (
