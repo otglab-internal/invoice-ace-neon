@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
+import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
 
 interface TemplateField {
   id: string;
