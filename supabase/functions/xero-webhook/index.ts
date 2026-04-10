@@ -353,32 +353,82 @@ Deno.serve(async (req) => {
         );
         if (invoiceRows.length > 0) {
           const inv = invoiceRows[0];
-          const requesterEmail = inv.submitted_by_system_id as string;
+          const systemId = inv.submitted_by_system_id as string;
           const smtpConfig = await getSmtpConfig(sql);
 
-          if (smtpConfig && requesterEmail) {
-            // Check sandbox override
-            const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
-            const toEmail = sandboxEmail || requesterEmail;
+          if (smtpConfig && systemId) {
+            let requesterEmail: string | null = null;
 
-            const htmlBody = `
-              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-                <h2 style="color:#16a34a;">Payment Received</h2>
-                <p style="color:#6b7280;">Great news! A payment has been recorded for an invoice you submitted.</p>
-                <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-                  <tr><td style="padding:4px 0;color:#6b7280;">Invoice #:</td><td style="padding:4px 0;font-weight:600;">${xeroInvoiceNumber}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
-                </table>
-                <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
-              </div>
-            `;
+            // Check if system_id is already an email
+            if (systemId.includes("@")) {
+              requesterEmail = systemId;
+            } else {
+              // Look up email via the external auth gateway
+              // The system_id is a system access ID — we need to find which user has it
+              const orgUpper2 = orgId === "stridekidz" ? "SK" : "OTG";
+              const envSuffix2 = environment === "sandbox" ? "SB" : "PROD";
+              const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper2}_${envSuffix2}`) ||
+                Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
+              const gatewayApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
 
-            await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
-            console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
+              try {
+                const gwRes = await fetch(`https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users`, {
+                  method: "GET",
+                  headers: {
+                    "apikey": gatewayApiKey,
+                    "x-api-key": authApiKey,
+                    "x-org-id": orgId,
+                  },
+                });
+                if (gwRes.ok) {
+                  const gwData = await gwRes.json();
+                  const users = gwData.data || [];
+                  // Find the user whose system_access array contains the systemId
+                  for (const u of users) {
+                    const access: string[] = u.system_access || [];
+                    if (access.includes(systemId) || u.id === systemId) {
+                      requesterEmail = u.email;
+                      console.log(`xero-webhook: Resolved email ${requesterEmail} for system_id=${systemId} (user: ${u.first_name} ${u.last_name})`);
+                      break;
+                    }
+                  }
+                  if (!requesterEmail) {
+                    console.warn(`xero-webhook: No user with system_access containing ${systemId} found in gateway`);
+                  }
+                } else {
+                  console.error(`xero-webhook: Gateway get-users failed: ${gwRes.status}`);
+                }
+              } catch (gwErr) {
+                console.error(`xero-webhook: Gateway lookup error:`, gwErr);
+              }
+            }
+
+            if (!requesterEmail) {
+              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email.`);
+            } else {
+              // Check sandbox override
+              const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+              const toEmail = sandboxEmail || requesterEmail;
+
+              const htmlBody = `
+                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                  <h2 style="color:#16a34a;">Payment Received</h2>
+                  <p style="color:#6b7280;">Great news! A payment has been recorded for an invoice you submitted.</p>
+                  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                    <tr><td style="padding:4px 0;color:#6b7280;">Invoice #:</td><td style="padding:4px 0;font-weight:600;">${xeroInvoiceNumber}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
+                  </table>
+                  <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
+                </div>
+              `;
+
+              await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
+              console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
+            }
           }
         }
       } catch (emailErr) {
