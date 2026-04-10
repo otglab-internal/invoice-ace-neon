@@ -22,7 +22,8 @@ async function resolveEmail(systemId: string, orgId: string, environment: string
 
   const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
   const envSuffix = environment === "sandbox" ? "SB" : "PROD";
-  const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_${envSuffix}`) || "";
+  const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_${envSuffix}`) ||
+    Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
 
   const res = await fetch(GATEWAY_URL, {
     method: "GET",
