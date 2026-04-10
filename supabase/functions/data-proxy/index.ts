@@ -166,7 +166,8 @@ Deno.serve(async (req) => {
 
       // Strip tenant fields that no longer exist in NeonDB tables
       const { org_id: _o, environment: _e, ...cleanRow } = row;
-      const entries = Object.entries(cleanRow);
+      const sanitizedRow = sanitizeValue(cleanRow) as Record<string, unknown>;
+      const entries = Object.entries(sanitizedRow);
       const keys = entries.map(([k]) => safeName(k));
       const values = entries.map(([k, v]) => toPgValue(k, v));
       const placeholders = values.map((_, i) => `$${i + 1}`);
