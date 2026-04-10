@@ -61,6 +61,28 @@ function toPgValue(key: string, v: unknown): unknown {
   return v;
 }
 
+function sanitizeStr(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, "")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+\s*=/gi, "")
+    .trim();
+}
+
+function sanitizeValue(v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (typeof v === "string") return sanitizeStr(v);
+  if (Array.isArray(v)) return v.map(sanitizeValue);
+  if (typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      out[k] = sanitizeValue(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 function safeSelect(select: string): string {
   if (!select || select === "*") return "*";
   return select.split(",").map(s => safeName(s.trim())).join(", ");
