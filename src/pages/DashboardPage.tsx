@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil } from "lucide-react";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { neonQuery } from "@/lib/neon-client";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Invoice {
   id: string;
@@ -21,6 +23,7 @@ interface Invoice {
   submitted_by_name: string;
   line_items: any[];
   amendment_status: string | null;
+  invoice_pdf_url: string | null;
 }
 
 const statusPill = (status: string, amendmentStatus: string | null) => {
@@ -50,6 +53,36 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState("RM");
   const [amendInvoice, setAmendInvoice] = useState<Invoice | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+
+  const handleViewPdf = useCallback(async (inv: Invoice) => {
+    if (!inv.invoice_pdf_url) return;
+    setLoadingPdf(inv.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("invoice-pdf-webhook", {
+        method: "GET",
+        headers: { "x-org-id": "" },
+        body: undefined,
+      } as any);
+      // Use fetch directly since supabase.functions.invoke doesn't support GET with query params well
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const res = await fetch(
+        `${baseUrl}/functions/v1/invoice-pdf-webhook?path=${encodeURIComponent(inv.invoice_pdf_url)}`,
+        { headers: { apikey: anonKey } }
+      );
+      const result = await res.json();
+      if (result.signedUrl) {
+        window.open(result.signedUrl, "_blank");
+      } else {
+        toast({ title: "Error", description: result.error || "Failed to get PDF URL", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to fetch PDF", variant: "destructive" });
+    } finally {
+      setLoadingPdf(null);
+    }
+  }, []);
 
   const canView = permissions.canViewInvoices;
   const isRequester = permissions.canCreateInvoice;
