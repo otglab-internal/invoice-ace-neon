@@ -388,7 +388,7 @@ const GlobalConfigPage: React.FC = () => {
                         <CardTitle className="text-base">Clear All Data</CardTitle>
                       </div>
                       <CardDescription className="text-xs">
-                        Permanently delete all invoices, invoice logs, staff assignments, approval flags, and templates for the current environment. Configuration settings will be preserved.
+                        Permanently delete all invoices, invoice logs, and approval flags for the current environment. Templates, staff assignments, and configuration settings will be preserved.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
