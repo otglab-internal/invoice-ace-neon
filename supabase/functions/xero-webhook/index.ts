@@ -367,7 +367,8 @@ Deno.serve(async (req) => {
               // The system_id is a system access ID — we need to find which user has it
               const orgUpper2 = orgId === "stridekidz" ? "SK" : "OTG";
               const envSuffix2 = environment === "sandbox" ? "SB" : "PROD";
-              const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper2}_${envSuffix2}`) || "";
+              const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper2}_${envSuffix2}`) ||
+                Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
               const gatewayApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
 
               try {
