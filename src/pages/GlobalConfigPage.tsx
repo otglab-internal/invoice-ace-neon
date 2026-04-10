@@ -58,7 +58,9 @@ const XERO_KEYS = [
 ];
 
 const GlobalConfigPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
