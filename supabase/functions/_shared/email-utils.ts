@@ -7,6 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-environment, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const GATEWAY_URL = "https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users";
+const GATEWAY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
+
 interface SmtpConfig {
   host: string;
   port: number;
@@ -44,7 +47,73 @@ export async function getSandboxTestEmail(sql: ReturnType<typeof neon>): Promise
   return val && val.trim() ? val.trim() : null;
 }
 
-export async function getApproverEmails(sql: ReturnType<typeof neon>, centreLocations: string[]): Promise<string[]> {
+/**
+ * Resolve an array of system_id UUIDs to email addresses via the Federation Gateway.
+ */
+export async function resolveSystemIdsToEmails(
+  systemIds: string[],
+  orgId: string,
+  environment: string,
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  if (systemIds.length === 0) return result;
+
+  // Separate emails from UUIDs
+  const uuidsToResolve: string[] = [];
+  for (const id of systemIds) {
+    if (id.includes("@")) {
+      result[id] = id;
+    } else {
+      uuidsToResolve.push(id);
+    }
+  }
+  if (uuidsToResolve.length === 0) return result;
+
+  const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+  const envSuffix = environment === "sandbox" ? "SB" : "PROD";
+  const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_${envSuffix}`) ||
+    Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
+
+  try {
+    const gwRes = await fetch(GATEWAY_URL, {
+      method: "GET",
+      headers: {
+        "apikey": GATEWAY_API_KEY,
+        "x-api-key": authApiKey,
+        "x-org-id": orgId,
+      },
+    });
+    if (gwRes.ok) {
+      const gwData = await gwRes.json();
+      const users = gwData.data || [];
+      for (const uuid of uuidsToResolve) {
+        for (const u of users) {
+          const access: string[] = u.system_access || [];
+          if (access.includes(uuid) || u.id === uuid) {
+            if (u.email) {
+              result[uuid] = u.email;
+              console.log(`email-utils: Resolved ${uuid} -> ${u.email}`);
+            }
+            break;
+          }
+        }
+      }
+    } else {
+      console.error(`email-utils: Gateway get-users failed: ${gwRes.status}`);
+    }
+  } catch (gwErr) {
+    console.error(`email-utils: Gateway lookup error:`, gwErr);
+  }
+
+  return result;
+}
+
+export async function getApproverEmails(
+  sql: ReturnType<typeof neon>,
+  centreLocations: string[],
+  orgId: string,
+  environment: string,
+): Promise<string[]> {
   const approvers = await sql`
     SELECT system_id, centre_locations, user_role
     FROM staff_centre_assignments
@@ -64,7 +133,17 @@ export async function getApproverEmails(sql: ReturnType<typeof neon>, centreLoca
     }
   }
 
-  return matchingIds;
+  if (matchingIds.length === 0) return [];
+
+  // Resolve UUIDs to emails
+  const emailMap = await resolveSystemIdsToEmails(matchingIds, orgId, environment);
+  const emails = matchingIds.map((id) => emailMap[id]).filter(Boolean) as string[];
+  
+  if (emails.length === 0) {
+    console.warn(`email-utils: Found ${matchingIds.length} approver IDs but resolved 0 emails`);
+  }
+
+  return emails;
 }
 
 export async function sendEmailViaSMTP(

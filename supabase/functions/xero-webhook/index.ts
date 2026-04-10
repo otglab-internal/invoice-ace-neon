@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
-import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
+import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, resolveSystemIdsToEmails } from "../_shared/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -359,49 +359,8 @@ Deno.serve(async (req) => {
           if (smtpConfig && systemId) {
             let requesterEmail: string | null = null;
 
-            // Check if system_id is already an email
-            if (systemId.includes("@")) {
-              requesterEmail = systemId;
-            } else {
-              // Look up email via the external auth gateway
-              // The system_id is a system access ID — we need to find which user has it
-              const orgUpper2 = orgId === "stridekidz" ? "SK" : "OTG";
-              const envSuffix2 = environment === "sandbox" ? "SB" : "PROD";
-              const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper2}_${envSuffix2}`) ||
-                Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
-              const gatewayApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
-
-              try {
-                const gwRes = await fetch(`https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users`, {
-                  method: "GET",
-                  headers: {
-                    "apikey": gatewayApiKey,
-                    "x-api-key": authApiKey,
-                    "x-org-id": orgId,
-                  },
-                });
-                if (gwRes.ok) {
-                  const gwData = await gwRes.json();
-                  const users = gwData.data || [];
-                  // Find the user whose system_access array contains the systemId
-                  for (const u of users) {
-                    const access: string[] = u.system_access || [];
-                    if (access.includes(systemId) || u.id === systemId) {
-                      requesterEmail = u.email;
-                      console.log(`xero-webhook: Resolved email ${requesterEmail} for system_id=${systemId} (user: ${u.first_name} ${u.last_name})`);
-                      break;
-                    }
-                  }
-                  if (!requesterEmail) {
-                    console.warn(`xero-webhook: No user with system_access containing ${systemId} found in gateway`);
-                  }
-                } else {
-                  console.error(`xero-webhook: Gateway get-users failed: ${gwRes.status}`);
-                }
-              } catch (gwErr) {
-                console.error(`xero-webhook: Gateway lookup error:`, gwErr);
-              }
-            }
+            const emailMap = await resolveSystemIdsToEmails([systemId], orgId, environment);
+            requesterEmail = emailMap[systemId] || null;
 
             if (!requesterEmail) {
               console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email.`);

@@ -114,7 +114,8 @@ Deno.serve(async (req) => {
         try {
           const smtpConfig = await getSmtpConfig(dbSql);
           if (smtpConfig) {
-            const env = req.headers.get("x-environment") || "development";
+            const env = req.headers.get("x-environment") || "production";
+            const org = bodyOrgId || req.headers.get("x-org-id") || "";
             const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
 
             let recipients: string[];
@@ -122,7 +123,7 @@ Deno.serve(async (req) => {
               recipients = [sandboxEmail];
             } else {
               const centers = (created.line_items || []).map((li: any) => li.center).filter(Boolean);
-              recipients = await getApproverEmails(dbSql, centers);
+              recipients = await getApproverEmails(dbSql, centers, org, env);
             }
 
             if (recipients.length > 0) {
@@ -231,7 +232,8 @@ Deno.serve(async (req) => {
         });
       }
 
-      const env = req.headers.get("x-environment") || "development";
+      const env = req.headers.get("x-environment") || "production";
+      const org = bodyOrgId || req.headers.get("x-org-id") || "";
       const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
 
       let recipients: string[];
@@ -239,7 +241,7 @@ Deno.serve(async (req) => {
         recipients = [sandboxEmail];
       } else {
         const centers = (invoice.line_items || []).map((li: any) => li.center).filter(Boolean);
-        recipients = await getApproverEmails(dbSql, centers);
+        recipients = await getApproverEmails(dbSql, centers, org, env);
       }
 
       if (recipients.length === 0) {
