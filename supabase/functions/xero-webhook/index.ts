@@ -287,22 +287,50 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      await sql.query(
-        `UPDATE invoices
-         SET status = 'paid',
-             amendment_status = NULL,
-             amendment_data = NULL,
-             amendment_note = NULL,
-             amendment_requested_by = NULL,
-             amendment_requested_by_name = NULL,
-             amendment_requested_at = NULL
-         WHERE id = $1`,
-        [localInvoice.id],
-      );
-
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid`);
-
+      // Fetch latest PDF from Xero and replace in storage
+      let newPdfPath: string | null = null;
       try {
+        const pdfBytes = await fetchXeroInvoicePdf(xeroInvoiceId!, accessToken, config.xero_tenant_id);
+        if (pdfBytes) {
+          newPdfPath = await uploadPdfToStorage(localInvoice.id as string, pdfBytes, xeroInvoiceNumber);
+          if (newPdfPath) {
+            console.log(`xero-webhook: Updated PDF for ${xeroInvoiceNumber} -> ${newPdfPath}`);
+          }
+        } else {
+          console.warn(`xero-webhook: Could not fetch PDF from Xero for ${xeroInvoiceNumber}`);
+        }
+      } catch (pdfErr) {
+        console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
+      }
+
+      const updateFields = newPdfPath
+        ? `status = 'paid',
+           amendment_status = NULL,
+           amendment_data = NULL,
+           amendment_note = NULL,
+           amendment_requested_by = NULL,
+           amendment_requested_by_name = NULL,
+           amendment_requested_at = NULL,
+           invoice_pdf_url = $2`
+        : `status = 'paid',
+           amendment_status = NULL,
+           amendment_data = NULL,
+           amendment_note = NULL,
+           amendment_requested_by = NULL,
+           amendment_requested_by_name = NULL,
+           amendment_requested_at = NULL`;
+
+      if (newPdfPath) {
+        await sql.query(
+          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
+          [localInvoice.id, newPdfPath],
+        );
+      } else {
+        await sql.query(
+          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
+          [localInvoice.id],
+        );
+      }
         await sql.query(
           `INSERT INTO invoice_logs (invoice_id, action_type, performed_by, performed_by_name, source, details)
            VALUES ($1, $2, $3, $4, $5, $6)`,
