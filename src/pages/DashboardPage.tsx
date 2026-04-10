@@ -59,12 +59,6 @@ const DashboardPage: React.FC = () => {
     if (!inv.invoice_pdf_url) return;
     setLoadingPdf(inv.id);
     try {
-      const { data, error } = await supabase.functions.invoke("invoice-pdf-webhook", {
-        method: "GET",
-        headers: { "x-org-id": "" },
-        body: undefined,
-      } as any);
-      // Use fetch directly since supabase.functions.invoke doesn't support GET with query params well
       const baseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const res = await fetch(
@@ -99,7 +93,7 @@ const DashboardPage: React.FC = () => {
     }
 
     const { data, error } = await neonQuery("invoices", {
-      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status",
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url",
       filters,
       order: { column: "created_at", ascending: false },
     });
@@ -213,6 +207,17 @@ const DashboardPage: React.FC = () => {
                       {formatCurrency(inv.total, currency)}
                     </span>
                     {statusPill(inv.status, inv.amendment_status)}
+                    {inv.invoice_pdf_url && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 gap-1 text-xs"
+                        onClick={() => handleViewPdf(inv)}
+                        disabled={loadingPdf === inv.id}
+                      >
+                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "PDF"}
+                      </Button>
+                    )}
                     {canAmendInvoice(inv) && (
                       <Button
                         variant="ghost"
