@@ -330,10 +330,32 @@ const CreateInvoicePage: React.FC = () => {
             icon: <ShieldAlert className="w-4 h-4" />,
           });
         } else {
-          toast.success("Invoice auto-submitted to Xero", {
-            description: "Your invoice has been automatically validated and pushed.",
-            icon: <Zap className="w-4 h-4" />,
-          });
+          // No approval needed — send webhook to n8n (same as post-approval flow)
+          let webhookDelivered = true;
+          try {
+            const inv = inserted as any;
+            await apiClient.invoices("notify-approval", {
+              invoice: {
+                ...inv,
+                contact_id: finalContactId,
+                contact_name: contactName,
+              },
+            });
+          } catch (webhookErr) {
+            webhookDelivered = false;
+            console.warn("n8n webhook failed for auto-submitted invoice:", webhookErr);
+          }
+
+          if (webhookDelivered) {
+            toast.success("Invoice auto-submitted to Xero", {
+              description: "Your invoice has been automatically validated and pushed.",
+              icon: <Zap className="w-4 h-4" />,
+            });
+          } else {
+            toast.error("Invoice saved, but the webhook to Xero failed", {
+              description: "Please contact your admin.",
+            });
+          }
         }
       }
 
