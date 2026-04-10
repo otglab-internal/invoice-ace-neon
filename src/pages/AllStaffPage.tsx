@@ -9,6 +9,7 @@ import { Loader2, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate } from "@/lib/neon-client";
+import { logActivity } from "@/lib/activity-logger";
 
 interface ExternalUser {
   id: string;
@@ -42,7 +43,7 @@ interface StaffRow {
 
 
 const AllStaffPage: React.FC = () => {
-  const { user, environment } = useAuth();
+  const { user, environment, systemId } = useAuth();
   const [staffRows, setStaffRows] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -205,6 +206,9 @@ const AllStaffPage: React.FC = () => {
       })
     );
 
+    const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+    const performerId = systemId || "";
+    await logActivity("staff_assignment_updated", "staff", performerId, performerName, { staff: `${row.firstName} ${row.lastName}`, ...updates });
     toast.success(`Updated ${row.firstName} ${row.lastName}`);
     setSaving(null);
   };

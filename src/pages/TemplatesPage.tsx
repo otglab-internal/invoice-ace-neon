@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logActivity } from "@/lib/activity-logger";
 
 interface TemplateField {
   id: string;
@@ -54,6 +56,9 @@ const createField = (): TemplateField => ({
 });
 
 const TemplatesPage: React.FC = () => {
+  const { user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"list" | "create">("list");
@@ -166,6 +171,7 @@ const TemplatesPage: React.FC = () => {
     if (error) {
       toast.error("Failed to save template");
     } else {
+      await logActivity(editingId ? "template_updated" : "template_created", "template", performerId, performerName, { name: templateName.trim() });
       toast.success(editingId ? "Template updated" : "Template created");
       resetBuilder();
       setView("list");
@@ -175,10 +181,12 @@ const TemplatesPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    const template = templates.find(t => t.id === id);
     const { error } = await neonDelete("invoice_templates", { id });
     if (error) {
       toast.error("Failed to delete template");
     } else {
+      await logActivity("template_deleted", "template", performerId, performerName, { name: template?.name || id });
       toast.success("Template deleted");
       fetchTemplates();
     }

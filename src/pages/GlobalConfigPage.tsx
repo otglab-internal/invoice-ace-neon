@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { nowGMT8 } from "@/lib/utils";
 import {
@@ -24,6 +24,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonUpsert, neonDelete } from "@/lib/neon-client";
 import { invalidateBrandingCache } from "@/hooks/use-branding";
 import { getOrgId } from "@/lib/runtime-config";
+import { logActivity } from "@/lib/activity-logger";
 
 function getXeroHeaders(): Record<string, string> {
   return {
@@ -57,7 +58,9 @@ const XERO_KEYS = [
 ];
 
 const GlobalConfigPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -65,6 +68,42 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [testEmailError, setTestEmailError] = useState<string | null>(null);
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
+      toast({ title: "Enter a valid email address", variant: "destructive" });
+      return;
+    }
+    setSendingTestEmail(true);
+    setTestEmailError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-test-email", {
+        body: { to: testEmailTo.trim() },
+        headers: getXeroHeaders(),
+      });
+      if (error) {
+        const errMsg = typeof error === "object" ? JSON.stringify(error, null, 2) : String(error);
+        setTestEmailError(errMsg);
+        toast({ title: "Failed to send test email", description: errMsg, variant: "destructive" });
+      } else if (data?.error) {
+        const errMsg = [data.error, data.details, data.code, data.stack].filter(Boolean).join("\n\n");
+        setTestEmailError(errMsg);
+        toast({ title: "Failed to send test email", description: data.error, variant: "destructive" });
+      } else {
+        await logActivity("test_email_sent", "email", performerId, performerName, { to: testEmailTo });
+        toast({ title: "Test email sent!", description: `Sent to ${testEmailTo}` });
+        setTestEmailError(null);
+      }
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      setTestEmailError(errMsg);
+      toast({ title: "Failed to send test email", description: errMsg, variant: "destructive" });
+    }
+    setSendingTestEmail(false);
+  };
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await neonQuery("global_config", { select: "key,value" });
@@ -114,6 +153,7 @@ const GlobalConfigPage: React.FC = () => {
         logoUrl: config["logo_url"]?.trim() || null,
         faviconUrl: config["favicon_url"]?.trim() || null,
       });
+      await logActivity("config_saved", "config", performerId, performerName, { keys: allKeys });
       toast({ title: "Configuration saved" });
       await checkXeroStatus();
     } catch (err: any) {
@@ -149,6 +189,7 @@ const GlobalConfigPage: React.FC = () => {
         headers: getXeroHeaders(),
       });
       setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
+      await logActivity("xero_disconnected", "config", performerId, performerName);
       toast({ title: "Xero disconnected" });
     } catch {
       toast({ title: "Failed to disconnect Xero", variant: "destructive" });
@@ -159,12 +200,13 @@ const GlobalConfigPage: React.FC = () => {
   const handleClearData = async () => {
     setClearing(true);
     try {
-      const tables = ["invoice_logs", "invoices", "staff_centre_assignments", "user_approval_flags", "invoice_templates"];
+      const tables = ["invoice_logs", "invoices", "user_approval_flags"];
       for (const table of tables) {
         const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
-      toast({ title: "All data cleared", description: "Invoices, logs, staff, flags, and templates have been deleted." });
+      await logActivity("data_cleared", "system", performerId, performerName, { tables: ["invoice_logs", "invoices", "user_approval_flags"] });
+      toast({ title: "All data cleared", description: "Invoices, logs, and approval flags have been deleted." });
     } catch (err: any) {
       toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
     }
@@ -185,6 +227,7 @@ const GlobalConfigPage: React.FC = () => {
         if (data?.success) {
           toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });
           setXeroStatus({ connected: true, hasCredentials: true });
+          logActivity("xero_connected", "config", performerId, performerName, { tenant: data.tenant });
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
         }
@@ -352,6 +395,36 @@ const GlobalConfigPage: React.FC = () => {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Send Test Email</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Send a test email using the SMTP settings above. Save configuration first.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={testEmailTo}
+                      onChange={(e) => setTestEmailTo(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button onClick={handleSendTestEmail} disabled={sendingTestEmail} size="sm">
+                      {sendingTestEmail ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+                      Send
+                    </Button>
+                  </div>
+                  {testEmailError && (
+                    <pre className="text-xs text-destructive bg-destructive/10 p-3 rounded-md whitespace-pre-wrap break-all max-h-48 overflow-auto font-mono">
+                      {testEmailError}
+                    </pre>
+                  )}
+                </CardContent>
+              </Card>
+
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Sandbox Settings</h2>
               <Card>
                 <CardHeader className="pb-3">
@@ -388,7 +461,7 @@ const GlobalConfigPage: React.FC = () => {
                         <CardTitle className="text-base">Clear All Data</CardTitle>
                       </div>
                       <CardDescription className="text-xs">
-                        Permanently delete all invoices, invoice logs, staff assignments, approval flags, and templates for the current environment. Configuration settings will be preserved.
+                        Permanently delete all invoices, invoice logs, and approval flags for the current environment. Templates, staff assignments, and configuration settings will be preserved.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -403,7 +476,7 @@ const GlobalConfigPage: React.FC = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete <strong>all invoices, logs, staff assignments, approval flags, and templates</strong> for the current environment. This action cannot be undone.
+                              This will permanently delete <strong>all invoices, logs, and approval flags</strong> for the current environment. Templates and staff assignments will be preserved. This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
