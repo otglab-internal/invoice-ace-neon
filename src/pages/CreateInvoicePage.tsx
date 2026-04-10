@@ -175,7 +175,7 @@ const CreateInvoicePage: React.FC = () => {
         const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
         const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?name=centre&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
+          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?action=get&name=centre&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
           { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
         );
         const data = await res.json();
