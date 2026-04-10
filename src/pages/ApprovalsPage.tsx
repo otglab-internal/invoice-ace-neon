@@ -663,7 +663,7 @@ const ApprovalsPage: React.FC = () => {
                                 }
                               }}
                             >
-                              <FileText className="w-3.5 h-3.5" /> View Xero PDF
+<FileText className="w-3.5 h-3.5" /> View Xero Invoice PDF
                             </Button>
                           )}
 
@@ -743,7 +743,7 @@ const ApprovalsPage: React.FC = () => {
                     }
                   }}
                 >
-                  <FileText className="w-3.5 h-3.5" /> View Xero PDF
+                  <FileText className="w-3.5 h-3.5" /> View Xero Invoice PDF
                 </Button>
               )}
               <div>

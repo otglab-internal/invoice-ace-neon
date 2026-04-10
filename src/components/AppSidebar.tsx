@@ -15,6 +15,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, permissionKey: null },
   { to: "/create-invoice", label: "Create Invoice", icon: FilePlus, permissionKey: "canCreateInvoice" },
+  { to: "/all-invoices", label: "All Invoices", icon: FileText, permissionKey: "canViewInvoices" },
   { to: "/templates", label: "Templates", icon: LayoutTemplate, permissionKey: "canManageTemplates" },
   { to: "/approvals", label: "Approvals", icon: CheckSquare, permissionKey: "canAccessApprovals" },
   { to: "/settings", label: "Settings", icon: Settings, permissionKey: "canAccessSettings" },
