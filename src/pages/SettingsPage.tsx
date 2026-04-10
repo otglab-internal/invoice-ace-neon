@@ -180,6 +180,7 @@ const SettingsPage: React.FC = () => {
     if (error) {
       toast.error("Failed to save currency");
     } else {
+      await logActivity("currency_changed", "settings", performerId, performerName, { currency: val });
       toast.success(`Currency set to ${val}`);
     }
   };
