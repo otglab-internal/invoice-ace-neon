@@ -159,12 +159,12 @@ const GlobalConfigPage: React.FC = () => {
   const handleClearData = async () => {
     setClearing(true);
     try {
-      const tables = ["invoice_logs", "invoices", "staff_centre_assignments", "user_approval_flags", "invoice_templates"];
+      const tables = ["invoice_logs", "invoices", "user_approval_flags"];
       for (const table of tables) {
         const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
-      toast({ title: "All data cleared", description: "Invoices, logs, staff, flags, and templates have been deleted." });
+      toast({ title: "All data cleared", description: "Invoices, logs, and approval flags have been deleted." });
     } catch (err: any) {
       toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
     }
@@ -388,7 +388,7 @@ const GlobalConfigPage: React.FC = () => {
                         <CardTitle className="text-base">Clear All Data</CardTitle>
                       </div>
                       <CardDescription className="text-xs">
-                        Permanently delete all invoices, invoice logs, staff assignments, approval flags, and templates for the current environment. Configuration settings will be preserved.
+                        Permanently delete all invoices, invoice logs, and approval flags for the current environment. Templates, staff assignments, and configuration settings will be preserved.
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -403,7 +403,7 @@ const GlobalConfigPage: React.FC = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete <strong>all invoices, logs, staff assignments, approval flags, and templates</strong> for the current environment. This action cannot be undone.
+                              This will permanently delete <strong>all invoices, logs, and approval flags</strong> for the current environment. Templates and staff assignments will be preserved. This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
