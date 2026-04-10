@@ -43,7 +43,7 @@ interface StaffRow {
 
 
 const AllStaffPage: React.FC = () => {
-  const { user, environment } = useAuth();
+  const { user, environment, systemId } = useAuth();
   const [staffRows, setStaffRows] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
