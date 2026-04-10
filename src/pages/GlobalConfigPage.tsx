@@ -227,6 +227,7 @@ const GlobalConfigPage: React.FC = () => {
         if (data?.success) {
           toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });
           setXeroStatus({ connected: true, hasCredentials: true });
+          logActivity("xero_connected", "config", performerId, performerName, { tenant: data.tenant });
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
         }
