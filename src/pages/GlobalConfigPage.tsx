@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { nowGMT8 } from "@/lib/utils";
 import {
@@ -65,6 +65,41 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [testEmailError, setTestEmailError] = useState<string | null>(null);
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
+      toast({ title: "Enter a valid email address", variant: "destructive" });
+      return;
+    }
+    setSendingTestEmail(true);
+    setTestEmailError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-test-email", {
+        body: { to: testEmailTo.trim() },
+        headers: getXeroHeaders(),
+      });
+      if (error) {
+        const errMsg = typeof error === "object" ? JSON.stringify(error, null, 2) : String(error);
+        setTestEmailError(errMsg);
+        toast({ title: "Failed to send test email", description: errMsg, variant: "destructive" });
+      } else if (data?.error) {
+        const errMsg = [data.error, data.details, data.code, data.stack].filter(Boolean).join("\n\n");
+        setTestEmailError(errMsg);
+        toast({ title: "Failed to send test email", description: data.error, variant: "destructive" });
+      } else {
+        toast({ title: "Test email sent!", description: `Sent to ${testEmailTo}` });
+        setTestEmailError(null);
+      }
+    } catch (err: any) {
+      const errMsg = err.message || String(err);
+      setTestEmailError(errMsg);
+      toast({ title: "Failed to send test email", description: errMsg, variant: "destructive" });
+    }
+    setSendingTestEmail(false);
+  };
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await neonQuery("global_config", { select: "key,value" });
@@ -349,6 +384,36 @@ const GlobalConfigPage: React.FC = () => {
                       />
                     </div>
                   ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Send Test Email</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Send a test email using the SMTP settings above. Save configuration first.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={testEmailTo}
+                      onChange={(e) => setTestEmailTo(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button onClick={handleSendTestEmail} disabled={sendingTestEmail} size="sm">
+                      {sendingTestEmail ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+                      Send
+                    </Button>
+                  </div>
+                  {testEmailError && (
+                    <pre className="text-xs text-destructive bg-destructive/10 p-3 rounded-md whitespace-pre-wrap break-all max-h-48 overflow-auto font-mono">
+                      {testEmailError}
+                    </pre>
+                  )}
                 </CardContent>
               </Card>
 
