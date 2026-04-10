@@ -132,7 +132,7 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<void> {
     const cost = Number(item.cost) || 0;
     const lineTotal = qty * cost;
 
-    const desc = item.description || "—";
+    const desc = (item.description || "—").replace(/\\n/g, "\n");
     const descLines = doc.splitTextToSize(desc, colQty - colDesc - 10);
 
     for (let i = 0; i < descLines.length; i++) {
