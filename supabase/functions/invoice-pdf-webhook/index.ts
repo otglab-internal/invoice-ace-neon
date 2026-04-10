@@ -170,10 +170,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Ensure column exists, then update invoice_pdf_url in tenant-specific Neon DB
+    // Grab invoice number from header if provided
+    const invoiceNumber = req.headers.get("x-invoice-number") || null;
+
+    // Ensure columns exist, then update invoice in tenant-specific Neon DB
     const sql = neon(dbUrl);
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`;
-    const result = await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath} WHERE id = ${invoiceId}`;
+    await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`;
+
+    if (invoiceNumber) {
+      await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath}, invoice_number = ${invoiceNumber} WHERE id = ${invoiceId}`;
+    } else {
+      await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath} WHERE id = ${invoiceId}`;
+    }
 
     console.log(`Updated invoice ${invoiceId} in ${orgId}/${environment} with PDF path: ${storagePath}`);
 

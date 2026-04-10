@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil } from "lucide-react";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { neonQuery } from "@/lib/neon-client";
+import { toast } from "@/hooks/use-toast";
 
 interface Invoice {
   id: string;
@@ -21,6 +22,7 @@ interface Invoice {
   submitted_by_name: string;
   line_items: any[];
   amendment_status: string | null;
+  invoice_pdf_url: string | null;
 }
 
 const statusPill = (status: string, amendmentStatus: string | null) => {
@@ -50,6 +52,30 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState("RM");
   const [amendInvoice, setAmendInvoice] = useState<Invoice | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+
+  const handleViewPdf = useCallback(async (inv: Invoice) => {
+    if (!inv.invoice_pdf_url) return;
+    setLoadingPdf(inv.id);
+    try {
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const res = await fetch(
+        `${baseUrl}/functions/v1/invoice-pdf-webhook?path=${encodeURIComponent(inv.invoice_pdf_url)}`,
+        { headers: { apikey: anonKey } }
+      );
+      const result = await res.json();
+      if (result.signedUrl) {
+        window.open(result.signedUrl, "_blank");
+      } else {
+        toast({ title: "Error", description: result.error || "Failed to get PDF URL", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to fetch PDF", variant: "destructive" });
+    } finally {
+      setLoadingPdf(null);
+    }
+  }, []);
 
   const canView = permissions.canViewInvoices;
   const isRequester = permissions.canCreateInvoice;
@@ -66,7 +92,7 @@ const DashboardPage: React.FC = () => {
     }
 
     const { data, error } = await neonQuery("invoices", {
-      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status",
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url",
       filters,
       order: { column: "created_at", ascending: false },
     });
@@ -180,6 +206,17 @@ const DashboardPage: React.FC = () => {
                       {formatCurrency(inv.total, currency)}
                     </span>
                     {statusPill(inv.status, inv.amendment_status)}
+                    {inv.invoice_pdf_url && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 gap-1 text-xs"
+                        onClick={() => handleViewPdf(inv)}
+                        disabled={loadingPdf === inv.id}
+                      >
+                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "PDF"}
+                      </Button>
+                    )}
                     {canAmendInvoice(inv) && (
                       <Button
                         variant="ghost"
