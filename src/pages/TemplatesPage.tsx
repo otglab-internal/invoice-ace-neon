@@ -56,6 +56,9 @@ const createField = (): TemplateField => ({
 });
 
 const TemplatesPage: React.FC = () => {
+  const { user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"list" | "create">("list");
