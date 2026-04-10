@@ -357,35 +357,54 @@ Deno.serve(async (req) => {
           const smtpConfig = await getSmtpConfig(sql);
 
           if (smtpConfig && systemId) {
-            // Look up the requester's email from staff_centre_assignments
-            // The system_id is a UUID, not an email — we need to find the staff record
-            // that has a matching system_id and check if it looks like an email,
-            // otherwise fall back to checking if system_id itself is an email
             let requesterEmail: string | null = null;
 
             // Check if system_id is already an email
             if (systemId.includes("@")) {
               requesterEmail = systemId;
             } else {
-              // Look up email from staff table — system_id might map to a user
-              // whose email we can find via the auth system or staff records
-              const staffRows = await sql.query(
-                `SELECT system_id, user_name FROM staff_centre_assignments WHERE system_id = $1 LIMIT 1`,
-                [systemId],
-              );
-              if (staffRows.length > 0) {
-                // system_id in staff table is typically the user's identifier
-                // For now, use the submitted_by_name if it looks like an email
-                const name = inv.submitted_by_name as string;
-                if (name && name.includes("@")) {
-                  requesterEmail = name;
+              // Look up email via the external auth gateway
+              // The system_id is a system access ID — we need to find which user has it
+              const orgUpper2 = orgId === "stridekidz" ? "SK" : "OTG";
+              const envSuffix2 = environment === "sandbox" ? "SB" : "PROD";
+              const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper2}_${envSuffix2}`) ||
+                Deno.env.get(environment === "sandbox" ? "AUTH_API_KEY_SANDBOX" : "AUTH_API_KEY_PROD") || "";
+              const gatewayApiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
+
+              try {
+                const gwRes = await fetch(`https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users`, {
+                  method: "GET",
+                  headers: {
+                    "apikey": gatewayApiKey,
+                    "x-api-key": authApiKey,
+                    "x-org-id": orgId,
+                  },
+                });
+                if (gwRes.ok) {
+                  const gwData = await gwRes.json();
+                  const users = gwData.data || [];
+                  // Find the user whose system_access array contains the systemId
+                  for (const u of users) {
+                    const access: string[] = u.system_access || [];
+                    if (access.includes(systemId) || u.id === systemId) {
+                      requesterEmail = u.email;
+                      console.log(`xero-webhook: Resolved email ${requesterEmail} for system_id=${systemId} (user: ${u.first_name} ${u.last_name})`);
+                      break;
+                    }
+                  }
+                  if (!requesterEmail) {
+                    console.warn(`xero-webhook: No user with system_access containing ${systemId} found in gateway`);
+                  }
+                } else {
+                  console.error(`xero-webhook: Gateway get-users failed: ${gwRes.status}`);
                 }
+              } catch (gwErr) {
+                console.error(`xero-webhook: Gateway lookup error:`, gwErr);
               }
-              console.log(`xero-webhook: system_id=${systemId} is not an email. Staff lookup found: ${staffRows.length > 0 ? 'yes' : 'no'}. requesterEmail=${requesterEmail || 'none'}`);
             }
 
             if (!requesterEmail) {
-              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email notification.`);
+              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email.`);
             } else {
               // Check sandbox override
               const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
