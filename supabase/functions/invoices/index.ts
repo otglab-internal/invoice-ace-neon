@@ -109,32 +109,7 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
       `;
 
-      // Send approval email
-      if (created.requires_approval) {
-        try {
-          const smtpConfig = await getSmtpConfig(dbSql);
-          if (smtpConfig) {
-            const env = req.headers.get("x-environment") || "production";
-            const org = bodyOrgId || req.headers.get("x-org-id") || "";
-            const sandboxEmail = env !== "production" ? await getSandboxTestEmail(dbSql) : null;
-
-            let recipients: string[];
-            if (sandboxEmail) {
-              recipients = [sandboxEmail];
-            } else {
-              const centers = (created.line_items || []).map((li: any) => li.center).filter(Boolean);
-              recipients = await getApproverEmails(dbSql, centers, org, env);
-            }
-
-            if (recipients.length > 0) {
-              const html = buildApprovalEmailHtml(created);
-              await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval - ${created.contact_name}`, html);
-            }
-          }
-        } catch (emailErr) {
-          console.error("Failed to send approval email:", emailErr);
-        }
-      }
+      // Approval emails disabled — only paid notifications are sent (via xero-webhook)
 
       return new Response(JSON.stringify({
         success: true,
