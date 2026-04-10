@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
-import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../invoices/email-utils.ts";
+import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
