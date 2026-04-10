@@ -1,6 +1,5 @@
 // Test function: directly exercises the email-sending path
-// without needing a real Xero invoice fetch.
-// It picks a real local invoice and sends the payment notification email.
+// Looks up requester email from the users table (same as xero-webhook)
 
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
@@ -42,7 +41,6 @@ Deno.serve(async (req) => {
         [invoice_id],
       );
     } else {
-      // Pick the most recent approved invoice
       invoiceRows = await sql.query(
         `SELECT id, invoice_number, submitted_by_system_id, submitted_by_name, contact_name, total, invoice_date, reference, status FROM invoices WHERE status = 'approved' ORDER BY created_at DESC LIMIT 1`,
       );
@@ -55,8 +53,8 @@ Deno.serve(async (req) => {
     }
 
     const inv = invoiceRows[0];
-    console.log(`test-paid-email: Found invoice ${inv.id} (${inv.invoice_number || 'no number'}) status=${inv.status}`);
-    console.log(`test-paid-email: Requester system_id=${inv.submitted_by_system_id}, name=${inv.submitted_by_name}`);
+    const systemId = inv.submitted_by_system_id as string;
+    console.log(`test-paid-email: Invoice ${inv.id}, systemId=${systemId}, name=${inv.submitted_by_name}`);
 
     // Get SMTP config
     const smtpConfig = await getSmtpConfig(sql);
@@ -65,26 +63,37 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log(`test-paid-email: SMTP configured: host=${smtpConfig.host}, from=${smtpConfig.from_email}`);
 
-    // Check sandbox email override
-    const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
-    const requesterEmail = inv.submitted_by_system_id as string;
-    const toEmail = sandboxEmail || requesterEmail;
+    // Resolve email — same logic as xero-webhook
+    let requesterEmail: string | null = null;
+    if (systemId.includes("@")) {
+      requesterEmail = systemId;
+    } else {
+      const userRows = await sql.query(
+        `SELECT email FROM users WHERE id = $1 LIMIT 1`,
+        [systemId],
+      );
+      if (userRows.length > 0 && userRows[0].email) {
+        requesterEmail = userRows[0].email as string;
+        console.log(`test-paid-email: Resolved email ${requesterEmail} from users table`);
+      } else {
+        console.warn(`test-paid-email: No user found for system_id=${systemId}`);
+      }
+    }
 
-    console.log(`test-paid-email: Will send to: ${toEmail} (sandbox override: ${sandboxEmail || 'none'})`);
-
-    // Check if toEmail looks like an email
-    if (!toEmail || !toEmail.includes("@")) {
+    if (!requesterEmail) {
       return new Response(JSON.stringify({
-        error: "Requester system_id is not an email address",
-        submitted_by_system_id: requesterEmail,
-        note: "The xero-webhook uses submitted_by_system_id as the email recipient. This value must be a valid email address for the notification to work.",
-        invoice: inv,
+        error: "Could not resolve email for requester",
+        submitted_by_system_id: systemId,
+        submitted_by_name: inv.submitted_by_name,
       }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Sandbox override
+    const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+    const toEmail = sandboxEmail || requesterEmail;
 
     const invoiceNumber = inv.invoice_number || inv.id?.toString().slice(0, 8).toUpperCase() || "N/A";
 
@@ -105,14 +114,14 @@ Deno.serve(async (req) => {
     `;
 
     await sendEmailViaSMTP(smtpConfig, [toEmail], `[TEST] Payment Received – Invoice ${invoiceNumber}`, htmlBody);
-    console.log(`test-paid-email: Email sent successfully to ${toEmail}`);
+    console.log(`test-paid-email: Email sent to ${toEmail}`);
 
     return new Response(JSON.stringify({
       success: true,
       sent_to: toEmail,
+      resolved_from: "users table",
       invoice_id: inv.id,
       invoice_number: inv.invoice_number,
-      submitted_by_system_id: inv.submitted_by_system_id,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
