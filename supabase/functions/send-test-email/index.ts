@@ -7,6 +7,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-environment, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const DB_MAP: Record<string, { prod: string; sb: string }> = {
+  otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
+  stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,11 +26,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Determine database URL from headers
     const environment = req.headers.get("x-environment") || "production";
     const orgId = req.headers.get("x-org-id") || "";
+    const isProd = environment !== "sandbox";
 
-    const dbKey = `DATABASE_URL_${orgId}_${environment === "sandbox" ? "SB" : "PROD"}`.toUpperCase();
+    const mapping = DB_MAP[orgId];
+    const dbKey = mapping
+      ? (isProd ? mapping.prod : mapping.sb)
+      : `DATABASE_URL_${orgId}_${isProd ? "PROD" : "SB"}`.toUpperCase();
+
     const databaseUrl = Deno.env.get(dbKey);
     if (!databaseUrl) {
       return new Response(JSON.stringify({ error: `Database not configured for ${dbKey}` }), {
