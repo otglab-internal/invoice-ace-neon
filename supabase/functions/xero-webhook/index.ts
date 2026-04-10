@@ -140,9 +140,10 @@ Deno.serve(async (req) => {
 
     const sql = getDb(orgId, environment);
 
-    // Get webhook key from config
-    const webhookKeyConfig = await getConfigMap(sql, ["xero_webhook_key"]);
-    const webhookKey = webhookKeyConfig.xero_webhook_key;
+    // Resolve webhook key from environment secrets per org + environment
+    const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+    const envSuffix = environment === "sandbox" ? "SB" : "PROD";
+    const webhookKey = Deno.env.get(`XERO_WEBHOOK_KEY_${orgUpper}_${envSuffix}`) || "";
 
     if (!webhookKey) {
       console.error("xero-webhook: No xero_webhook_key configured");
