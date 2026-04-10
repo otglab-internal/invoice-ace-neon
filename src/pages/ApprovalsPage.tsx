@@ -144,6 +144,8 @@ const ApprovalsPage: React.FC = () => {
     if (error) {
       toast.error("Failed to save edits");
     } else {
+      const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+      await logActivity("invoice_edited", "invoice", systemId || "", performerName, { invoice_id: id, contact_name: editContactName, total: newTotal });
       toast.success("Invoice updated");
       setEditing(false);
       fetchInvoices();
