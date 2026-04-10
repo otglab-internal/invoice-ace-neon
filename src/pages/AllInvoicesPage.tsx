@@ -28,6 +28,9 @@ interface Invoice {
 }
 
 const statusPill = (status: string, amendmentStatus: string | null) => {
+  if (status === "paid") {
+    return <Badge className="text-xs bg-green-600 text-white border-green-600">Paid</Badge>;
+  }
   if (amendmentStatus === "pending") {
     return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Amendment Pending</Badge>;
   }
@@ -131,6 +134,7 @@ const AllInvoicesPage: React.FC = () => {
 
   const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
+    if (inv.status === "paid") return false;
     if (!["approved", "submitted", "pushed"].includes(inv.status)) return false;
     if (inv.amendment_status === "pending") return false;
     const invoiceCentres = (inv.line_items || []).map((li: any) => li.center).filter(Boolean);
@@ -202,6 +206,7 @@ const AllInvoicesPage: React.FC = () => {
               <SelectItem value="pushed">Pushed</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
             </SelectContent>
           </Select>
           <span className="text-sm text-muted-foreground">
