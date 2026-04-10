@@ -73,27 +73,23 @@ export async function sendEmailViaSMTP(
   subject: string,
   htmlBody: string
 ): Promise<void> {
-  const client = new SMTPClient({
-    user: config.user,
-    password: config.pass,
+  const transporter = nodemailer.createTransport({
     host: config.host,
     port: config.port,
-    tls: config.port === 465,
-    ssl: config.port === 465,
+    secure: config.port === 465,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
   });
 
   for (const recipient of to) {
-    try {
-      await client.sendAsync({
-        from: `${config.from_name} <${config.from_email}>`,
-        to: recipient,
-        subject,
-        attachment: [{ data: htmlBody, alternative: true }],
-      });
-    } catch (err) {
-      console.error(`Failed to send email to ${recipient}:`, err);
-      throw err;
-    }
+    await transporter.sendMail({
+      from: `${config.from_name} <${config.from_email}>`,
+      to: recipient,
+      subject,
+      html: htmlBody,
+    });
   }
 }
 
