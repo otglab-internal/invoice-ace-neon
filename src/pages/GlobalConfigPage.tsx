@@ -164,7 +164,7 @@ const GlobalConfigPage: React.FC = () => {
         const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
-      toast({ title: "All data cleared", description: "Invoices, logs, staff, flags, and templates have been deleted." });
+      toast({ title: "All data cleared", description: "Invoices, logs, and approval flags have been deleted." });
     } catch (err: any) {
       toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
     }
