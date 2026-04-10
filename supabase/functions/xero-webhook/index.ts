@@ -37,7 +37,7 @@ interface ConfigMap {
 async function getConfigMap(sql: ReturnType<typeof neon>, keys: string[]): Promise<ConfigMap> {
   if (keys.length === 0) return {};
   const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-  const rows = await sql(`SELECT key, value FROM global_config WHERE key IN (${placeholders})`, keys);
+  const rows = await sql.query(`SELECT key, value FROM global_config WHERE key IN (${placeholders})`, keys);
   const map: ConfigMap = {};
   for (const r of rows) {
     map[r.key as string] = typeof r.value === "string" ? (r.value as string).trim() : String(r.value ?? "");
@@ -46,7 +46,7 @@ async function getConfigMap(sql: ReturnType<typeof neon>, keys: string[]): Promi
 }
 
 async function upsertConfig(sql: ReturnType<typeof neon>, key: string, value: string) {
-  await sql(
+  await sql.query(
     `INSERT INTO global_config (key, value, updated_at)
      VALUES ($1, $2, $3)
      ON CONFLICT (key)
@@ -147,7 +147,6 @@ Deno.serve(async (req) => {
 
     if (!webhookKey) {
       console.error("xero-webhook: No xero_webhook_key configured");
-      // Must return 401 for invalid signature per Xero spec
       return new Response("", { status: 401 });
     }
 
@@ -163,7 +162,7 @@ Deno.serve(async (req) => {
     try {
       payload = JSON.parse(rawBody);
     } catch {
-      return new Response("", { status: 200 }); // Acknowledge but ignore malformed
+      return new Response("", { status: 200 });
     }
 
     const events = payload.events || [];
@@ -189,7 +188,6 @@ Deno.serve(async (req) => {
     let accessToken = config.xero_access_token;
 
     for (const event of events) {
-      // Only process invoice update events
       if (event.eventCategory !== "INVOICE" || event.eventType !== "UPDATE") {
         continue;
       }
@@ -199,10 +197,8 @@ Deno.serve(async (req) => {
 
       console.log(`xero-webhook: Processing invoice update for Xero ID ${xeroInvoiceId}`);
 
-      // Fetch invoice from Xero
       let xeroInvoice = await fetchXeroInvoice(xeroInvoiceId, accessToken, config.xero_tenant_id);
 
-      // Retry with refreshed token if needed
       if (!xeroInvoice) {
         const refreshed = await refreshAccessToken(sql, config);
         if (refreshed) {
@@ -221,7 +217,6 @@ Deno.serve(async (req) => {
 
       console.log(`xero-webhook: Xero invoice ${xeroInvoiceNumber} status: ${xeroStatus}`);
 
-      // Only process if invoice is now PAID
       if (xeroStatus !== "PAID") {
         continue;
       }
@@ -231,8 +226,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Find matching local invoice by invoice_number
-      const matchingInvoices = await sql(
+      const matchingInvoices = await sql.query(
         `SELECT id, status, amendment_status FROM invoices WHERE invoice_number = $1 LIMIT 1`,
         [xeroInvoiceNumber],
       );
@@ -249,8 +243,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Update to paid, clear any pending amendment
-      await sql(
+      await sql.query(
         `UPDATE invoices
          SET status = 'paid',
              amendment_status = NULL,
@@ -265,9 +258,8 @@ Deno.serve(async (req) => {
 
       console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid`);
 
-      // Log the status change
       try {
-        await sql(
+        await sql.query(
           `INSERT INTO invoice_logs (invoice_id, action_type, performed_by, performed_by_name, source, details)
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
@@ -284,11 +276,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Must return 200 to acknowledge receipt
     return new Response("", { status: 200 });
   } catch (err) {
     console.error("xero-webhook error:", err);
-    // Return 200 to avoid Xero retrying on server errors
     return new Response("", { status: 200 });
   }
 });
