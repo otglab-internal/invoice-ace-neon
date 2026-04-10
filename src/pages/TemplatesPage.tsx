@@ -171,6 +171,7 @@ const TemplatesPage: React.FC = () => {
     if (error) {
       toast.error("Failed to save template");
     } else {
+      await logActivity(editingId ? "template_updated" : "template_created", "template", performerId, performerName, { name: templateName.trim() });
       toast.success(editingId ? "Template updated" : "Template created");
       resetBuilder();
       setView("list");
@@ -180,10 +181,12 @@ const TemplatesPage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    const template = templates.find(t => t.id === id);
     const { error } = await neonDelete("invoice_templates", { id });
     if (error) {
       toast.error("Failed to delete template");
     } else {
+      await logActivity("template_deleted", "template", performerId, performerName, { name: template?.name || id });
       toast.success("Template deleted");
       fetchTemplates();
     }
