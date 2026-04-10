@@ -157,7 +157,7 @@ const AllInvoicesPage: React.FC = () => {
     }
   }, [currency, logoUrl]);
 
-
+  const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
     if (inv.status === "paid") return false;
     if (!["approved", "submitted", "pushed"].includes(inv.status)) return false;
