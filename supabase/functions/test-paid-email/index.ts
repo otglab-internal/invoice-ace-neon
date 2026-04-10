@@ -1,5 +1,5 @@
-// Test function: directly exercises the email-sending path
-// Looks up requester email from the users table (same as xero-webhook)
+// Test function: exercises the email-sending path using the same
+// gateway lookup as xero-webhook to resolve requester email.
 
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
@@ -13,6 +13,36 @@ const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
   stridekidz: { prod: "DATABASE_URL_SK_PROD", sb: "DATABASE_URL_SK_SB" },
 };
+
+const GATEWAY_URL = "https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users";
+const GATEWAY_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
+
+async function resolveEmail(systemId: string, orgId: string, environment: string): Promise<string | null> {
+  if (systemId.includes("@")) return systemId;
+
+  const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+  const envSuffix = environment === "sandbox" ? "SB" : "PROD";
+  const authApiKey = Deno.env.get(`AUTH_API_KEY_${orgUpper}_${envSuffix}`) || "";
+
+  const res = await fetch(GATEWAY_URL, {
+    method: "GET",
+    headers: { "apikey": GATEWAY_API_KEY, "x-api-key": authApiKey, "x-org-id": orgId },
+  });
+
+  if (!res.ok) {
+    console.error(`Gateway failed: ${res.status}`);
+    return null;
+  }
+
+  const data = await res.json();
+  for (const u of (data.data || [])) {
+    const access: string[] = u.system_access || [];
+    if (access.includes(systemId) || u.id === systemId) {
+      return u.email;
+    }
+  }
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -33,7 +63,6 @@ Deno.serve(async (req) => {
 
     const sql = neon(dbUrl);
 
-    // Get the invoice
     let invoiceRows;
     if (invoice_id) {
       invoiceRows = await sql.query(
@@ -54,36 +83,18 @@ Deno.serve(async (req) => {
 
     const inv = invoiceRows[0];
     const systemId = inv.submitted_by_system_id as string;
-    console.log(`test-paid-email: Invoice ${inv.id}, systemId=${systemId}, name=${inv.submitted_by_name}`);
 
-    // Get SMTP config
     const smtpConfig = await getSmtpConfig(sql);
     if (!smtpConfig) {
-      return new Response(JSON.stringify({ error: "SMTP not configured", invoice: inv }), {
+      return new Response(JSON.stringify({ error: "SMTP not configured" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Resolve email — same logic as xero-webhook
-    let requesterEmail: string | null = null;
-    if (systemId.includes("@")) {
-      requesterEmail = systemId;
-    } else {
-      const userRows = await sql.query(
-        `SELECT email FROM users WHERE id = $1 LIMIT 1`,
-        [systemId],
-      );
-      if (userRows.length > 0 && userRows[0].email) {
-        requesterEmail = userRows[0].email as string;
-        console.log(`test-paid-email: Resolved email ${requesterEmail} from users table`);
-      } else {
-        console.warn(`test-paid-email: No user found for system_id=${systemId}`);
-      }
-    }
-
+    const requesterEmail = await resolveEmail(systemId, org_id, environment);
     if (!requesterEmail) {
       return new Response(JSON.stringify({
-        error: "Could not resolve email for requester",
+        error: "Could not resolve email",
         submitted_by_system_id: systemId,
         submitted_by_name: inv.submitted_by_name,
       }), {
@@ -91,10 +102,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Sandbox override
     const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
     const toEmail = sandboxEmail || requesterEmail;
-
     const invoiceNumber = inv.invoice_number || inv.id?.toString().slice(0, 8).toUpperCase() || "N/A";
 
     const htmlBody = `
@@ -119,9 +128,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       sent_to: toEmail,
-      resolved_from: "users table",
+      resolved_email: requesterEmail,
       invoice_id: inv.id,
-      invoice_number: inv.invoice_number,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
