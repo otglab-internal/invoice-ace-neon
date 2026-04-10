@@ -357,35 +357,27 @@ Deno.serve(async (req) => {
           const smtpConfig = await getSmtpConfig(sql);
 
           if (smtpConfig && systemId) {
-            // Look up the requester's email from staff_centre_assignments
-            // The system_id is a UUID, not an email — we need to find the staff record
-            // that has a matching system_id and check if it looks like an email,
-            // otherwise fall back to checking if system_id itself is an email
             let requesterEmail: string | null = null;
 
             // Check if system_id is already an email
             if (systemId.includes("@")) {
               requesterEmail = systemId;
             } else {
-              // Look up email from staff table — system_id might map to a user
-              // whose email we can find via the auth system or staff records
-              const staffRows = await sql.query(
-                `SELECT system_id, user_name FROM staff_centre_assignments WHERE system_id = $1 LIMIT 1`,
+              // Look up email from the users table using the system_id (user UUID)
+              const userRows = await sql.query(
+                `SELECT email FROM users WHERE id = $1 LIMIT 1`,
                 [systemId],
               );
-              if (staffRows.length > 0) {
-                // system_id in staff table is typically the user's identifier
-                // For now, use the submitted_by_name if it looks like an email
-                const name = inv.submitted_by_name as string;
-                if (name && name.includes("@")) {
-                  requesterEmail = name;
-                }
+              if (userRows.length > 0 && userRows[0].email) {
+                requesterEmail = userRows[0].email as string;
+                console.log(`xero-webhook: Resolved email ${requesterEmail} for system_id=${systemId}`);
+              } else {
+                console.warn(`xero-webhook: No user found in users table for system_id=${systemId}`);
               }
-              console.log(`xero-webhook: system_id=${systemId} is not an email. Staff lookup found: ${staffRows.length > 0 ? 'yes' : 'no'}. requesterEmail=${requesterEmail || 'none'}`);
             }
 
             if (!requesterEmail) {
-              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email notification.`);
+              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email.`);
             } else {
               // Check sandbox override
               const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
