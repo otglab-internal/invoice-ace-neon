@@ -40,6 +40,8 @@ interface StaffOption {
 
 const SettingsPage: React.FC = () => {
   const { user, systemId } = useAuth();
+  const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+  const performerId = systemId || "";
   const [autoMode, setAutoMode] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currency, setCurrency] = useState("RM");
