@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,6 +114,49 @@ async function fetchXeroInvoice(
   if (!res.ok) return null;
   const data = await res.json();
   return data.Invoices?.[0] || null;
+}
+
+async function fetchXeroInvoicePdf(
+  invoiceId: string,
+  accessToken: string,
+  tenantId: string,
+): Promise<Uint8Array | null> {
+  const res = await fetch(`${XERO_API_URL}/Invoices/${invoiceId}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Xero-Tenant-Id": tenantId,
+      Accept: "application/pdf",
+    },
+  });
+  if (!res.ok) {
+    console.error(`xero-webhook: Failed to fetch PDF for ${invoiceId}: ${res.status}`);
+    return null;
+  }
+  const buffer = await res.arrayBuffer();
+  return new Uint8Array(buffer);
+}
+
+async function uploadPdfToStorage(
+  localInvoiceId: string,
+  pdfBytes: Uint8Array,
+  invoiceNumber: string,
+): Promise<string | null> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const storagePath = `${localInvoiceId}/invoice.pdf`;
+  const blob = new Blob([pdfBytes], { type: "application/pdf" });
+
+  const { error } = await supabase.storage
+    .from("invoice-pdfs")
+    .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
+
+  if (error) {
+    console.error(`xero-webhook: Failed to upload PDF for ${invoiceNumber}:`, error.message);
+    return null;
+  }
+  return storagePath;
 }
 
 Deno.serve(async (req) => {
@@ -243,20 +287,52 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      await sql.query(
-        `UPDATE invoices
-         SET status = 'paid',
-             amendment_status = NULL,
-             amendment_data = NULL,
-             amendment_note = NULL,
-             amendment_requested_by = NULL,
-             amendment_requested_by_name = NULL,
-             amendment_requested_at = NULL
-         WHERE id = $1`,
-        [localInvoice.id],
-      );
+      // Fetch latest PDF from Xero and replace in storage
+      let newPdfPath: string | null = null;
+      try {
+        const pdfBytes = await fetchXeroInvoicePdf(xeroInvoiceId!, accessToken, config.xero_tenant_id);
+        if (pdfBytes) {
+          newPdfPath = await uploadPdfToStorage(localInvoice.id as string, pdfBytes, xeroInvoiceNumber);
+          if (newPdfPath) {
+            console.log(`xero-webhook: Updated PDF for ${xeroInvoiceNumber} -> ${newPdfPath}`);
+          }
+        } else {
+          console.warn(`xero-webhook: Could not fetch PDF from Xero for ${xeroInvoiceNumber}`);
+        }
+      } catch (pdfErr) {
+        console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
+      }
 
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid`);
+      const updateFields = newPdfPath
+        ? `status = 'paid',
+           amendment_status = NULL,
+           amendment_data = NULL,
+           amendment_note = NULL,
+           amendment_requested_by = NULL,
+           amendment_requested_by_name = NULL,
+           amendment_requested_at = NULL,
+           invoice_pdf_url = $2`
+        : `status = 'paid',
+           amendment_status = NULL,
+           amendment_data = NULL,
+           amendment_note = NULL,
+           amendment_requested_by = NULL,
+           amendment_requested_by_name = NULL,
+           amendment_requested_at = NULL`;
+
+      if (newPdfPath) {
+        await sql.query(
+          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
+          [localInvoice.id, newPdfPath],
+        );
+      } else {
+        await sql.query(
+          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
+          [localInvoice.id],
+        );
+      }
+
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid${newPdfPath ? " + PDF updated" : ""}`);
 
       try {
         await sql.query(
@@ -268,7 +344,7 @@ Deno.serve(async (req) => {
             "xero-webhook",
             "Xero Webhook",
             "webhook",
-            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber }),
+            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath }),
           ],
         );
       } catch (logErr) {
