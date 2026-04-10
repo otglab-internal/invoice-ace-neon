@@ -291,7 +291,7 @@ const AllInvoicesPage: React.FC = () => {
                         onClick={() => handleDownloadReceipt(inv)}
                         disabled={loadingReceipt === inv.id}
                       >
-                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt"}
+                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt PDF"}
                       </Button>
                     )}
                     {canAmendInvoice(inv) && (

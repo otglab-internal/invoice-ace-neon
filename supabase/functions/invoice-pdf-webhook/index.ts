@@ -1,5 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { neon } from "https://esm.sh/@neondatabase/serverless@0.9.0";
+import { uploadToR2, getR2PresignedUrl } from "../_shared/r2-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Handle GET requests for signed URL generation
+  // Handle GET requests for presigned URL generation
   if (req.method === "GET") {
     try {
       const url = new URL(req.url);
@@ -37,22 +37,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, serviceKey);
+      const signedUrl = await getR2PresignedUrl(storagePath, 300);
 
-      const { data, error } = await supabase.storage
-        .from("invoice-pdfs")
-        .createSignedUrl(storagePath, 300);
-
-      if (error || !data?.signedUrl) {
-        return new Response(JSON.stringify({ error: error?.message || "Failed to generate signed URL" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(JSON.stringify({ signedUrl: data.signedUrl }), {
+      return new Response(JSON.stringify({ signedUrl }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -151,20 +138,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    // Upload PDF to Supabase storage
+    // Upload PDF to Cloudflare R2
     const storagePath = `${invoiceId}/${pdfFilename}`;
-    const { error: uploadError } = await supabase.storage.from("invoice-pdfs").upload(storagePath, pdfBlob, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
-
-    if (uploadError) {
-      console.error("Storage upload error:", uploadError);
-      return new Response(JSON.stringify({ error: "Failed to upload PDF", details: uploadError.message }), {
+    try {
+      await uploadToR2(storagePath, pdfBlob, "application/pdf");
+    } catch (uploadErr) {
+      console.error("R2 upload error:", uploadErr);
+      return new Response(JSON.stringify({ error: "Failed to upload PDF", details: String(uploadErr) }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -184,7 +164,7 @@ Deno.serve(async (req) => {
       await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath} WHERE id = ${invoiceId}`;
     }
 
-    console.log(`Updated invoice ${invoiceId} in ${orgId}/${environment} with PDF path: ${storagePath}`);
+    console.log(`Updated invoice ${invoiceId} in ${orgId}/${environment} with R2 path: ${storagePath}`);
 
     return new Response(
       JSON.stringify({

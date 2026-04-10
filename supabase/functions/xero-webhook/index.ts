@@ -1,5 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { uploadToR2 } from "../_shared/r2-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -141,22 +141,15 @@ async function uploadPdfToStorage(
   pdfBytes: Uint8Array,
   invoiceNumber: string,
 ): Promise<string | null> {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceKey);
-
   const storagePath = `${localInvoiceId}/invoice.pdf`;
-  const blob = new Blob([pdfBytes], { type: "application/pdf" });
 
-  const { error } = await supabase.storage
-    .from("invoice-pdfs")
-    .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
-
-  if (error) {
-    console.error(`xero-webhook: Failed to upload PDF for ${invoiceNumber}:`, error.message);
+  try {
+    await uploadToR2(storagePath, pdfBytes, "application/pdf");
+    return storagePath;
+  } catch (err) {
+    console.error(`xero-webhook: Failed to upload PDF for ${invoiceNumber}:`, err);
     return null;
   }
-  return storagePath;
 }
 
 Deno.serve(async (req) => {

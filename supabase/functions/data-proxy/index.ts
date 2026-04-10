@@ -61,6 +61,28 @@ function toPgValue(key: string, v: unknown): unknown {
   return v;
 }
 
+function sanitizeStr(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, "")
+    .replace(/javascript:/gi, "")
+    .replace(/on\w+\s*=/gi, "")
+    .trim();
+}
+
+function sanitizeValue(v: unknown): unknown {
+  if (v === null || v === undefined) return v;
+  if (typeof v === "string") return sanitizeStr(v);
+  if (Array.isArray(v)) return v.map(sanitizeValue);
+  if (typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      out[k] = sanitizeValue(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 function safeSelect(select: string): string {
   if (!select || select === "*") return "*";
   return select.split(",").map(s => safeName(s.trim())).join(", ");
@@ -144,7 +166,8 @@ Deno.serve(async (req) => {
 
       // Strip tenant fields that no longer exist in NeonDB tables
       const { org_id: _o, environment: _e, ...cleanRow } = row;
-      const entries = Object.entries(cleanRow);
+      const sanitizedRow = sanitizeValue(cleanRow) as Record<string, unknown>;
+      const entries = Object.entries(sanitizedRow);
       const keys = entries.map(([k]) => safeName(k));
       const values = entries.map(([k, v]) => toPgValue(k, v));
       const placeholders = values.map((_, i) => `$${i + 1}`);
@@ -160,10 +183,11 @@ Deno.serve(async (req) => {
       if (!updates || typeof updates !== "object") return err(400, "Missing updates");
 
       const { org_id: _o2, environment: _e2, ...cleanUpdates } = updates;
+      const sanitizedUpdates = sanitizeValue(cleanUpdates) as Record<string, unknown>;
       const params: unknown[] = [];
       const setClauses: string[] = [];
 
-      for (const [key, value] of Object.entries(cleanUpdates)) {
+      for (const [key, value] of Object.entries(sanitizedUpdates)) {
         params.push(toPgValue(key, value));
         setClauses.push(`${safeName(key)} = $${params.length}`);
       }
@@ -206,7 +230,8 @@ Deno.serve(async (req) => {
       if (!row || !conflictKey) return err(400, "Missing row or conflictKey");
 
       const { org_id: _o3, environment: _e3, ...cleanRow } = row;
-      const entries = Object.entries(cleanRow);
+      const sanitizedRow = sanitizeValue(cleanRow) as Record<string, unknown>;
+      const entries = Object.entries(sanitizedRow);
       const keys = entries.map(([k]) => k);
       const vals = entries.map(([k, v]) => toPgValue(k, v));
       const safeCK = safeName(conflictKey);
