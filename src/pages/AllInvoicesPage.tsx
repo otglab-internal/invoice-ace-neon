@@ -250,7 +250,7 @@ const AllInvoicesPage: React.FC = () => {
                         onClick={() => handleViewPdf(inv)}
                         disabled={loadingPdf === inv.id}
                       >
-                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "…" : "PDF"}
+                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "…" : "INV PDF"}
                       </Button>
                     )}
                     {canAmendInvoice(inv) && (

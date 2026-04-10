@@ -214,7 +214,7 @@ const DashboardPage: React.FC = () => {
                         onClick={() => handleViewPdf(inv)}
                         disabled={loadingPdf === inv.id}
                       >
-                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "PDF"}
+                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "INV PDF"}
                       </Button>
                     )}
                     {canAmendInvoice(inv) && (
