@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
+import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
+import { useBranding } from "@/hooks/use-branding";
 
 interface Invoice {
   id: string;
