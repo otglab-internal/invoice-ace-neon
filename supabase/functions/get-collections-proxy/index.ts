@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const environment = url.searchParams.get("environment") || "production";
     const orgId = url.searchParams.get("org_id") || "";
     const action = url.searchParams.get("action") || "get";
-    const name = url.searchParams.get("name") || "";
+    const name = url.searchParams.get("name") || "centre";
 
     // Resolve API key based on org + environment
     const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
