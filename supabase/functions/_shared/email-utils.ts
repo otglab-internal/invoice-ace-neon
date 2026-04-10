@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { SMTPClient } from "npm:emailjs@4.0.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,21 +45,18 @@ export async function getSandboxTestEmail(sql: ReturnType<typeof neon>): Promise
 }
 
 export async function getApproverEmails(sql: ReturnType<typeof neon>, centreLocations: string[]): Promise<string[]> {
-  // Get all staff with 'approver' tag
   const approvers = await sql`
     SELECT system_id, centre_locations, user_role
     FROM staff_centre_assignments
     WHERE 'approver' = ANY(tags)
   `;
 
-  // Filter approvers: management/admin have global scope, centre users need location match
   const matchingIds: string[] = [];
   for (const a of approvers) {
     const role = (a.user_role || "").toLowerCase();
     if (role === "admin" || role === "management") {
       matchingIds.push(a.system_id);
     } else {
-      // Check location overlap
       const aLocations: string[] = a.centre_locations || [];
       if (centreLocations.some((loc) => aLocations.includes(loc))) {
         matchingIds.push(a.system_id);
@@ -66,7 +64,6 @@ export async function getApproverEmails(sql: ReturnType<typeof neon>, centreLoca
     }
   }
 
-  // system_id is the email for this system
   return matchingIds;
 }
 
@@ -76,113 +73,26 @@ export async function sendEmailViaSMTP(
   subject: string,
   htmlBody: string
 ): Promise<void> {
-  // Use a simple HTTPS-based email sending approach via the SMTP relay
-  // Since Deno doesn't have native SMTP, we'll use a fetch-based approach
-  // with a basic email API format
-  
-  // Construct a basic email payload and send via SMTP2GO or similar relay
-  // For now, we log and use the Supabase edge function HTTP approach
-  
-  // Build a basic SMTP payload using base64 encoding for AUTH
-  const encoder = new TextEncoder();
-  
+  const client = new SMTPClient({
+    user: config.user,
+    password: config.pass,
+    host: config.host,
+    port: config.port,
+    tls: config.port === 465,
+    ssl: config.port === 465,
+  });
+
   for (const recipient of to) {
     try {
-      // Use a TCP connection to send SMTP (Deno supports this)
-      const conn = await Deno.connect({
-        hostname: config.host,
-        port: config.port,
+      await client.sendAsync({
+        from: `${config.from_name} <${config.from_email}>`,
+        to: recipient,
+        subject,
+        attachment: [{ data: htmlBody, alternative: true }],
       });
-
-      const write = async (msg: string) => {
-        await conn.write(encoder.encode(msg + "\r\n"));
-      };
-
-      const read = async (): Promise<string> => {
-        const buf = new Uint8Array(1024);
-        const n = await conn.read(buf);
-        return new TextDecoder().decode(buf.subarray(0, n || 0));
-      };
-
-      await read(); // greeting
-      await write(`EHLO localhost`);
-      await read();
-      
-      // STARTTLS if port 587
-      if (config.port === 587) {
-        await write(`STARTTLS`);
-        await read();
-        const tlsConn = await Deno.startTls(conn, { hostname: config.host });
-        
-        const tlsWrite = async (msg: string) => {
-          await tlsConn.write(encoder.encode(msg + "\r\n"));
-        };
-        const tlsRead = async (): Promise<string> => {
-          const buf = new Uint8Array(1024);
-          const n = await tlsConn.read(buf);
-          return new TextDecoder().decode(buf.subarray(0, n || 0));
-        };
-
-        await tlsWrite(`EHLO localhost`);
-        await tlsRead();
-        
-        // AUTH LOGIN
-        await tlsWrite(`AUTH LOGIN`);
-        await tlsRead();
-        await tlsWrite(btoa(config.user));
-        await tlsRead();
-        await tlsWrite(btoa(config.pass));
-        await tlsRead();
-
-        await tlsWrite(`MAIL FROM:<${config.from_email}>`);
-        await tlsRead();
-        await tlsWrite(`RCPT TO:<${recipient}>`);
-        await tlsRead();
-        await tlsWrite(`DATA`);
-        await tlsRead();
-        await tlsWrite(
-          `From: ${config.from_name} <${config.from_email}>\r\n` +
-          `To: ${recipient}\r\n` +
-          `Subject: ${subject}\r\n` +
-          `MIME-Version: 1.0\r\n` +
-          `Content-Type: text/html; charset=utf-8\r\n` +
-          `\r\n` +
-          htmlBody + `\r\n.`
-        );
-        await tlsRead();
-        await tlsWrite(`QUIT`);
-        tlsConn.close();
-      } else {
-        // Plain or port 465 (SSL)
-        // AUTH LOGIN
-        await write(`AUTH LOGIN`);
-        await read();
-        await write(btoa(config.user));
-        await read();
-        await write(btoa(config.pass));
-        await read();
-
-        await write(`MAIL FROM:<${config.from_email}>`);
-        await read();
-        await write(`RCPT TO:<${recipient}>`);
-        await read();
-        await write(`DATA`);
-        await read();
-        await write(
-          `From: ${config.from_name} <${config.from_email}>\r\n` +
-          `To: ${recipient}\r\n` +
-          `Subject: ${subject}\r\n` +
-          `MIME-Version: 1.0\r\n` +
-          `Content-Type: text/html; charset=utf-8\r\n` +
-          `\r\n` +
-          htmlBody + `\r\n.`
-        );
-        await read();
-        await write(`QUIT`);
-        conn.close();
-      }
     } catch (err) {
       console.error(`Failed to send email to ${recipient}:`, err);
+      throw err;
     }
   }
 }
