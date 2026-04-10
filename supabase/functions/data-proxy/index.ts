@@ -183,10 +183,11 @@ Deno.serve(async (req) => {
       if (!updates || typeof updates !== "object") return err(400, "Missing updates");
 
       const { org_id: _o2, environment: _e2, ...cleanUpdates } = updates;
+      const sanitizedUpdates = sanitizeValue(cleanUpdates) as Record<string, unknown>;
       const params: unknown[] = [];
       const setClauses: string[] = [];
 
-      for (const [key, value] of Object.entries(cleanUpdates)) {
+      for (const [key, value] of Object.entries(sanitizedUpdates)) {
         params.push(toPgValue(key, value));
         setClauses.push(`${safeName(key)} = $${params.length}`);
       }
