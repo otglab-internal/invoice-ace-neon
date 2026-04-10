@@ -206,6 +206,9 @@ const AllStaffPage: React.FC = () => {
       })
     );
 
+    const performerName = user ? `${user.firstName} ${user.lastName}` : "";
+    const performerId = systemId || "";
+    await logActivity("staff_assignment_updated", "staff", performerId, performerName, { staff: `${row.firstName} ${row.lastName}`, ...updates });
     toast.success(`Updated ${row.firstName} ${row.lastName}`);
     setSaving(null);
   };
