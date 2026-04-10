@@ -35,6 +35,7 @@ function getDb(req: Request) {
 const ALLOWED_TABLES = new Set([
   "invoices", "invoice_templates", "invoice_logs",
   "staff_centre_assignments", "user_approval_flags", "global_config",
+  "activity_logs",
 ]);
 
 function safeName(name: string): string {
