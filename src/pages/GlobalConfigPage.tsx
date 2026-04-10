@@ -93,6 +93,7 @@ const GlobalConfigPage: React.FC = () => {
         setTestEmailError(errMsg);
         toast({ title: "Failed to send test email", description: data.error, variant: "destructive" });
       } else {
+        await logActivity("test_email_sent", "email", performerId, performerName, { to: testEmailTo });
         toast({ title: "Test email sent!", description: `Sent to ${testEmailTo}` });
         setTestEmailError(null);
       }
