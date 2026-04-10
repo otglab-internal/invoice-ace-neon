@@ -2,13 +2,15 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Eye, Pencil, Search, Filter } from "lucide-react";
+import { FileText, Eye, Pencil, Search, Filter, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
+import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
+import { useBranding } from "@/hooks/use-branding";
 
 interface Invoice {
   id: string;
@@ -58,8 +60,10 @@ const AllInvoicesPage: React.FC = () => {
   const [currency, setCurrency] = useState("RM");
   const [amendInvoice, setAmendInvoice] = useState<Invoice | null>(null);
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
+  const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { logoUrl } = useBranding();
 
   const isAdmin = permissions.isSystemAdmin;
   const isCentre = role === "centre";
@@ -131,6 +135,27 @@ const AllInvoicesPage: React.FC = () => {
       setLoadingPdf(null);
     }
   }, []);
+
+  const handleDownloadReceipt = useCallback(async (inv: Invoice) => {
+    setLoadingReceipt(inv.id);
+    try {
+      await generateReceiptPdf({
+        invoiceNumber: inv.invoice_number,
+        contactName: inv.contact_name,
+        invoiceDate: inv.invoice_date,
+        reference: inv.reference,
+        total: inv.total,
+        lineItems: inv.line_items,
+        submittedByName: inv.submitted_by_name,
+        currency,
+        logoUrl,
+      });
+    } catch {
+      toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
+    } finally {
+      setLoadingReceipt(null);
+    }
+  }, [currency, logoUrl]);
 
   const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
@@ -256,6 +281,17 @@ const AllInvoicesPage: React.FC = () => {
                         disabled={loadingPdf === inv.id}
                       >
                         <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "…" : "INV PDF"}
+                      </Button>
+                    )}
+                    {inv.status === "paid" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 gap-1 text-xs"
+                        onClick={() => handleDownloadReceipt(inv)}
+                        disabled={loadingReceipt === inv.id}
+                      >
+                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt"}
                       </Button>
                     )}
                     {canAmendInvoice(inv) && (
