@@ -152,6 +152,7 @@ const GlobalConfigPage: React.FC = () => {
         logoUrl: config["logo_url"]?.trim() || null,
         faviconUrl: config["favicon_url"]?.trim() || null,
       });
+      await logActivity("config_saved", "config", performerId, performerName, { keys: allKeys });
       toast({ title: "Configuration saved" });
       await checkXeroStatus();
     } catch (err: any) {
@@ -187,6 +188,7 @@ const GlobalConfigPage: React.FC = () => {
         headers: getXeroHeaders(),
       });
       setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
+      await logActivity("xero_disconnected", "config", performerId, performerName);
       toast({ title: "Xero disconnected" });
     } catch {
       toast({ title: "Failed to disconnect Xero", variant: "destructive" });
@@ -202,6 +204,7 @@ const GlobalConfigPage: React.FC = () => {
         const { error } = await neonDelete(table, {});
         if (error) throw new Error(`Failed to clear ${table}: ${error.message}`);
       }
+      await logActivity("data_cleared", "system", performerId, performerName, { tables: ["invoice_logs", "invoices", "user_approval_flags"] });
       toast({ title: "All data cleared", description: "Invoices, logs, and approval flags have been deleted." });
     } catch (err: any) {
       toast({ title: "Failed to clear data", description: err.message, variant: "destructive" });
