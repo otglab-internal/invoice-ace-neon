@@ -403,7 +403,7 @@ const GlobalConfigPage: React.FC = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will permanently delete <strong>all invoices, logs, staff assignments, approval flags, and templates</strong> for the current environment. This action cannot be undone.
+                              This will permanently delete <strong>all invoices, logs, and approval flags</strong> for the current environment. Templates and staff assignments will be preserved. This action cannot be undone.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
