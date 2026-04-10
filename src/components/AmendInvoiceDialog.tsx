@@ -88,13 +88,13 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
     setSubmitting(true);
 
     try {
-      const amendmentData = {
+      const amendmentData = sanitizeObject({
         contact_name: contactName,
         contact_id: invoice.contact_id,
         reference,
         line_items: lineItems,
         total,
-      };
+      });
 
       const { error } = await neonUpdate(
         "invoices",
