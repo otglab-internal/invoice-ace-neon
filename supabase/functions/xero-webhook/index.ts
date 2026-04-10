@@ -353,32 +353,63 @@ Deno.serve(async (req) => {
         );
         if (invoiceRows.length > 0) {
           const inv = invoiceRows[0];
-          const requesterEmail = inv.submitted_by_system_id as string;
+          const systemId = inv.submitted_by_system_id as string;
           const smtpConfig = await getSmtpConfig(sql);
 
-          if (smtpConfig && requesterEmail) {
-            // Check sandbox override
-            const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
-            const toEmail = sandboxEmail || requesterEmail;
+          if (smtpConfig && systemId) {
+            // Look up the requester's email from staff_centre_assignments
+            // The system_id is a UUID, not an email — we need to find the staff record
+            // that has a matching system_id and check if it looks like an email,
+            // otherwise fall back to checking if system_id itself is an email
+            let requesterEmail: string | null = null;
 
-            const htmlBody = `
-              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-                <h2 style="color:#16a34a;">Payment Received</h2>
-                <p style="color:#6b7280;">Great news! A payment has been recorded for an invoice you submitted.</p>
-                <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-                  <tr><td style="padding:4px 0;color:#6b7280;">Invoice #:</td><td style="padding:4px 0;font-weight:600;">${xeroInvoiceNumber}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
-                  <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
-                </table>
-                <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
-              </div>
-            `;
+            // Check if system_id is already an email
+            if (systemId.includes("@")) {
+              requesterEmail = systemId;
+            } else {
+              // Look up email from staff table — system_id might map to a user
+              // whose email we can find via the auth system or staff records
+              const staffRows = await sql.query(
+                `SELECT system_id, user_name FROM staff_centre_assignments WHERE system_id = $1 LIMIT 1`,
+                [systemId],
+              );
+              if (staffRows.length > 0) {
+                // system_id in staff table is typically the user's identifier
+                // For now, use the submitted_by_name if it looks like an email
+                const name = inv.submitted_by_name as string;
+                if (name && name.includes("@")) {
+                  requesterEmail = name;
+                }
+              }
+              console.log(`xero-webhook: system_id=${systemId} is not an email. Staff lookup found: ${staffRows.length > 0 ? 'yes' : 'no'}. requesterEmail=${requesterEmail || 'none'}`);
+            }
 
-            await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
-            console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
+            if (!requesterEmail) {
+              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email notification.`);
+            } else {
+              // Check sandbox override
+              const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+              const toEmail = sandboxEmail || requesterEmail;
+
+              const htmlBody = `
+                <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                  <h2 style="color:#16a34a;">Payment Received</h2>
+                  <p style="color:#6b7280;">Great news! A payment has been recorded for an invoice you submitted.</p>
+                  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                    <tr><td style="padding:4px 0;color:#6b7280;">Invoice #:</td><td style="padding:4px 0;font-weight:600;">${xeroInvoiceNumber}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
+                  </table>
+                  <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
+                </div>
+              `;
+
+              await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
+              console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
+            }
           }
         }
       } catch (emailErr) {
