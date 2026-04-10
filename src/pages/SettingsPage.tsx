@@ -92,6 +92,7 @@ const SettingsPage: React.FC = () => {
         setUserFlags((prev) =>
           prev.map((f) => (f.id === existing.id ? { ...f, requires_approval: true } : f))
         );
+        await logActivity("user_flagged_approval", "settings", performerId, performerName, { user: staff.user_name });
         toast.success(`${staff.user_name} flagged for approval`);
       }
     } else {
@@ -104,6 +105,7 @@ const SettingsPage: React.FC = () => {
       if (error) {
         toast.error("Failed to flag user");
       } else {
+        await logActivity("user_flagged_approval", "settings", performerId, performerName, { user: staff.user_name });
         toast.success(`${staff.user_name} flagged for approval`);
         fetchFlags();
       }
@@ -122,6 +124,7 @@ const SettingsPage: React.FC = () => {
       setUserFlags((prev) =>
         prev.map((f) => (f.id === flag.id ? { ...f, requires_approval: false } : f))
       );
+      await logActivity("user_unflagged_approval", "settings", performerId, performerName, { user: flag.user_name || flag.system_id });
       toast.success(`${flag.user_name || flag.system_id} unflagged`);
     }
   };
@@ -139,6 +142,7 @@ const SettingsPage: React.FC = () => {
       setTemplates((prev) =>
         prev.map((t) => (t.id === template.id ? { ...t, requires_approval: flag } : t))
       );
+      await logActivity(flag ? "template_flagged_approval" : "template_unflagged_approval", "settings", performerId, performerName, { template: template.name });
       toast.success(`"${template.name}" ${flag ? "flagged" : "unflagged"}`);
     }
     setTemplateComboOpen(false);
@@ -155,6 +159,7 @@ const SettingsPage: React.FC = () => {
       toast.error("Failed to update free text flag");
     } else {
       setFreeTextFlagged(flag);
+      await logActivity(flag ? "freetext_flagged_approval" : "freetext_unflagged_approval", "settings", performerId, performerName);
       toast.success(`Free Text ${flag ? "flagged" : "unflagged"} for approval`);
     }
     setTemplateComboOpen(false);
