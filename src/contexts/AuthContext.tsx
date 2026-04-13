@@ -152,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userId = data.user.id || data.system_id || null;
     const sysId = data.system_id || userId;
+    console.log("[Auth] data.user.email:", data.user?.email, "| pendingEmail:", pendingEmail);
     const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
     setUser(authUser);
