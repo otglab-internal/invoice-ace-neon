@@ -219,11 +219,56 @@ Deno.serve(async (req) => {
       }
     }
 
-    // send-approval-email — DISABLED (approval emails no longer sent)
+    // send-approval-email — re-enabled, sends to configured approval_notice_emails
     if (action === "send-approval-email") {
-      return new Response(JSON.stringify({ success: true, message: "Approval emails are disabled" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { invoice } = body;
+      const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
+      const environment = req.headers.get("x-environment") || "production";
+      const dbSql = getDb(req, orgId);
+
+      try {
+        const approvalNoticeRows = await dbSql`SELECT value FROM global_config WHERE key = 'approval_notice_emails' LIMIT 1`;
+        const approvalNoticeEmails = (approvalNoticeRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+
+        if (approvalNoticeEmails.length === 0) {
+          return new Response(JSON.stringify({ success: true, message: "No approval notice emails configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const smtpConfig = await getSmtpConfig(dbSql);
+        if (!smtpConfig) {
+          return new Response(JSON.stringify({ success: true, message: "SMTP not configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(dbSql) : null;
+        const recipients = sandboxEmail ? [sandboxEmail] : approvalNoticeEmails;
+
+        const htmlBody = buildApprovalEmailHtml(invoice);
+        await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval – ${invoice.contact_name || "N/A"}`, htmlBody);
+
+        await dbSql`
+          INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+          VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+            type: 'approval_notice',
+            recipients,
+            invoice_id: invoice.id,
+            contact_name: invoice.contact_name,
+          })}::jsonb)
+        `;
+
+        return new Response(JSON.stringify({ success: true, sent_to: recipients }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (emailErr) {
+        console.error("invoices: send-approval-email error:", emailErr);
+        return new Response(JSON.stringify({ error: String(emailErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // All other actions require authentication
