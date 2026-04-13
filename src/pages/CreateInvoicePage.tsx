@@ -295,6 +295,8 @@ const CreateInvoicePage: React.FC = () => {
 
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
 
+      console.log("[CreateInvoice] userEmail before submit:", userEmail, "| normalized:", normalizeSubmittedEmail(userEmail));
+
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
         contact_name: contactName,
