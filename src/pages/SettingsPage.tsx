@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate, neonUpsert } from "@/lib/neon-client";
 import { logActivity } from "@/lib/activity-logger";
-import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
+import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign, Mail } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const CURRENCIES = [
