@@ -252,10 +252,18 @@ Deno.serve(async (req) => {
 
       const xeroStatus = (xeroInvoice.Status as string || "").toUpperCase();
       const xeroInvoiceNumber = xeroInvoice.InvoiceNumber as string || "";
+      const amountPaid = Number(xeroInvoice.AmountPaid ?? 0);
+      const amountDue = Number(xeroInvoice.AmountDue ?? 0);
 
-      console.log(`xero-webhook: Xero invoice ${xeroInvoiceNumber} status: ${xeroStatus}`);
+      console.log(`xero-webhook: Xero invoice ${xeroInvoiceNumber} status: ${xeroStatus}, amountPaid: ${amountPaid}, amountDue: ${amountDue}`);
 
-      if (xeroStatus !== "PAID") {
+      // Determine local status: paid, partially_paid, or skip
+      let newLocalStatus: string | null = null;
+      if (xeroStatus === "PAID") {
+        newLocalStatus = "paid";
+      } else if (amountPaid > 0 && amountDue > 0) {
+        newLocalStatus = "partially_paid";
+      } else {
         continue;
       }
 
