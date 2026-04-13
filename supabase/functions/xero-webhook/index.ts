@@ -305,36 +305,31 @@ Deno.serve(async (req) => {
         console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
       }
 
-      const updateFields = newPdfPath
-        ? `status = 'paid',
+      // For fully paid, clear amendment fields; for partial, just update status
+      const clearAmendments = newLocalStatus === "paid";
+      const amendmentClause = clearAmendments
+        ? `,
            amendment_status = NULL,
            amendment_data = NULL,
            amendment_note = NULL,
            amendment_requested_by = NULL,
            amendment_requested_by_name = NULL,
-           amendment_requested_at = NULL,
-           invoice_pdf_url = $2`
-        : `status = 'paid',
-           amendment_status = NULL,
-           amendment_data = NULL,
-           amendment_note = NULL,
-           amendment_requested_by = NULL,
-           amendment_requested_by_name = NULL,
-           amendment_requested_at = NULL`;
+           amendment_requested_at = NULL`
+        : "";
 
       if (newPdfPath) {
         await sql.query(
-          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
-          [localInvoice.id, newPdfPath],
+          `UPDATE invoices SET status = $2, invoice_pdf_url = $3${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus, newPdfPath],
         );
       } else {
         await sql.query(
-          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
-          [localInvoice.id],
+          `UPDATE invoices SET status = $2${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus],
         );
       }
 
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid${newPdfPath ? " + PDF updated" : ""}`);
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}`);
 
       try {
         await sql.query(
@@ -342,11 +337,11 @@ Deno.serve(async (req) => {
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             localInvoice.id,
-            "status_changed_to_paid",
+            `status_changed_to_${newLocalStatus}`,
             "xero-webhook",
             "Xero Webhook",
             "webhook",
-            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath }),
+            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath, new_status: newLocalStatus }),
           ],
         );
       } catch (logErr) {
