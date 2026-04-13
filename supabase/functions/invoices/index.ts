@@ -271,6 +271,66 @@ Deno.serve(async (req) => {
       }
     }
 
+    // send-approved-email — sends to configured approved_invoice_emails after approval
+    if (action === "send-approved-email") {
+      const { invoice } = body;
+      const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
+      const environment = req.headers.get("x-environment") || "production";
+      const dbSql = getDb(req, orgId);
+
+      console.log(`invoices: [SEND-APPROVED-EMAIL] Starting for invoice ${invoice?.id}, org=${orgId}, env=${environment}`);
+
+      try {
+        const approvedEmailRows = await dbSql`SELECT value FROM global_config WHERE key = 'approved_invoice_emails' LIMIT 1`;
+        console.log(`invoices: [SEND-APPROVED-EMAIL] approved_invoice_emails config:`, JSON.stringify(approvedEmailRows));
+        const approvedEmails = (approvedEmailRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+
+        if (approvedEmails.length === 0) {
+          console.warn(`invoices: [SEND-APPROVED-EMAIL] No approved_invoice_emails configured`);
+          return new Response(JSON.stringify({ success: true, message: "No approved invoice emails configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const smtpConfig = await getSmtpConfig(dbSql);
+        console.log(`invoices: [SEND-APPROVED-EMAIL] SMTP config found: ${smtpConfig ? 'YES' : 'NO'}`);
+        if (!smtpConfig) {
+          return new Response(JSON.stringify({ success: true, message: "SMTP not configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(dbSql) : null;
+        const recipients = sandboxEmail ? [sandboxEmail] : approvedEmails;
+        console.log(`invoices: [SEND-APPROVED-EMAIL] Sending to:`, recipients);
+
+        const htmlBody = buildApprovedEmailHtml(invoice);
+        await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${invoice.contact_name || "N/A"}`, htmlBody);
+        console.log(`invoices: [SEND-APPROVED-EMAIL] Email sent successfully`);
+
+        await dbSql`
+          INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details, org_id, environment)
+          VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+            type: 'approved_invoice',
+            recipients,
+            invoice_id: invoice.id,
+            contact_name: invoice.contact_name,
+            total: invoice.total,
+          })}::jsonb, ${orgId}, ${environment})
+        `;
+
+        return new Response(JSON.stringify({ success: true, sent_to: recipients }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (emailErr) {
+        console.error("invoices: [SEND-APPROVED-EMAIL] error:", emailErr);
+        return new Response(JSON.stringify({ error: String(emailErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // All other actions require authentication
     const claims = await authenticate(req);
     if (!claims) {
