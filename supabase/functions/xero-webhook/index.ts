@@ -409,6 +409,7 @@ Deno.serve(async (req) => {
           } else if (!requesterEmail) {
               console.warn(`xero-webhook: No submitted_by_email stored for invoice ${xeroInvoiceNumber}. Skipping payment email.`);
           }
+        }
       } catch (emailErr) {
         console.error(`xero-webhook: Failed to send payment email for ${xeroInvoiceNumber}:`, emailErr);
       }
