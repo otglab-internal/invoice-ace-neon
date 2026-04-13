@@ -213,3 +213,46 @@ export function buildApprovalEmailHtml(invoice: Record<string, any>): string {
     </div>
   `;
 }
+
+export function buildApprovedEmailHtml(invoice: Record<string, any>): string {
+  const lineItemsHtml = (invoice.line_items || [])
+    .map(
+      (li: any) =>
+        `<tr>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${li.description || ""}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">${li.quantity}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${Number(li.cost).toFixed(2)}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${(Number(li.quantity) * Number(li.cost)).toFixed(2)}</td>
+        </tr>`
+    )
+    .join("");
+
+  return `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <h2 style="color:#16a34a;">Invoice Approved</h2>
+      <p style="color:#6b7280;">An invoice has been approved and is being processed.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:4px 0;color:#6b7280;">Invoice ID:</td><td style="padding:4px 0;font-weight:600;">${invoice.invoice_number || invoice.id?.slice(0, 8).toUpperCase() || "N/A"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${invoice.contact_name || "N/A"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${invoice.invoice_date || "N/A"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${invoice.reference || "—"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Submitted By:</td><td style="padding:4px 0;">${invoice.submitted_by_name || "N/A"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(invoice.total).toFixed(2)}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">APPROVED</span></td></tr>
+      </table>
+      <h3 style="color:#1a1a1a;margin-top:16px;">Line Items</h3>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f3f4f6;">
+            <th style="padding:8px;border:1px solid #e5e7eb;text-align:left;">Description</th>
+            <th style="padding:8px;border:1px solid #e5e7eb;text-align:center;">Qty</th>
+            <th style="padding:8px;border:1px solid #e5e7eb;text-align:right;">Cost</th>
+            <th style="padding:8px;border:1px solid #e5e7eb;text-align:right;">Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${lineItemsHtml}</tbody>
+      </table>
+      <p style="color:#6b7280;margin-top:16px;font-size:12px;">This invoice has been approved and will be pushed to Xero for processing.</p>
+    </div>
+  `;
+}

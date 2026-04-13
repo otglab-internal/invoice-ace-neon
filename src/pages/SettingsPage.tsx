@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { neonQuery, neonInsert, neonUpdate, neonUpsert } from "@/lib/neon-client";
 import { logActivity } from "@/lib/activity-logger";
-import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign } from "lucide-react";
+import { ShieldAlert, ShieldCheck, X, ChevronsUpDown, Check, Zap, DollarSign, Mail } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const CURRENCIES = [
@@ -45,6 +46,9 @@ const SettingsPage: React.FC = () => {
   const [autoMode, setAutoMode] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currency, setCurrency] = useState("RM");
+  const [approvalNoticeEmails, setApprovalNoticeEmails] = useState("");
+  const [approvedInvoiceEmails, setApprovedInvoiceEmails] = useState("");
+  const [savingEmails, setSavingEmails] = useState(false);
   const FREETEXT_ID = "__freetext__";
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
 
@@ -62,18 +66,22 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes, approvalEmailsRes, approvedEmailsRes] = await Promise.all([
       neonQuery("user_approval_flags", { order: { column: "user_name", ascending: true } }),
       neonQuery("invoice_templates", { select: "id,name,requires_approval", order: { column: "name", ascending: true } }),
       neonQuery("staff_centre_assignments", { select: "system_id,user_name", order: { column: "user_name", ascending: true } }),
       neonQuery("global_config", { select: "value", filters: { key: "freetext_requires_approval" }, maybeSingle: true }),
       neonQuery("global_config", { select: "value", filters: { key: "currency" }, maybeSingle: true }),
+      neonQuery("global_config", { select: "value", filters: { key: "approval_notice_emails" }, maybeSingle: true }),
+      neonQuery("global_config", { select: "value", filters: { key: "approved_invoice_emails" }, maybeSingle: true }),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
     if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
     setFreeTextFlagged((freeTextRes.data as any)?.value === "true");
     if ((currencyRes.data as any)?.value) setCurrency((currencyRes.data as any).value);
+    if ((approvalEmailsRes.data as any)?.value) setApprovalNoticeEmails((approvalEmailsRes.data as any).value);
+    if ((approvedEmailsRes.data as any)?.value) setApprovedInvoiceEmails((approvedEmailsRes.data as any).value);
     setLoadingFlags(false);
   };
 
@@ -183,6 +191,24 @@ const SettingsPage: React.FC = () => {
       await logActivity("currency_changed", "settings", performerId, performerName, { currency: val });
       toast.success(`Currency set to ${val}`);
     }
+  };
+
+  const saveNotificationEmails = async () => {
+    setSavingEmails(true);
+    const [res1, res2] = await Promise.all([
+      neonUpsert("global_config", { key: "approval_notice_emails", value: approvalNoticeEmails.trim(), updated_at: nowGMT8() }, "key"),
+      neonUpsert("global_config", { key: "approved_invoice_emails", value: approvedInvoiceEmails.trim(), updated_at: nowGMT8() }, "key"),
+    ]);
+    if (res1.error || res2.error) {
+      toast.error("Failed to save notification emails");
+    } else {
+      await logActivity("notification_emails_updated", "settings", performerId, performerName, {
+        approval_notice_emails: approvalNoticeEmails.trim(),
+        approved_invoice_emails: approvedInvoiceEmails.trim(),
+      });
+      toast.success("Notification emails saved");
+    }
+    setSavingEmails(false);
   };
 
   const handleSave = async () => {
@@ -352,6 +378,49 @@ const SettingsPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Email Notifications */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold font-display text-foreground">Email Notifications</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Configure email addresses to receive notifications at different stages of the invoice lifecycle. Use commas to separate multiple addresses.
+            </p>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Approval Notice Emails</Label>
+              <p className="text-xs text-muted-foreground">
+                These addresses will be notified when an invoice is raised and requires approval.
+              </p>
+              <Textarea
+                placeholder="approver1@company.com, approver2@company.com"
+                value={approvalNoticeEmails}
+                onChange={(e) => setApprovalNoticeEmails(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Approved Invoice Emails</Label>
+              <p className="text-xs text-muted-foreground">
+                These addresses will be notified when an invoice has been approved (manually or auto-approved).
+              </p>
+              <Textarea
+                placeholder="finance@company.com, manager@company.com"
+                value={approvedInvoiceEmails}
+                onChange={(e) => setApprovedInvoiceEmails(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            <Button onClick={saveNotificationEmails} disabled={savingEmails} size="sm">
+              {savingEmails ? "Saving..." : "Save Notification Emails"}
+            </Button>
           </div>
 
           {/* Currency */}

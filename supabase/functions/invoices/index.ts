@@ -1,5 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
-import { getSmtpConfig, getSandboxTestEmail, getApproverEmails, sendEmailViaSMTP, buildApprovalEmailHtml } from "../_shared/email-utils.ts";
+import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,7 +109,41 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
       `;
 
-      // Approval emails disabled — only paid notifications are sent (via xero-webhook)
+      // Send approval notice emails to configured addresses
+      if (created.requires_approval) {
+        try {
+          const approvalNoticeRows = await dbSql`SELECT value FROM global_config WHERE key = 'approval_notice_emails' LIMIT 1`;
+          const approvalNoticeEmails = (approvalNoticeRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+          
+          if (approvalNoticeEmails.length > 0) {
+            const smtpConfig = await getSmtpConfig(dbSql);
+            if (smtpConfig) {
+              // Sandbox override
+              const environment = req.headers.get("x-environment") || "production";
+              const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(dbSql) : null;
+              const recipients = sandboxEmail ? [sandboxEmail] : approvalNoticeEmails;
+              
+              const htmlBody = buildApprovalEmailHtml(created);
+              await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval – ${created.contact_name}`, htmlBody);
+              
+              // Log email sent
+              await dbSql`
+                INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+                VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+                  type: 'approval_notice',
+                  recipients,
+                  invoice_id: created.id,
+                  contact_name: created.contact_name,
+                  total: created.total,
+                })}::jsonb)
+              `;
+              console.log(`invoices: Approval notice email sent to ${recipients.join(", ")} for invoice ${created.id}`);
+            }
+          }
+        } catch (emailErr) {
+          console.error("invoices: Failed to send approval notice email:", emailErr);
+        }
+      }
 
       return new Response(JSON.stringify({
         success: true,
@@ -185,11 +219,56 @@ Deno.serve(async (req) => {
       }
     }
 
-    // send-approval-email — DISABLED (approval emails no longer sent)
+    // send-approval-email — re-enabled, sends to configured approval_notice_emails
     if (action === "send-approval-email") {
-      return new Response(JSON.stringify({ success: true, message: "Approval emails are disabled" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const { invoice } = body;
+      const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
+      const environment = req.headers.get("x-environment") || "production";
+      const dbSql = getDb(req, orgId);
+
+      try {
+        const approvalNoticeRows = await dbSql`SELECT value FROM global_config WHERE key = 'approval_notice_emails' LIMIT 1`;
+        const approvalNoticeEmails = (approvalNoticeRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+
+        if (approvalNoticeEmails.length === 0) {
+          return new Response(JSON.stringify({ success: true, message: "No approval notice emails configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const smtpConfig = await getSmtpConfig(dbSql);
+        if (!smtpConfig) {
+          return new Response(JSON.stringify({ success: true, message: "SMTP not configured" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(dbSql) : null;
+        const recipients = sandboxEmail ? [sandboxEmail] : approvalNoticeEmails;
+
+        const htmlBody = buildApprovalEmailHtml(invoice);
+        await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval – ${invoice.contact_name || "N/A"}`, htmlBody);
+
+        await dbSql`
+          INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+          VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+            type: 'approval_notice',
+            recipients,
+            invoice_id: invoice.id,
+            contact_name: invoice.contact_name,
+          })}::jsonb)
+        `;
+
+        return new Response(JSON.stringify({ success: true, sent_to: recipients }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (emailErr) {
+        console.error("invoices: send-approval-email error:", emailErr);
+        return new Response(JSON.stringify({ error: String(emailErr) }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // All other actions require authentication
@@ -291,6 +370,39 @@ Deno.serve(async (req) => {
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
         }
+      }
+
+      // Send approved invoice notification email
+      try {
+        const approvedEmailRows = await sql`SELECT value FROM global_config WHERE key = 'approved_invoice_emails' LIMIT 1`;
+        const approvedEmails = (approvedEmailRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+
+        if (approvedEmails.length > 0) {
+          const smtpConfig = await getSmtpConfig(sql);
+          if (smtpConfig) {
+            const environment = req.headers.get("x-environment") || "production";
+            const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+            const recipients = sandboxEmail ? [sandboxEmail] : approvedEmails;
+
+            const htmlBody = buildApprovedEmailHtml(approvedInvoice);
+            await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${approvedInvoice.contact_name || "N/A"}`, htmlBody);
+
+            await sql`
+              INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+              VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+                type: 'approved_invoice',
+                recipients,
+                invoice_id: approvedInvoice.id,
+                contact_name: approvedInvoice.contact_name,
+                total: approvedInvoice.total,
+                approved_by: userId,
+              })}::jsonb)
+            `;
+            console.log(`invoices: Approved invoice email sent to ${recipients.join(", ")} for invoice ${approvedInvoice.id}`);
+          }
+        }
+      } catch (emailErr) {
+        console.error("invoices: Failed to send approved invoice email:", emailErr);
       }
 
       return new Response(JSON.stringify({ invoice: approvedInvoice }), {
