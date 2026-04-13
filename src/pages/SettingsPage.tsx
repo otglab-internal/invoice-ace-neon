@@ -193,6 +193,24 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const saveNotificationEmails = async () => {
+    setSavingEmails(true);
+    const [res1, res2] = await Promise.all([
+      neonUpsert("global_config", { key: "approval_notice_emails", value: approvalNoticeEmails.trim(), updated_at: nowGMT8() }, "key"),
+      neonUpsert("global_config", { key: "approved_invoice_emails", value: approvedInvoiceEmails.trim(), updated_at: nowGMT8() }, "key"),
+    ]);
+    if (res1.error || res2.error) {
+      toast.error("Failed to save notification emails");
+    } else {
+      await logActivity("notification_emails_updated", "settings", performerId, performerName, {
+        approval_notice_emails: approvalNoticeEmails.trim(),
+        approved_invoice_emails: approvedInvoiceEmails.trim(),
+      });
+      toast.success("Notification emails saved");
+    }
+    setSavingEmails(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     await new Promise((r) => setTimeout(r, 600));
