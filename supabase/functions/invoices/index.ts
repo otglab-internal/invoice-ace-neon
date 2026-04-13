@@ -109,7 +109,41 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
       `;
 
-      // Approval emails disabled — only paid notifications are sent (via xero-webhook)
+      // Send approval notice emails to configured addresses
+      if (created.requires_approval) {
+        try {
+          const approvalNoticeRows = await dbSql`SELECT value FROM global_config WHERE key = 'approval_notice_emails' LIMIT 1`;
+          const approvalNoticeEmails = (approvalNoticeRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+          
+          if (approvalNoticeEmails.length > 0) {
+            const smtpConfig = await getSmtpConfig(dbSql);
+            if (smtpConfig) {
+              // Sandbox override
+              const environment = req.headers.get("x-environment") || "production";
+              const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(dbSql) : null;
+              const recipients = sandboxEmail ? [sandboxEmail] : approvalNoticeEmails;
+              
+              const htmlBody = buildApprovalEmailHtml(created);
+              await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Requires Approval – ${created.contact_name}`, htmlBody);
+              
+              // Log email sent
+              await dbSql`
+                INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+                VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+                  type: 'approval_notice',
+                  recipients,
+                  invoice_id: created.id,
+                  contact_name: created.contact_name,
+                  total: created.total,
+                })}::jsonb)
+              `;
+              console.log(`invoices: Approval notice email sent to ${recipients.join(", ")} for invoice ${created.id}`);
+            }
+          }
+        } catch (emailErr) {
+          console.error("invoices: Failed to send approval notice email:", emailErr);
+        }
+      }
 
       return new Response(JSON.stringify({
         success: true,
