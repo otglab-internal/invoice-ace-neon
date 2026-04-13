@@ -96,7 +96,7 @@ function isLineItemValid(item: LineItem, templates: Template[]): boolean {
 }
 
 const CreateInvoicePage: React.FC = () => {
-  const { user, systemId } = useAuth();
+  const { user, systemId, userEmail } = useAuth();
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -295,6 +295,7 @@ const CreateInvoicePage: React.FC = () => {
         total,
         submitted_by_system_id: systemId || "",
         submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+        submitted_by_email: userEmail || "",
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
