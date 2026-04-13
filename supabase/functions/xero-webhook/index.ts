@@ -421,6 +421,7 @@ Deno.serve(async (req) => {
       } catch (emailErr) {
         console.error(`xero-webhook: Failed to send payment email for ${xeroInvoiceNumber}:`, emailErr);
       }
+      } // end if newLocalStatus === "paid"
     }
 
     return new Response("", { status: 200 });
