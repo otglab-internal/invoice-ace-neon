@@ -361,7 +361,6 @@ Deno.serve(async (req) => {
           const smtpConfig = await getSmtpConfig(sql);
 
           if (smtpConfig && requesterEmail) {
-              // Check sandbox override
               const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
               const toEmail = sandboxEmail || requesterEmail;
 
@@ -407,9 +406,9 @@ Deno.serve(async (req) => {
               }
 
               console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
-            }
+          } else if (!requesterEmail) {
+              console.warn(`xero-webhook: No submitted_by_email stored for invoice ${xeroInvoiceNumber}. Skipping payment email.`);
           }
-        }
       } catch (emailErr) {
         console.error(`xero-webhook: Failed to send payment email for ${xeroInvoiceNumber}:`, emailErr);
       }
