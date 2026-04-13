@@ -373,19 +373,25 @@ Deno.serve(async (req) => {
       }
 
       // Send approved invoice notification email
+      console.log(`invoices: [APPROVE] Starting email notification flow for invoice ${approvedInvoice.id}`);
       try {
         const approvedEmailRows = await sql`SELECT value FROM global_config WHERE key = 'approved_invoice_emails' LIMIT 1`;
+        console.log(`invoices: [APPROVE] approved_invoice_emails config row:`, JSON.stringify(approvedEmailRows));
         const approvedEmails = (approvedEmailRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+        console.log(`invoices: [APPROVE] Parsed email recipients:`, approvedEmails);
 
         if (approvedEmails.length > 0) {
           const smtpConfig = await getSmtpConfig(sql);
+          console.log(`invoices: [APPROVE] SMTP config found: ${smtpConfig ? 'YES' : 'NO'}`, smtpConfig ? { host: smtpConfig.host, port: smtpConfig.port, from: smtpConfig.from_email } : null);
           if (smtpConfig) {
             const environment = req.headers.get("x-environment") || "production";
             const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
             const recipients = sandboxEmail ? [sandboxEmail] : approvedEmails;
+            console.log(`invoices: [APPROVE] Sending to recipients:`, recipients, `(env: ${environment}, sandbox override: ${sandboxEmail})`);
 
             const htmlBody = buildApprovedEmailHtml(approvedInvoice);
             await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${approvedInvoice.contact_name || "N/A"}`, htmlBody);
+            console.log(`invoices: [APPROVE] sendEmailViaSMTP completed successfully`);
 
             await sql`
               INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
@@ -398,11 +404,15 @@ Deno.serve(async (req) => {
                 approved_by: userId,
               })}::jsonb)
             `;
-            console.log(`invoices: Approved invoice email sent to ${recipients.join(", ")} for invoice ${approvedInvoice.id}`);
+            console.log(`invoices: [APPROVE] Email activity logged for invoice ${approvedInvoice.id}`);
+          } else {
+            console.warn(`invoices: [APPROVE] SMTP not configured — skipping email`);
           }
+        } else {
+          console.warn(`invoices: [APPROVE] No approved_invoice_emails configured — skipping email`);
         }
       } catch (emailErr) {
-        console.error("invoices: Failed to send approved invoice email:", emailErr);
+        console.error("invoices: [APPROVE] Failed to send approved invoice email:", emailErr);
       }
 
       return new Response(JSON.stringify({ invoice: approvedInvoice }), {
