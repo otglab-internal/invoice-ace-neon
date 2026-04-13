@@ -348,7 +348,8 @@ Deno.serve(async (req) => {
         console.error("xero-webhook: Failed to log status change:", logErr);
       }
 
-      // Send payment notification email to the invoice requester
+      // Send payment notification email only for fully paid invoices
+      if (newLocalStatus === "paid") {
       try {
         const invoiceRows = await sql.query(
           `SELECT submitted_by_system_id, submitted_by_name, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
