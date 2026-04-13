@@ -185,10 +185,13 @@ const ApprovalsPage: React.FC = () => {
       const invoice = invoices.find((i) => i.id === id);
       await logAction(id, "approved", { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null });
 
+      // Send "approved invoice" notification email
       try {
-        await apiClient.invoices("send-approval-email", { invoiceId: id });
+        await apiClient.invoices("send-approved-email", {
+          invoice: { ...invoice, status: "approved", approved_by: approvedBy, approved_at: approvedAt, approval_note: adjustmentNote || null },
+        });
       } catch (err) {
-        console.warn("Approval email failed:", err);
+        console.warn("Approved invoice email failed:", err);
       }
 
       let webhookDelivered = true;
