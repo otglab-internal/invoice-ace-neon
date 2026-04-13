@@ -17,6 +17,7 @@ interface AuthContextType {
   user: AuthUser | null;
   environment: string | null;
   systemId: string | null;
+  userEmail: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   role: AppRole;
