@@ -225,12 +225,14 @@ Deno.serve(async (req) => {
             amendment_requested_at TIMESTAMPTZ,
             amendment_note TEXT,
             invoice_pdf_url TEXT,
+            submitted_by_email TEXT,
             created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
         // Add columns that may be missing from older schemas
         await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`;
         await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`;
+        await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS submitted_by_email TEXT`;
         await sql`
           CREATE TABLE IF NOT EXISTS invoice_templates (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
