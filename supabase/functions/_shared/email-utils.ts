@@ -48,7 +48,8 @@ export async function getSandboxTestEmail(sql: ReturnType<typeof neon>): Promise
 }
 
 /**
- * Resolve an array of system_id UUIDs to email addresses via the Federation Gateway.
+ * Resolve an array of exact user IDs to email addresses via the Federation Gateway.
+ * Direct email addresses are passed through unchanged.
  */
 export async function resolveSystemIdsToEmails(
   systemIds: string[],
@@ -87,30 +88,15 @@ export async function resolveSystemIdsToEmails(
       const gwData = await gwRes.json();
       const users = gwData.data || [];
       for (const uuid of uuidsToResolve) {
-        // First pass: exact id match (highest priority)
-        let found = false;
         for (const u of users) {
           if (u.id === uuid && u.email) {
             result[uuid] = u.email;
             console.log(`email-utils: Resolved ${uuid} -> ${u.email} (id match)`);
-            found = true;
             break;
           }
         }
-        // Second pass: system_access match (fallback only)
-        if (!found) {
-          for (const u of users) {
-            const access: string[] = u.system_access || [];
-            if (access.includes(uuid) && u.email) {
-              result[uuid] = u.email;
-              console.log(`email-utils: Resolved ${uuid} -> ${u.email} (system_access match)`);
-              found = true;
-              break;
-            }
-          }
-        }
-        if (!found) {
-          console.warn(`email-utils: Could not resolve UUID ${uuid} to any email`);
+        if (!result[uuid]) {
+          console.warn(`email-utils: Could not resolve exact user id ${uuid} to any email`);
         }
       }
     } else {
