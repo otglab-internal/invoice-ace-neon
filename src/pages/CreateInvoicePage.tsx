@@ -331,20 +331,30 @@ const CreateInvoicePage: React.FC = () => {
             icon: <ShieldAlert className="w-4 h-4" />,
           });
         } else {
-          // No approval needed — send webhook to n8n (same as post-approval flow)
-          let webhookDelivered = true;
-          try {
-            const inv = inserted as any;
-            await apiClient.invoices("notify-approval", {
-              invoice: {
-                ...inv,
-                contact_id: finalContactId,
-                contact_name: contactName,
-              },
-            });
-          } catch (webhookErr) {
-            webhookDelivered = false;
-            console.warn("n8n webhook failed for auto-submitted invoice:", webhookErr);
+          // No approval needed — notify downstream systems and approved-email recipients
+          const inv = inserted as any;
+          const notificationInvoice = {
+            ...inv,
+            contact_id: finalContactId,
+            contact_name: contactName,
+          };
+
+          const [emailResult, webhookResult] = await Promise.allSettled([
+            apiClient.invoices("send-approved-email", {
+              invoice: notificationInvoice,
+            }),
+            apiClient.invoices("notify-approval", {
+              invoice: notificationInvoice,
+            }),
+          ]);
+
+          if (emailResult.status === "rejected") {
+            console.warn("Approved invoice email failed for auto-submitted invoice:", emailResult.reason);
+          }
+
+          const webhookDelivered = webhookResult.status === "fulfilled";
+          if (!webhookDelivered) {
+            console.warn("n8n webhook failed for auto-submitted invoice:", webhookResult.reason);
           }
 
           if (webhookDelivered) {
