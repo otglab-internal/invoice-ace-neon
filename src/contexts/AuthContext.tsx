@@ -34,6 +34,17 @@ const defaultPermissions = getPermissions("sales", []);
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const normalizeAuthEmail = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+
+  const lower = normalized.toLowerCase();
+  if (lower === "undefined" || lower === "null") return null;
+
+  return normalized;
+};
+
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
@@ -74,13 +85,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
     const storedUserId = localStorage.getItem("auth_user_id");
-    const storedEmail = localStorage.getItem("auth_email");
+    const storedEmail = normalizeAuthEmail(localStorage.getItem("auth_email"));
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
         setSystemId(storedSysId);
         setUserEmail(storedEmail);
+        if (storedEmail) {
+          localStorage.setItem("auth_email", storedEmail);
+        } else {
+          localStorage.removeItem("auth_email");
+        }
         const tagLookupId = storedUserId || storedSysId;
         if (tagLookupId) fetchTags(tagLookupId);
       } catch {
@@ -98,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      // The edge function may return error details in data even on failure
       const bodyError = data?.error || data?.message || error?.message;
       throw new Error(bodyError || "Login failed. Please try again.");
     }
@@ -137,23 +152,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userId = data.user.id || data.system_id || null;
     const sysId = data.system_id || userId;
+    const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
     setUser(authUser);
     setEnvironment(data.environment || null);
     setSystemId(sysId);
-    setUserEmail(data.user.email || pendingEmail || null);
+    setUserEmail(resolvedEmail);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
     localStorage.setItem("auth_system_id", sysId || "");
     localStorage.setItem("auth_user_id", userId || "");
-    localStorage.setItem("auth_email", data.user.email || pendingEmail || "");
+    if (resolvedEmail) {
+      localStorage.setItem("auth_email", resolvedEmail);
+    } else {
+      localStorage.removeItem("auth_email");
+    }
     setPendingEmail(null);
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
 
     if (userId) await fetchTags(userId);
-  }, [fetchTags]);
+  }, [fetchTags, pendingEmail]);
 
   const logout = useCallback(() => {
     setUser(null);

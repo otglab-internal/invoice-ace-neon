@@ -90,6 +90,15 @@ function getGeneratedDescription(item: LineItem, templates: Template[]): string 
   return output;
 }
 
+function normalizeSubmittedEmail(value: string | null | undefined): string {
+  if (!value) return "";
+  const normalized = value.trim();
+  if (!normalized) return "";
+
+  const lower = normalized.toLowerCase();
+  return lower === "undefined" || lower === "null" ? "" : normalized;
+}
+
 function isLineItemValid(item: LineItem, templates: Template[]): boolean {
   const desc = getGeneratedDescription(item, templates).trim();
   return !!desc && !!item.quantity && !!item.cost && !!item.account && !!item.center;
@@ -295,7 +304,7 @@ const CreateInvoicePage: React.FC = () => {
         total,
         submitted_by_system_id: systemId || "",
         submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
-        submitted_by_email: userEmail || "",
+        submitted_by_email: normalizeSubmittedEmail(userEmail),
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
