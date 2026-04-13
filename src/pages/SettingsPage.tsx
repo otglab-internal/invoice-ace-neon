@@ -66,12 +66,14 @@ const SettingsPage: React.FC = () => {
 
   const fetchFlags = async () => {
     setLoadingFlags(true);
-    const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes] = await Promise.all([
+    const [usersRes, templatesRes, staffRes, freeTextRes, currencyRes, approvalEmailsRes, approvedEmailsRes] = await Promise.all([
       neonQuery("user_approval_flags", { order: { column: "user_name", ascending: true } }),
       neonQuery("invoice_templates", { select: "id,name,requires_approval", order: { column: "name", ascending: true } }),
       neonQuery("staff_centre_assignments", { select: "system_id,user_name", order: { column: "user_name", ascending: true } }),
       neonQuery("global_config", { select: "value", filters: { key: "freetext_requires_approval" }, maybeSingle: true }),
       neonQuery("global_config", { select: "value", filters: { key: "currency" }, maybeSingle: true }),
+      neonQuery("global_config", { select: "value", filters: { key: "approval_notice_emails" }, maybeSingle: true }),
+      neonQuery("global_config", { select: "value", filters: { key: "approved_invoice_emails" }, maybeSingle: true }),
     ]);
     if (usersRes.data) setUserFlags(usersRes.data as unknown as UserFlag[]);
     if (templatesRes.data) setTemplates(templatesRes.data as unknown as TemplateFlag[]);
