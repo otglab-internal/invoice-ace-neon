@@ -33,6 +33,9 @@ const statusPill = (status: string, amendmentStatus: string | null) => {
   if (status === "paid") {
     return <Badge className="text-xs bg-green-600 text-white border-green-600">Paid</Badge>;
   }
+  if (status === "partially_paid") {
+    return <Badge className="text-xs bg-amber-500 text-white border-amber-500">Partially Paid</Badge>;
+  }
   if (amendmentStatus === "pending") {
     return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Amendment Pending</Badge>;
   }
@@ -231,6 +234,7 @@ const AllInvoicesPage: React.FC = () => {
               <SelectItem value="pushed">Pushed</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="partially_paid">Partially Paid</SelectItem>
               <SelectItem value="paid">Paid</SelectItem>
             </SelectContent>
           </Select>
