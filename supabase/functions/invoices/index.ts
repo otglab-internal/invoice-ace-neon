@@ -372,6 +372,39 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Send approved invoice notification email
+      try {
+        const approvedEmailRows = await sql`SELECT value FROM global_config WHERE key = 'approved_invoice_emails' LIMIT 1`;
+        const approvedEmails = (approvedEmailRows[0]?.value || "").split(",").map((e: string) => e.trim()).filter(Boolean);
+
+        if (approvedEmails.length > 0) {
+          const smtpConfig = await getSmtpConfig(sql);
+          if (smtpConfig) {
+            const environment = req.headers.get("x-environment") || "production";
+            const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
+            const recipients = sandboxEmail ? [sandboxEmail] : approvedEmails;
+
+            const htmlBody = buildApprovedEmailHtml(approvedInvoice);
+            await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${approvedInvoice.contact_name || "N/A"}`, htmlBody);
+
+            await sql`
+              INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details)
+              VALUES ('email_sent', 'email', 'system', 'System', ${JSON.stringify({
+                type: 'approved_invoice',
+                recipients,
+                invoice_id: approvedInvoice.id,
+                contact_name: approvedInvoice.contact_name,
+                total: approvedInvoice.total,
+                approved_by: userId,
+              })}::jsonb)
+            `;
+            console.log(`invoices: Approved invoice email sent to ${recipients.join(", ")} for invoice ${approvedInvoice.id}`);
+          }
+        }
+      } catch (emailErr) {
+        console.error("invoices: Failed to send approved invoice email:", emailErr);
+      }
+
       return new Response(JSON.stringify({ invoice: approvedInvoice }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
