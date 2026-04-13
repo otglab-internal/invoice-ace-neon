@@ -184,6 +184,7 @@ export type Database = {
           reference: string | null
           requires_approval: boolean
           status: string
+          submitted_by_email: string | null
           submitted_by_name: string
           submitted_by_system_id: string
           template_id: string | null
@@ -212,6 +213,7 @@ export type Database = {
           reference?: string | null
           requires_approval?: boolean
           status?: string
+          submitted_by_email?: string | null
           submitted_by_name?: string
           submitted_by_system_id: string
           template_id?: string | null
@@ -240,6 +242,7 @@ export type Database = {
           reference?: string | null
           requires_approval?: boolean
           status?: string
+          submitted_by_email?: string | null
           submitted_by_name?: string
           submitted_by_system_id?: string
           template_id?: string | null
