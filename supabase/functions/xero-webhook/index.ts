@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
-import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, resolveSystemIdsToEmails } from "../_shared/email-utils.ts";
+import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -352,23 +352,15 @@ Deno.serve(async (req) => {
       if (newLocalStatus === "paid") {
       try {
         const invoiceRows = await sql.query(
-          `SELECT submitted_by_system_id, submitted_by_name, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
+          `SELECT submitted_by_system_id, submitted_by_name, submitted_by_email, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
           [localInvoice.id],
         );
         if (invoiceRows.length > 0) {
           const inv = invoiceRows[0];
-          const systemId = inv.submitted_by_system_id as string;
+          const requesterEmail = (inv.submitted_by_email as string) || null;
           const smtpConfig = await getSmtpConfig(sql);
 
-          if (smtpConfig && systemId) {
-            let requesterEmail: string | null = null;
-
-            const emailMap = await resolveSystemIdsToEmails([systemId], orgId, environment);
-            requesterEmail = emailMap[systemId] || null;
-
-            if (!requesterEmail) {
-              console.warn(`xero-webhook: Cannot determine email for requester system_id=${systemId}, name=${inv.submitted_by_name}. Skipping email.`);
-            } else {
+          if (smtpConfig && requesterEmail) {
               // Check sandbox override
               const sandboxEmail = environment === "sandbox" ? await getSandboxTestEmail(sql) : null;
               const toEmail = sandboxEmail || requesterEmail;
