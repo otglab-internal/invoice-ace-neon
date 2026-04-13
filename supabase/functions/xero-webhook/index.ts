@@ -386,6 +386,30 @@ Deno.serve(async (req) => {
               `;
 
               await sendEmailViaSMTP(smtpConfig, [toEmail], `Payment Received – Invoice ${xeroInvoiceNumber}`, htmlBody);
+
+              try {
+                await sql.query(
+                  `INSERT INTO activity_logs (action_type, category, performed_by, performed_by_name, details, environment)
+                   VALUES ($1, $2, $3, $4, $5, $6)`,
+                  [
+                    "email_sent",
+                    "email",
+                    "xero-webhook",
+                    "Xero Webhook",
+                    JSON.stringify({
+                      type: "payment_received",
+                      recipients: [toEmail],
+                      invoice_id: localInvoice.id,
+                      xero_invoice_id: xeroInvoiceId,
+                      xero_invoice_number: xeroInvoiceNumber,
+                    }),
+                    environment,
+                  ],
+                );
+              } catch (logErr) {
+                console.error(`xero-webhook: Failed to log payment email for ${xeroInvoiceNumber}:`, logErr);
+              }
+
               console.log(`xero-webhook: Payment notification email sent to ${toEmail} for ${xeroInvoiceNumber}`);
             }
           }
