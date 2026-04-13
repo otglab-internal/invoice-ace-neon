@@ -80,6 +80,8 @@ const SettingsPage: React.FC = () => {
     if (staffRes.data) setStaffOptions(staffRes.data as unknown as StaffOption[]);
     setFreeTextFlagged((freeTextRes.data as any)?.value === "true");
     if ((currencyRes.data as any)?.value) setCurrency((currencyRes.data as any).value);
+    if ((approvalEmailsRes.data as any)?.value) setApprovalNoticeEmails((approvalEmailsRes.data as any).value);
+    if ((approvedEmailsRes.data as any)?.value) setApprovedInvoiceEmails((approvedEmailsRes.data as any).value);
     setLoadingFlags(false);
   };
 
