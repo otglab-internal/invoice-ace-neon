@@ -44,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [environment, setEnvironment] = useState<string | null>(null);
   const [systemId, setSystemId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [tags, setTags] = useState<StaffTag[]>([]);
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,11 +73,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
     const storedUserId = localStorage.getItem("auth_user_id");
+    const storedEmail = localStorage.getItem("auth_email");
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
         setSystemId(storedSysId);
+        setUserEmail(storedEmail);
         const tagLookupId = storedUserId || storedSysId;
         if (tagLookupId) fetchTags(tagLookupId);
       } catch {
@@ -136,10 +139,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(authUser);
     setEnvironment(data.environment || null);
     setSystemId(sysId);
+    setUserEmail(data.user.email || body.email || null);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
     localStorage.setItem("auth_system_id", sysId || "");
     localStorage.setItem("auth_user_id", userId || "");
+    localStorage.setItem("auth_email", data.user.email || body.email || "");
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
@@ -151,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setEnvironment(null);
     setSystemId(null);
+    setUserEmail(null);
     setTags([]);
     setCentreLocations([]);
     localStorage.removeItem("auth_user");
@@ -158,6 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_system_id");
     localStorage.removeItem("auth_user_id");
     localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_email");
   }, []);
 
   const role = normalizeRole(user?.role);
@@ -165,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = permissions.isSystemAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, environment, systemId, isAuthenticated: !!user, isLoading, role, tags, centreLocations, permissions, isAdmin, login, verify2FA, logout }}>
+    <AuthContext.Provider value={{ user, environment, systemId, userEmail, isAuthenticated: !!user, isLoading, role, tags, centreLocations, permissions, isAdmin, login, verify2FA, logout }}>
       {children}
     </AuthContext.Provider>
   );
