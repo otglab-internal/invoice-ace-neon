@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN submitted_by_email text;
