@@ -252,10 +252,18 @@ Deno.serve(async (req) => {
 
       const xeroStatus = (xeroInvoice.Status as string || "").toUpperCase();
       const xeroInvoiceNumber = xeroInvoice.InvoiceNumber as string || "";
+      const amountPaid = Number(xeroInvoice.AmountPaid ?? 0);
+      const amountDue = Number(xeroInvoice.AmountDue ?? 0);
 
-      console.log(`xero-webhook: Xero invoice ${xeroInvoiceNumber} status: ${xeroStatus}`);
+      console.log(`xero-webhook: Xero invoice ${xeroInvoiceNumber} status: ${xeroStatus}, amountPaid: ${amountPaid}, amountDue: ${amountDue}`);
 
-      if (xeroStatus !== "PAID") {
+      // Determine local status: paid, partially_paid, or skip
+      let newLocalStatus: string | null = null;
+      if (xeroStatus === "PAID") {
+        newLocalStatus = "paid";
+      } else if (amountPaid > 0 && amountDue > 0) {
+        newLocalStatus = "partially_paid";
+      } else {
         continue;
       }
 
@@ -297,36 +305,31 @@ Deno.serve(async (req) => {
         console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
       }
 
-      const updateFields = newPdfPath
-        ? `status = 'paid',
+      // For fully paid, clear amendment fields; for partial, just update status
+      const clearAmendments = newLocalStatus === "paid";
+      const amendmentClause = clearAmendments
+        ? `,
            amendment_status = NULL,
            amendment_data = NULL,
            amendment_note = NULL,
            amendment_requested_by = NULL,
            amendment_requested_by_name = NULL,
-           amendment_requested_at = NULL,
-           invoice_pdf_url = $2`
-        : `status = 'paid',
-           amendment_status = NULL,
-           amendment_data = NULL,
-           amendment_note = NULL,
-           amendment_requested_by = NULL,
-           amendment_requested_by_name = NULL,
-           amendment_requested_at = NULL`;
+           amendment_requested_at = NULL`
+        : "";
 
       if (newPdfPath) {
         await sql.query(
-          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
-          [localInvoice.id, newPdfPath],
+          `UPDATE invoices SET status = $2, invoice_pdf_url = $3${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus, newPdfPath],
         );
       } else {
         await sql.query(
-          `UPDATE invoices SET ${updateFields} WHERE id = $1`,
-          [localInvoice.id],
+          `UPDATE invoices SET status = $2${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus],
         );
       }
 
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as paid${newPdfPath ? " + PDF updated" : ""}`);
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}`);
 
       try {
         await sql.query(
@@ -334,18 +337,19 @@ Deno.serve(async (req) => {
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             localInvoice.id,
-            "status_changed_to_paid",
+            `status_changed_to_${newLocalStatus}`,
             "xero-webhook",
             "Xero Webhook",
             "webhook",
-            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath }),
+            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath, new_status: newLocalStatus }),
           ],
         );
       } catch (logErr) {
         console.error("xero-webhook: Failed to log status change:", logErr);
       }
 
-      // Send payment notification email to the invoice requester
+      // Send payment notification email only for fully paid invoices
+      if (newLocalStatus === "paid") {
       try {
         const invoiceRows = await sql.query(
           `SELECT submitted_by_system_id, submitted_by_name, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
@@ -417,6 +421,7 @@ Deno.serve(async (req) => {
       } catch (emailErr) {
         console.error(`xero-webhook: Failed to send payment email for ${xeroInvoiceNumber}:`, emailErr);
       }
+      } // end if newLocalStatus === "paid"
     }
 
     return new Response("", { status: 200 });
