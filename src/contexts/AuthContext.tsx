@@ -48,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [tags, setTags] = useState<StaffTag[]>([]);
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const fetchTags = useCallback(async (sysId: string, _env?: string) => {
     const { data } = await neonQuery("staff_centre_assignments", {
@@ -104,6 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data?.error) throw new Error(data.message || data.error);
 
     if (data.requires_2fa) {
+      setPendingEmail(email);
       return { requires2FA: true, challengeToken: data.challenge_token };
     }
 
@@ -139,12 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(authUser);
     setEnvironment(data.environment || null);
     setSystemId(sysId);
-    setUserEmail(data.user.email || body.email || null);
+    setUserEmail(data.user.email || pendingEmail || null);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
     localStorage.setItem("auth_environment", data.environment || "");
     localStorage.setItem("auth_system_id", sysId || "");
     localStorage.setItem("auth_user_id", userId || "");
-    localStorage.setItem("auth_email", data.user.email || body.email || "");
+    localStorage.setItem("auth_email", data.user.email || pendingEmail || "");
+    setPendingEmail(null);
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
