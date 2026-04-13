@@ -380,6 +380,49 @@ const SettingsPage: React.FC = () => {
             )}
           </div>
 
+          {/* Email Notifications */}
+          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-primary" />
+              <h2 className="text-sm font-semibold font-display text-foreground">Email Notifications</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Configure email addresses to receive notifications at different stages of the invoice lifecycle. Use commas to separate multiple addresses.
+            </p>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Approval Notice Emails</Label>
+              <p className="text-xs text-muted-foreground">
+                These addresses will be notified when an invoice is raised and requires approval.
+              </p>
+              <Textarea
+                placeholder="approver1@company.com, approver2@company.com"
+                value={approvalNoticeEmails}
+                onChange={(e) => setApprovalNoticeEmails(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-foreground">Approved Invoice Emails</Label>
+              <p className="text-xs text-muted-foreground">
+                These addresses will be notified when an invoice has been approved (manually or auto-approved).
+              </p>
+              <Textarea
+                placeholder="finance@company.com, manager@company.com"
+                value={approvedInvoiceEmails}
+                onChange={(e) => setApprovedInvoiceEmails(e.target.value)}
+                rows={2}
+                className="text-sm"
+              />
+            </div>
+
+            <Button onClick={saveNotificationEmails} disabled={savingEmails} size="sm">
+              {savingEmails ? "Saving..." : "Save Notification Emails"}
+            </Button>
+          </div>
+
           {/* Currency */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-2">
