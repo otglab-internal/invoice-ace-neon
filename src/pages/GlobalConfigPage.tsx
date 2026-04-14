@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { nowGMT8 } from "@/lib/utils";
 import {
   AlertDialog,
@@ -71,6 +72,9 @@ const GlobalConfigPage: React.FC = () => {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [testEmailError, setTestEmailError] = useState<string | null>(null);
+  const [allXeroAccounts, setAllXeroAccounts] = useState<{ code: string; name: string; type: string }[]>([]);
+  const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   const handleSendTestEmail = async () => {
     if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
