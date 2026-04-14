@@ -221,7 +221,7 @@ const CreateInvoicePage: React.FC = () => {
     };
 
     fetchContacts();
-    fetchCenters();
+    fetchTrackingCategories();
     fetchAccounts();
   }, []);
 
@@ -577,7 +577,7 @@ const CreateInvoicePage: React.FC = () => {
               canRemove={lineItems.length > 1}
               templates={templates}
               accounts={xeroAccounts}
-              centers={xeroCenters}
+              trackingCategories={trackingCategories}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
             />
@@ -657,12 +657,12 @@ interface LineItemCardProps {
   canRemove: boolean;
   templates: Template[];
   accounts: XeroAccount[];
-  centers: XeroCenter[];
+  trackingCategories: TrackingCategory[];
   onUpdate: (id: string, updates: Partial<LineItem>) => void;
   onRemove: (id: string) => void;
 }
 
-const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, accounts, centers, onUpdate, onRemove }) => {
+const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, accounts, trackingCategories, onUpdate, onRemove }) => {
   const update = (updates: Partial<LineItem>) => onUpdate(item.id, updates);
   const selectedTemplate = templates.find((t) => t.id === item.templateId);
   const desc = getGeneratedDescription(item, templates);
