@@ -473,7 +473,7 @@ const ApprovalsPage: React.FC = () => {
                         <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.line_items?.length || 0})</p>
                         {(selectedAmendment.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-border mt-1">
-                            <p>{li.description}</p>
+                            <p className="whitespace-pre-wrap">{li.description}</p>
                             <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
                           </div>
                         ))}
@@ -488,7 +488,7 @@ const ApprovalsPage: React.FC = () => {
                         <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.amendment_data?.line_items?.length || 0})</p>
                         {(selectedAmendment.amendment_data?.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-primary/30 mt-1">
-                            <p>{li.description}</p>
+                            <p className="whitespace-pre-wrap">{li.description}</p>
                             <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
                           </div>
                         ))}
@@ -641,7 +641,7 @@ const ApprovalsPage: React.FC = () => {
                             <p className="text-xs text-muted-foreground font-medium">Line Items ({selected.line_items?.length || 0})</p>
                             {(selected.line_items || []).map((item: any, idx: number) => (
                               <div key={idx} className="text-xs bg-muted/50 p-2 rounded-lg">
-                                <p className="text-foreground">{item.description}</p>
+                                <p className="text-foreground whitespace-pre-wrap">{item.description}</p>
                                 <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}</p>
                               </div>
                             ))}

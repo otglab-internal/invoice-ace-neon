@@ -444,30 +444,6 @@ const SettingsPage: React.FC = () => {
             </RadioGroup>
           </div>
 
-          {/* Xero Connection */}
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold font-display text-foreground">Xero Connection</h2>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-success" />
-              <span className="text-sm text-foreground">Connected to Xero</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Accounts and tracking categories are synced from your Xero organisation.
-            </p>
-          </div>
-
-          {/* Database */}
-          <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-semibold font-display text-foreground">Database</h2>
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-success" />
-              <span className="text-sm text-foreground">NeonDB Connected</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Environment: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{localStorage.getItem("auth_environment") || "production"}</code>
-            </p>
-          </div>
-
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save Settings"}
           </Button>
