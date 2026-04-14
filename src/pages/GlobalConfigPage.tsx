@@ -117,12 +117,35 @@ const GlobalConfigPage: React.FC = () => {
         const map: Record<string, string> = {};
         ((data as ConfigEntry[]) || []).forEach((r) => (map[r.key] = r.value));
         setConfig(map);
+        // Parse visible accounts from config
+        try {
+          const parsed = JSON.parse(map["xero_visible_accounts"] || "[]");
+          if (Array.isArray(parsed)) setVisibleAccountCodes(parsed);
+        } catch { /* ignore */ }
       }
       setLoading(false);
     };
     fetchConfig();
     checkXeroStatus();
   }, []);
+
+  const fetchXeroAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "accounts" },
+        headers: getXeroHeaders(),
+      });
+      if (data?.accounts) setAllXeroAccounts(data.accounts);
+    } catch (err) {
+      console.warn("Failed to fetch Xero accounts:", err);
+    }
+    setLoadingAccounts(false);
+  };
+
+  useEffect(() => {
+    if (xeroStatus.connected) fetchXeroAccounts();
+  }, [xeroStatus.connected]);
 
   const checkXeroStatus = async () => {
     try {
