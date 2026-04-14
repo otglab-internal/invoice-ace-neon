@@ -122,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (data.requires_2fa) {
       setPendingEmail(email);
+      setPendingEnvironment(env);
       return { requires2FA: true, challengeToken: data.challenge_token };
     }
 
