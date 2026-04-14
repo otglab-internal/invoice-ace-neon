@@ -172,11 +172,10 @@ const GlobalConfigPage: React.FC = () => {
         "xero_visible_accounts",
       ];
 
-      // Set visible accounts as JSON before saving
-      setConfig((prev) => ({ ...prev, xero_visible_accounts: JSON.stringify(visibleAccountCodes) }));
+      const configToSave = { ...config, xero_visible_accounts: JSON.stringify(visibleAccountCodes) };
 
       for (const key of allKeys) {
-        const value = config[key] ?? "";
+        const value = configToSave[key] ?? "";
         await neonUpsert("global_config", { key, value, updated_at: nowGMT8() }, "key");
       }
 
