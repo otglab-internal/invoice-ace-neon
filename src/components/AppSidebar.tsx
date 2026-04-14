@@ -8,7 +8,6 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.FC<{ className?: string }>;
-  /** Permission key that must be truthy, or null for always-visible */
   permissionKey: string | null;
 }
 
@@ -25,7 +24,11 @@ const navItems: NavItem[] = [
   { to: "/api-docs", label: "API Docs", icon: BookOpen, permissionKey: null },
 ];
 
-const AppSidebar: React.FC = () => {
+interface AppSidebarProps {
+  onNavigate?: () => void;
+}
+
+const AppSidebar: React.FC<AppSidebarProps> = ({ onNavigate }) => {
   const { user, logout, permissions } = useAuth();
   const navigate = useNavigate();
   const { logoUrl } = useBranding();
@@ -41,7 +44,7 @@ const AppSidebar: React.FC = () => {
   };
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-sidebar flex flex-col border-r border-sidebar-border z-50">
+    <aside className="flex flex-col h-full bg-sidebar">
       <div className="p-5 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
           {logoUrl ? (
@@ -53,12 +56,13 @@ const AppSidebar: React.FC = () => {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
         {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === "/"}
+            onClick={onNavigate}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
