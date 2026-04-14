@@ -37,6 +37,12 @@ interface Template {
 
 const FREETEXT_ID = "__freetext__";
 
+interface TrackingCategory {
+  id: string;
+  name: string;
+  options: { id: string; name: string; status: string }[];
+}
+
 interface LineItem {
   id: string;
   templateId: string;
@@ -46,6 +52,7 @@ interface LineItem {
   cost: string;
   account: string;
   center: string;
+  trackingValues: Record<string, string>; // categoryId -> optionName
 }
 
 const createLineItem = (defaultTemplateId: string): LineItem => ({
@@ -57,6 +64,7 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   cost: "",
   account: "",
   center: "",
+  trackingValues: {},
 });
 
 interface XeroContact {
