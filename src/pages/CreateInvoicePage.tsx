@@ -104,12 +104,10 @@ function normalizeSubmittedEmail(value: string | null | undefined): string {
   return lower === "undefined" || lower === "null" ? "" : normalized;
 }
 
-function isLineItemValid(item: LineItem, templates: Template[]): boolean {
-  const desc = getGeneratedDescription(item, templates).trim();
-  const hasTracking = trackingCategories.length > 0;
+function isLineItemValid(item: LineItem, templates: Template[], trackingCategories: TrackingCategory[]): boolean {
   const desc = getGeneratedDescription(item, templates).trim();
   if (!desc || !item.quantity || !item.cost || !item.account) return false;
-  if (hasTracking) {
+  if (trackingCategories.length > 0) {
     return trackingCategories.every((tc) => !!item.trackingValues[tc.id]);
   }
   return true;
