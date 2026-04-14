@@ -178,7 +178,7 @@ export function buildApprovalEmailHtml(invoice: Record<string, any>): string {
     .map(
       (li: any) =>
         `<tr>
-          <td style="padding:8px;border:1px solid #e5e7eb;">${li.description || ""}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${(li.description || "").replace(/\\n/g, "<br>").replace(/\n/g, "<br>")}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">${li.quantity}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${Number(li.cost).toFixed(2)}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${(Number(li.quantity) * Number(li.cost)).toFixed(2)}</td>
@@ -220,7 +220,7 @@ export function buildApprovedEmailHtml(invoice: Record<string, any>): string {
     .map(
       (li: any) =>
         `<tr>
-          <td style="padding:8px;border:1px solid #e5e7eb;">${li.description || ""}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${(li.description || "").replace(/\\n/g, "<br>").replace(/\n/g, "<br>")}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">${li.quantity}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${Number(li.cost).toFixed(2)}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${(Number(li.quantity) * Number(li.cost)).toFixed(2)}</td>
