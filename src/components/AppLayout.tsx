@@ -31,7 +31,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppSidebar />
+      <div className="fixed left-0 top-0 h-screen w-60 z-50">
+        <AppSidebar />
+      </div>
       <main className="ml-60 p-8 animate-fade-in">{children}</main>
     </div>
   );
