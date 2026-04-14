@@ -494,9 +494,8 @@ const GlobalConfigPage: React.FC = () => {
               )}
             </>
           )}
-        </div>
-      </main>
-    </div>
+      </div>
+    </AppLayout>
   );
 };
 
