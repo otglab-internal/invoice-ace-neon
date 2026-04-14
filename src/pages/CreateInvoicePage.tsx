@@ -773,17 +773,22 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Center</Label>
-          <Select value={item.center} onValueChange={(v) => update({ center: v })}>
-            <SelectTrigger><SelectValue placeholder="Select center" /></SelectTrigger>
-            <SelectContent>
-              {centers.map((c) => (
-                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {trackingCategories.map((tc) => (
+          <div key={tc.id}>
+            <Label className="text-xs text-muted-foreground">{tc.name}</Label>
+            <Select
+              value={item.trackingValues[tc.id] || ""}
+              onValueChange={(v) => update({ trackingValues: { ...item.trackingValues, [tc.id]: v } })}
+            >
+              <SelectTrigger><SelectValue placeholder={`Select ${tc.name.toLowerCase()}`} /></SelectTrigger>
+              <SelectContent>
+                {tc.options.filter((o) => o.status === "ACTIVE").map((o) => (
+                  <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
       </div>
     </div>
   );
