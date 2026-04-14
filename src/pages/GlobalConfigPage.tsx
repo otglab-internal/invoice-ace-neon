@@ -169,7 +169,11 @@ const GlobalConfigPage: React.FC = () => {
         ...SMTP_KEYS.map((k) => k.key),
         ...XERO_KEYS.map((k) => k.key),
         "sandbox_test_email",
+        "xero_visible_accounts",
       ];
+
+      // Set visible accounts as JSON before saving
+      setConfig((prev) => ({ ...prev, xero_visible_accounts: JSON.stringify(visibleAccountCodes) }));
 
       for (const key of allKeys) {
         const value = config[key] ?? "";
