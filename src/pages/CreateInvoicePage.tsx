@@ -123,7 +123,7 @@ const CreateInvoicePage: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [contacts, setContacts] = useState<XeroContact[]>([]);
   const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
-  const [xeroCenters, setXeroCenters] = useState<XeroCenter[]>([]);
+  const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
@@ -190,27 +190,21 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(false);
     };
 
-    const fetchCenters = async () => {
+    const fetchTrackingCategories = async () => {
       try {
-        const env = localStorage.getItem("auth_environment") || "production";
-        const orgId = getOrgId();
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?action=get&name=centre&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
-          { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
-        );
-        const data = await res.json();
-        if (data?.data && Array.isArray(data.data)) {
-          setXeroCenters(
-            data.data.map((item: any) => ({
-              id: item["Centre Name"] || item.name || item.id || item,
-              name: item["Centre Name"] || item.name || item.label || item,
-            }))
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "tracking-categories" },
+          headers: xeroHeaders,
+        });
+        if (data?.categories) {
+          // Only include categories that have active options
+          const active = (data.categories as TrackingCategory[]).filter(
+            (tc) => tc.options.some((o) => o.status === "ACTIVE")
           );
+          setTrackingCategories(active);
         }
       } catch (err) {
-        console.warn("Failed to fetch centers from collections:", err);
+        console.warn("Failed to fetch Xero tracking categories:", err);
       }
     };
 
@@ -318,7 +312,7 @@ const CreateInvoicePage: React.FC = () => {
     : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
-  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates));
+  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -343,13 +337,26 @@ const CreateInvoicePage: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const lineItemsPayload = lineItems.map((item) => ({
-        description: getGeneratedDescription(item, templates),
-        quantity: Number(item.quantity),
-        cost: Number(item.cost),
-        account: item.account,
-        center: item.center,
-      }));
+      const lineItemsPayload = lineItems.map((item) => {
+        const base: Record<string, unknown> = {
+          description: getGeneratedDescription(item, templates),
+          quantity: Number(item.quantity),
+          cost: Number(item.cost),
+          account: item.account,
+        };
+        // Include tracking categories only if they exist
+        if (trackingCategories.length > 0) {
+          base.tracking = trackingCategories.map((tc) => ({
+            name: tc.name,
+            option: item.trackingValues[tc.id] || "",
+          }));
+          // Keep backward-compat "center" if there's a single tracking category
+          if (trackingCategories.length === 1) {
+            base.center = item.trackingValues[trackingCategories[0].id] || "";
+          }
+        }
+        return base;
+      });
 
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
       const submitterSystemId = resolvedSystemId || systemId || "";
