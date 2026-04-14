@@ -464,7 +464,7 @@ const SettingsPage: React.FC = () => {
               <span className="text-sm text-foreground">NeonDB Connected</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Environment: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">Development</code>
+              Environment: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{localStorage.getItem("auth_environment") || "production"}</code>
             </p>
           </div>
 
