@@ -394,6 +394,61 @@ const GlobalConfigPage: React.FC = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {xeroStatus.connected && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                          <ListChecks className="w-4 h-4 text-primary" />
+                          <CardTitle className="text-base">Visible Accounts</CardTitle>
+                        </div>
+                        <CardDescription className="text-xs">
+                          Select which Xero accounts appear in the invoice creation form. If none are selected, all accounts will be shown.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {loadingAccounts ? (
+                          <div className="flex items-center gap-2 py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Loading accounts from Xero...</span>
+                          </div>
+                        ) : allXeroAccounts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">No accounts found. Make sure Xero is connected.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => setVisibleAccountCodes(allXeroAccounts.map((a) => a.code))}>
+                                Select All
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => setVisibleAccountCodes([])}>
+                                Clear All
+                              </Button>
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {visibleAccountCodes.length} of {allXeroAccounts.length} selected
+                              </span>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                              {allXeroAccounts.map((a) => (
+                                <label key={a.code} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+                                  <Checkbox
+                                    checked={visibleAccountCodes.includes(a.code)}
+                                    onCheckedChange={(checked) => {
+                                      setVisibleAccountCodes((prev) =>
+                                        checked ? [...prev, a.code] : prev.filter((c) => c !== a.code)
+                                      );
+                                    }}
+                                  />
+                                  <span className="font-mono text-xs text-muted-foreground w-12">{a.code}</span>
+                                  <span className="flex-1">{a.name}</span>
+                                  <Badge variant="outline" className="text-xs">{a.type}</Badge>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
 
