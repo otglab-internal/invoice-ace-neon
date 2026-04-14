@@ -221,11 +221,29 @@ const CreateInvoicePage: React.FC = () => {
       }
     };
 
+    // Fetch visible account codes from config
+    const fetchVisibleAccounts = async () => {
+      try {
+        const { data } = await neonQuery("global_config", {
+          select: "value",
+          filters: { key: "xero_visible_accounts" },
+          maybeSingle: true,
+        });
+        if (data && (data as any).value) {
+          const parsed = JSON.parse((data as any).value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setVisibleAccountCodes(parsed);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+
     // Serialize all Xero calls to avoid token refresh race conditions
     const loadXeroData = async () => {
       await fetchContacts();
       await fetchTrackingCategories();
       await fetchAccounts();
+      await fetchVisibleAccounts();
     };
     loadXeroData();
   }, []);
