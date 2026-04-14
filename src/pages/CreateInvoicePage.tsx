@@ -106,6 +106,9 @@ function isLineItemValid(item: LineItem, templates: Template[]): boolean {
 
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId, userEmail } = useAuth();
+  const requesterName = user ? `${user.firstName} ${user.lastName}`.trim() : "";
+  const [resolvedSystemId, setResolvedSystemId] = useState("");
+  const [checkingApprovalState, setCheckingApprovalState] = useState(true);
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -154,10 +157,10 @@ const CreateInvoicePage: React.FC = () => {
       }
       setLoadingTemplates(false);
     };
+
     fetchTemplates();
   }, []);
 
-  // Fetch Xero contacts and accounts, and centers from collections
   useEffect(() => {
     const xeroHeaders = {
       "x-org-id": getOrgId(),
@@ -190,10 +193,12 @@ const CreateInvoicePage: React.FC = () => {
         );
         const data = await res.json();
         if (data?.data && Array.isArray(data.data)) {
-          setXeroCenters(data.data.map((item: any) => ({
-            id: item["Centre Name"] || item.name || item.id || item,
-            name: item["Centre Name"] || item.name || item.label || item,
-          })));
+          setXeroCenters(
+            data.data.map((item: any) => ({
+              id: item["Centre Name"] || item.name || item.id || item,
+              name: item["Centre Name"] || item.name || item.label || item,
+            }))
+          );
         }
       } catch (err) {
         console.warn("Failed to fetch centers from collections:", err);
@@ -217,28 +222,72 @@ const CreateInvoicePage: React.FC = () => {
     fetchAccounts();
   }, []);
 
-  // Check if the current user is flagged and if free text is flagged
   useEffect(() => {
-    const checkFlags = async () => {
-      const [userRes, freeTextRes] = await Promise.all([
-        systemId
-          ? neonQuery("user_approval_flags", { select: "requires_approval", filters: { system_id: systemId }, maybeSingle: true })
-          : Promise.resolve({ data: null, error: null }),
-        neonQuery("global_config", { select: "value", filters: { key: "freetext_requires_approval" }, maybeSingle: true }),
-      ]);
-      setUserFlagged((userRes.data as any)?.requires_approval === true);
-      setFreeTextFlagged((freeTextRes.data as any)?.value === "true");
-    };
-    checkFlags();
-  }, [systemId]);
+    let active = true;
+    const identityFilters: Array<Record<string, string>> = [];
 
-  // Initialize line items once templates load
+    if (systemId) identityFilters.push({ system_id: systemId });
+    if (requesterName) identityFilters.push({ user_name: requesterName });
+
+    const checkFlags = async () => {
+      setCheckingApprovalState(true);
+
+      const [staffRes, userRes, freeTextRes] = await Promise.all([
+        identityFilters.length > 0
+          ? neonQuery("staff_centre_assignments", {
+              select: "system_id,user_name",
+              orFilters: identityFilters,
+              limit: 10,
+            })
+          : Promise.resolve({ data: [], error: null }),
+        identityFilters.length > 0
+          ? neonQuery("user_approval_flags", {
+              select: "system_id,user_name,requires_approval",
+              orFilters: identityFilters,
+              limit: 10,
+            })
+          : Promise.resolve({ data: [], error: null }),
+        neonQuery("global_config", {
+          select: "value",
+          filters: { key: "freetext_requires_approval" },
+          maybeSingle: true,
+        }),
+      ]);
+
+      if (!active) return;
+
+      const staffRows = (staffRes.data as any[]) || [];
+      const matchedStaff =
+        staffRows.find((row) => systemId && row.system_id === systemId) ||
+        staffRows.find((row) => requesterName && row.user_name === requesterName) ||
+        null;
+
+      const flagRows = (userRes.data as any[]) || [];
+      const matchedFlag =
+        flagRows.find((row) => matchedStaff?.system_id && row.system_id === matchedStaff.system_id) ||
+        flagRows.find((row) => systemId && row.system_id === systemId) ||
+        flagRows.find((row) => requesterName && row.user_name === requesterName) ||
+        null;
+
+      setResolvedSystemId(matchedStaff?.system_id || matchedFlag?.system_id || systemId || "");
+      setUserFlagged(matchedFlag?.requires_approval === true);
+      setFreeTextFlagged((freeTextRes.data as any)?.value === "true");
+      setCheckingApprovalState(false);
+    };
+
+    checkFlags();
+
+    return () => {
+      active = false;
+    };
+  }, [requesterName, systemId]);
+
   useEffect(() => {
     if (!loadingTemplates && lineItems.length === 0) {
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setLineItems([createLineItem(defaultId)]);
     }
-  }, [loadingTemplates]);
+  }, [loadingTemplates, lineItems.length, templates]);
 
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
@@ -281,7 +330,7 @@ const CreateInvoicePage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allValid) return;
+    if (!allValid || checkingApprovalState) return;
     setSubmitting(true);
 
     try {
@@ -294,8 +343,7 @@ const CreateInvoicePage: React.FC = () => {
       }));
 
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
-
-      
+      const submitterSystemId = resolvedSystemId || systemId || "";
 
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
@@ -304,8 +352,8 @@ const CreateInvoicePage: React.FC = () => {
         reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
-        submitted_by_system_id: systemId || "",
-        submitted_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+        submitted_by_system_id: submitterSystemId,
+        submitted_by_name: requesterName,
         submitted_by_email: normalizeSubmittedEmail(userEmail),
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
@@ -317,21 +365,19 @@ const CreateInvoicePage: React.FC = () => {
       if (error) {
         toast.error("Failed to submit invoice");
       } else {
-        // Log the creation
         try {
           await neonInsert("invoice_logs", {
             invoice_id: (inserted as any).id,
             action_type: "request",
             source: "ui",
-            performed_by: systemId || "",
-            performed_by_name: user ? `${user.firstName} ${user.lastName}` : "",
+            performed_by: submitterSystemId,
+            performed_by_name: requesterName,
             details: JSON.parse(JSON.stringify(inserted)),
           });
         } catch (logErr) {
           console.warn("Failed to write log:", logErr);
         }
 
-        // Send approval notification email if needed
         if (willNeedApproval) {
           try {
             await apiClient.invoices("send-approval-email", { invoiceId: (inserted as any).id });
@@ -343,7 +389,6 @@ const CreateInvoicePage: React.FC = () => {
             icon: <ShieldAlert className="w-4 h-4" />,
           });
         } else {
-          // No approval needed — notify downstream systems and approved-email recipients
           const inv = inserted as any;
           const notificationInvoice = {
             ...inv,
@@ -387,7 +432,7 @@ const CreateInvoicePage: React.FC = () => {
       setNewContactName("");
       setReference("");
       setLineItems([createLineItem(defaultId)]);
-    } catch (err) {
+    } catch {
       toast.error("Something went wrong");
     } finally {
       setSubmitting(false);
@@ -413,7 +458,6 @@ const CreateInvoicePage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Bill To */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h2 className="text-sm font-semibold font-display text-foreground">Bill To</h2>
             <Popover open={contactOpen} onOpenChange={setContactOpen}>
@@ -491,7 +535,6 @@ const CreateInvoicePage: React.FC = () => {
             )}
           </div>
 
-          {/* Date & Reference */}
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -510,7 +553,6 @@ const CreateInvoicePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Line Items */}
           {lineItems.map((item, index) => (
             <LineItemCard
               key={item.id}
@@ -530,7 +572,17 @@ const CreateInvoicePage: React.FC = () => {
             Add Line Item
           </Button>
 
-          {willNeedApproval ? (
+          {checkingApprovalState ? (
+            <div className="bg-muted border border-border rounded-xl p-4">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                <span className="text-sm font-semibold text-foreground">Checking approval rules</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please wait while we validate requester and template approval requirements.
+              </p>
+            </div>
+          ) : willNeedApproval ? (
             <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-destructive" />
@@ -564,9 +616,17 @@ const CreateInvoicePage: React.FC = () => {
                 "Fill in quantity and cost to see total"
               )}
             </div>
-            <Button type="submit" disabled={!allValid || submitting} className="gap-2">
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : willNeedApproval ? <ShieldAlert className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
-              {willNeedApproval ? "Submit for Approval" : "Submit to Xero"}
+            <Button type="submit" disabled={!allValid || submitting || checkingApprovalState} className="gap-2">
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : checkingApprovalState ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : willNeedApproval ? (
+                <ShieldAlert className="w-4 h-4" />
+              ) : (
+                <Zap className="w-4 h-4" />
+              )}
+              {checkingApprovalState ? "Checking approval rules..." : willNeedApproval ? "Submit for Approval" : "Submit to Xero"}
             </Button>
           </div>
         </form>
