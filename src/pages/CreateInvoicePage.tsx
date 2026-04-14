@@ -595,7 +595,7 @@ const CreateInvoicePage: React.FC = () => {
               index={index}
               canRemove={lineItems.length > 1}
               templates={templates}
-              accounts={xeroAccounts}
+              accounts={visibleAccountCodes && visibleAccountCodes.length > 0 ? xeroAccounts.filter((a) => visibleAccountCodes.includes(a.code)) : xeroAccounts}
               trackingCategories={trackingCategories}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
