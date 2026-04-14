@@ -78,10 +78,7 @@ interface XeroAccount {
   type: string;
 }
 
-interface XeroCenter {
-  id: string;
-  name: string;
-}
+// XeroCenter removed — now using TrackingCategory
 
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
@@ -109,7 +106,13 @@ function normalizeSubmittedEmail(value: string | null | undefined): string {
 
 function isLineItemValid(item: LineItem, templates: Template[]): boolean {
   const desc = getGeneratedDescription(item, templates).trim();
-  return !!desc && !!item.quantity && !!item.cost && !!item.account && !!item.center;
+  const hasTracking = trackingCategories.length > 0;
+  const desc = getGeneratedDescription(item, templates).trim();
+  if (!desc || !item.quantity || !item.cost || !item.account) return false;
+  if (hasTracking) {
+    return trackingCategories.every((tc) => !!item.trackingValues[tc.id]);
+  }
+  return true;
 }
 
 const CreateInvoicePage: React.FC = () => {
