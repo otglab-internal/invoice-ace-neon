@@ -353,10 +353,6 @@ const CreateInvoicePage: React.FC = () => {
             name: tc.name,
             option: item.trackingValues[tc.id] || "",
           }));
-          // Keep backward-compat "center" if there's a single tracking category
-          if (trackingCategories.length === 1) {
-            base.center = item.trackingValues[trackingCategories[0].id] || "";
-          }
         }
         return base;
       });
