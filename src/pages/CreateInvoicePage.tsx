@@ -78,7 +78,7 @@ interface XeroAccount {
   type: string;
 }
 
-// XeroCenter removed — now using TrackingCategory
+
 
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
