@@ -60,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingEnvironment, setPendingEnvironment] = useState<string | null>(null);
 
   const fetchTags = useCallback(async (sysId: string, _env?: string) => {
     const { data } = await neonQuery("staff_centre_assignments", {
