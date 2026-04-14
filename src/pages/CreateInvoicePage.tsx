@@ -220,9 +220,12 @@ const CreateInvoicePage: React.FC = () => {
       }
     };
 
-    fetchContacts();
-    fetchTrackingCategories();
-    fetchAccounts();
+    // Serialize: contacts first (may refresh token), then others in parallel
+    const loadXeroData = async () => {
+      await fetchContacts();
+      await Promise.all([fetchTrackingCategories(), fetchAccounts()]);
+    };
+    loadXeroData();
   }, []);
 
   useEffect(() => {
