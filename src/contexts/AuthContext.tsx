@@ -156,12 +156,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sysId = data.system_id || userId;
     const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
+    const resolvedEnv = pendingEnvironment || data.environment || "production";
+
     setUser(authUser);
-    setEnvironment(data.environment || null);
+    setEnvironment(resolvedEnv);
     setSystemId(sysId);
     setUserEmail(resolvedEmail);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
-    localStorage.setItem("auth_environment", data.environment || "");
+    localStorage.setItem("auth_environment", resolvedEnv);
     localStorage.setItem("auth_system_id", sysId || "");
     localStorage.setItem("auth_user_id", userId || "");
     if (resolvedEmail) {
