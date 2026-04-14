@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import AppSidebar from "@/components/AppSidebar";
+import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -238,10 +238,8 @@ const GlobalConfigPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <AppSidebar />
-      <main className="flex-1 ml-60 p-8">
-        <div className="max-w-2xl mx-auto space-y-6">
+    <AppLayout>
+      <div className="max-w-2xl mx-auto space-y-6">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Global Configuration</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage branding, SMTP, Xero, and environment settings.</p>
