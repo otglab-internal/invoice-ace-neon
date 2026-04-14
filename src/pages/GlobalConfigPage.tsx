@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { nowGMT8 } from "@/lib/utils";
 import {
   AlertDialog,
@@ -71,6 +72,9 @@ const GlobalConfigPage: React.FC = () => {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [testEmailError, setTestEmailError] = useState<string | null>(null);
+  const [allXeroAccounts, setAllXeroAccounts] = useState<{ code: string; name: string; type: string }[]>([]);
+  const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
 
   const handleSendTestEmail = async () => {
     if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
@@ -113,12 +117,35 @@ const GlobalConfigPage: React.FC = () => {
         const map: Record<string, string> = {};
         ((data as ConfigEntry[]) || []).forEach((r) => (map[r.key] = r.value));
         setConfig(map);
+        // Parse visible accounts from config
+        try {
+          const parsed = JSON.parse(map["xero_visible_accounts"] || "[]");
+          if (Array.isArray(parsed)) setVisibleAccountCodes(parsed);
+        } catch { /* ignore */ }
       }
       setLoading(false);
     };
     fetchConfig();
     checkXeroStatus();
   }, []);
+
+  const fetchXeroAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "accounts" },
+        headers: getXeroHeaders(),
+      });
+      if (data?.accounts) setAllXeroAccounts(data.accounts);
+    } catch (err) {
+      console.warn("Failed to fetch Xero accounts:", err);
+    }
+    setLoadingAccounts(false);
+  };
+
+  useEffect(() => {
+    if (xeroStatus.connected) fetchXeroAccounts();
+  }, [xeroStatus.connected]);
 
   const checkXeroStatus = async () => {
     try {
@@ -142,10 +169,13 @@ const GlobalConfigPage: React.FC = () => {
         ...SMTP_KEYS.map((k) => k.key),
         ...XERO_KEYS.map((k) => k.key),
         "sandbox_test_email",
+        "xero_visible_accounts",
       ];
 
+      const configToSave = { ...config, xero_visible_accounts: JSON.stringify(visibleAccountCodes) };
+
       for (const key of allKeys) {
-        const value = config[key] ?? "";
+        const value = configToSave[key] ?? "";
         await neonUpsert("global_config", { key, value, updated_at: nowGMT8() }, "key");
       }
 
@@ -364,6 +394,61 @@ const GlobalConfigPage: React.FC = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {xeroStatus.connected && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-2">
+                          <ListChecks className="w-4 h-4 text-primary" />
+                          <CardTitle className="text-base">Visible Accounts</CardTitle>
+                        </div>
+                        <CardDescription className="text-xs">
+                          Select which Xero accounts appear in the invoice creation form. If none are selected, all accounts will be shown.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {loadingAccounts ? (
+                          <div className="flex items-center gap-2 py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Loading accounts from Xero...</span>
+                          </div>
+                        ) : allXeroAccounts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">No accounts found. Make sure Xero is connected.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <Button type="button" variant="outline" size="sm" onClick={() => setVisibleAccountCodes(allXeroAccounts.map((a) => a.code))}>
+                                Select All
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" onClick={() => setVisibleAccountCodes([])}>
+                                Clear All
+                              </Button>
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {visibleAccountCodes.length} of {allXeroAccounts.length} selected
+                              </span>
+                            </div>
+                            <div className="max-h-64 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                              {allXeroAccounts.map((a) => (
+                                <label key={a.code} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer text-sm">
+                                  <Checkbox
+                                    checked={visibleAccountCodes.includes(a.code)}
+                                    onCheckedChange={(checked) => {
+                                      setVisibleAccountCodes((prev) =>
+                                        checked ? [...prev, a.code] : prev.filter((c) => c !== a.code)
+                                      );
+                                    }}
+                                  />
+                                  <span className="font-mono text-xs text-muted-foreground w-12">{a.code}</span>
+                                  <span className="flex-1">{a.name}</span>
+                                  <Badge variant="outline" className="text-xs">{a.type}</Badge>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
                 </>
               )}
 
