@@ -220,10 +220,11 @@ const CreateInvoicePage: React.FC = () => {
       }
     };
 
-    // Serialize: contacts first (may refresh token), then others in parallel
+    // Serialize all Xero calls to avoid token refresh race conditions
     const loadXeroData = async () => {
       await fetchContacts();
-      await Promise.all([fetchTrackingCategories(), fetchAccounts()]);
+      await fetchTrackingCategories();
+      await fetchAccounts();
     };
     loadXeroData();
   }, []);
