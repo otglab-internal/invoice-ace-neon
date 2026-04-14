@@ -60,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [centreLocations, setCentreLocations] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingEnvironment, setPendingEnvironment] = useState<string | null>(null);
 
   const fetchTags = useCallback(async (sysId: string, _env?: string) => {
     const { data } = await neonQuery("staff_centre_assignments", {
@@ -121,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (data.requires_2fa) {
       setPendingEmail(email);
+      setPendingEnvironment(env);
       return { requires2FA: true, challengeToken: data.challenge_token };
     }
 
@@ -154,12 +156,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sysId = data.system_id || userId;
     const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
+    const resolvedEnv = pendingEnvironment || data.environment || "production";
+
     setUser(authUser);
-    setEnvironment(data.environment || null);
+    setEnvironment(resolvedEnv);
     setSystemId(sysId);
     setUserEmail(resolvedEmail);
     localStorage.setItem("auth_user", JSON.stringify(authUser));
-    localStorage.setItem("auth_environment", data.environment || "");
+    localStorage.setItem("auth_environment", resolvedEnv);
     localStorage.setItem("auth_system_id", sysId || "");
     localStorage.setItem("auth_user_id", userId || "");
     if (resolvedEmail) {
@@ -168,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem("auth_email");
     }
     setPendingEmail(null);
+    setPendingEnvironment(null);
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
