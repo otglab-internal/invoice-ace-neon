@@ -37,6 +37,12 @@ interface Template {
 
 const FREETEXT_ID = "__freetext__";
 
+interface TrackingCategory {
+  id: string;
+  name: string;
+  options: { id: string; name: string; status: string }[];
+}
+
 interface LineItem {
   id: string;
   templateId: string;
@@ -46,6 +52,7 @@ interface LineItem {
   cost: string;
   account: string;
   center: string;
+  trackingValues: Record<string, string>; // categoryId -> optionName
 }
 
 const createLineItem = (defaultTemplateId: string): LineItem => ({
@@ -57,6 +64,7 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
   cost: "",
   account: "",
   center: "",
+  trackingValues: {},
 });
 
 interface XeroContact {
@@ -70,10 +78,7 @@ interface XeroAccount {
   type: string;
 }
 
-interface XeroCenter {
-  id: string;
-  name: string;
-}
+
 
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
@@ -99,9 +104,13 @@ function normalizeSubmittedEmail(value: string | null | undefined): string {
   return lower === "undefined" || lower === "null" ? "" : normalized;
 }
 
-function isLineItemValid(item: LineItem, templates: Template[]): boolean {
+function isLineItemValid(item: LineItem, templates: Template[], trackingCategories: TrackingCategory[]): boolean {
   const desc = getGeneratedDescription(item, templates).trim();
-  return !!desc && !!item.quantity && !!item.cost && !!item.account && !!item.center;
+  if (!desc || !item.quantity || !item.cost || !item.account) return false;
+  if (trackingCategories.length > 0) {
+    return trackingCategories.every((tc) => !!item.trackingValues[tc.id]);
+  }
+  return true;
 }
 
 const CreateInvoicePage: React.FC = () => {
@@ -114,7 +123,7 @@ const CreateInvoicePage: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [contacts, setContacts] = useState<XeroContact[]>([]);
   const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
-  const [xeroCenters, setXeroCenters] = useState<XeroCenter[]>([]);
+  const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
@@ -181,27 +190,21 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(false);
     };
 
-    const fetchCenters = async () => {
+    const fetchTrackingCategories = async () => {
       try {
-        const env = localStorage.getItem("auth_environment") || "production";
-        const orgId = getOrgId();
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-        const res = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/get-collections-proxy?action=get&name=centre&environment=${env}&org_id=${encodeURIComponent(orgId)}`,
-          { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
-        );
-        const data = await res.json();
-        if (data?.data && Array.isArray(data.data)) {
-          setXeroCenters(
-            data.data.map((item: any) => ({
-              id: item["Centre Name"] || item.name || item.id || item,
-              name: item["Centre Name"] || item.name || item.label || item,
-            }))
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "tracking-categories" },
+          headers: xeroHeaders,
+        });
+        if (data?.categories) {
+          // Only include categories that have active options
+          const active = (data.categories as TrackingCategory[]).filter(
+            (tc) => tc.options.some((o) => o.status === "ACTIVE")
           );
+          setTrackingCategories(active);
         }
       } catch (err) {
-        console.warn("Failed to fetch centers from collections:", err);
+        console.warn("Failed to fetch Xero tracking categories:", err);
       }
     };
 
@@ -217,9 +220,13 @@ const CreateInvoicePage: React.FC = () => {
       }
     };
 
-    fetchContacts();
-    fetchCenters();
-    fetchAccounts();
+    // Serialize all Xero calls to avoid token refresh race conditions
+    const loadXeroData = async () => {
+      await fetchContacts();
+      await fetchTrackingCategories();
+      await fetchAccounts();
+    };
+    loadXeroData();
   }, []);
 
   useEffect(() => {
@@ -309,7 +316,7 @@ const CreateInvoicePage: React.FC = () => {
     : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
-  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates));
+  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -334,13 +341,22 @@ const CreateInvoicePage: React.FC = () => {
     setSubmitting(true);
 
     try {
-      const lineItemsPayload = lineItems.map((item) => ({
-        description: getGeneratedDescription(item, templates),
-        quantity: Number(item.quantity),
-        cost: Number(item.cost),
-        account: item.account,
-        center: item.center,
-      }));
+      const lineItemsPayload = lineItems.map((item) => {
+        const base: Record<string, unknown> = {
+          description: getGeneratedDescription(item, templates),
+          quantity: Number(item.quantity),
+          cost: Number(item.cost),
+          account: item.account,
+        };
+        // Include tracking categories only if they exist
+        if (trackingCategories.length > 0) {
+          base.tracking = trackingCategories.map((tc) => ({
+            name: tc.name,
+            option: item.trackingValues[tc.id] || "",
+          }));
+        }
+        return base;
+      });
 
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
       const submitterSystemId = resolvedSystemId || systemId || "";
@@ -561,7 +577,7 @@ const CreateInvoicePage: React.FC = () => {
               canRemove={lineItems.length > 1}
               templates={templates}
               accounts={xeroAccounts}
-              centers={xeroCenters}
+              trackingCategories={trackingCategories}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
             />
@@ -641,12 +657,12 @@ interface LineItemCardProps {
   canRemove: boolean;
   templates: Template[];
   accounts: XeroAccount[];
-  centers: XeroCenter[];
+  trackingCategories: TrackingCategory[];
   onUpdate: (id: string, updates: Partial<LineItem>) => void;
   onRemove: (id: string) => void;
 }
 
-const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, accounts, centers, onUpdate, onRemove }) => {
+const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, templates, accounts, trackingCategories, onUpdate, onRemove }) => {
   const update = (updates: Partial<LineItem>) => onUpdate(item.id, updates);
   const selectedTemplate = templates.find((t) => t.id === item.templateId);
   const desc = getGeneratedDescription(item, templates);
@@ -757,17 +773,22 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Center</Label>
-          <Select value={item.center} onValueChange={(v) => update({ center: v })}>
-            <SelectTrigger><SelectValue placeholder="Select center" /></SelectTrigger>
-            <SelectContent>
-              {centers.map((c) => (
-                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {trackingCategories.map((tc) => (
+          <div key={tc.id}>
+            <Label className="text-xs text-muted-foreground">{tc.name}</Label>
+            <Select
+              value={item.trackingValues[tc.id] || ""}
+              onValueChange={(v) => update({ trackingValues: { ...item.trackingValues, [tc.id]: v } })}
+            >
+              <SelectTrigger><SelectValue placeholder={`Select ${tc.name.toLowerCase()}`} /></SelectTrigger>
+              <SelectContent>
+                {tc.options.filter((o) => o.status === "ACTIVE").map((o) => (
+                  <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
       </div>
     </div>
   );
