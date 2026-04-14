@@ -172,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem("auth_email");
     }
     setPendingEmail(null);
+    setPendingEnvironment(null);
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
