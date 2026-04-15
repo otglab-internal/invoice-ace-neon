@@ -123,6 +123,7 @@ const CreateInvoicePage: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [contacts, setContacts] = useState<XeroContact[]>([]);
   const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
+  const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[] | null>(null);
   const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -220,11 +221,29 @@ const CreateInvoicePage: React.FC = () => {
       }
     };
 
+    // Fetch visible account codes from config
+    const fetchVisibleAccounts = async () => {
+      try {
+        const { data } = await neonQuery("global_config", {
+          select: "value",
+          filters: { key: "xero_visible_accounts" },
+          maybeSingle: true,
+        });
+        if (data && (data as any).value) {
+          const parsed = JSON.parse((data as any).value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setVisibleAccountCodes(parsed);
+          }
+        }
+      } catch { /* ignore */ }
+    };
+
     // Serialize all Xero calls to avoid token refresh race conditions
     const loadXeroData = async () => {
       await fetchContacts();
       await fetchTrackingCategories();
       await fetchAccounts();
+      await fetchVisibleAccounts();
     };
     loadXeroData();
   }, []);
@@ -576,7 +595,7 @@ const CreateInvoicePage: React.FC = () => {
               index={index}
               canRemove={lineItems.length > 1}
               templates={templates}
-              accounts={xeroAccounts}
+              accounts={visibleAccountCodes && visibleAccountCodes.length > 0 ? xeroAccounts.filter((a) => visibleAccountCodes.includes(a.code)) : xeroAccounts}
               trackingCategories={trackingCategories}
               onUpdate={updateLineItem}
               onRemove={removeLineItem}
