@@ -501,10 +501,16 @@ const TemplatesPage: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Create a template to speed up invoice creation
             </p>
-            <Button onClick={openCreate} variant="outline" className="gap-2">
-              <Plus className="w-4 h-4" />
-              Create your first template
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={openCreate} variant="outline" className="gap-2">
+                <Plus className="w-4 h-4" />
+                Create your first template
+              </Button>
+              <Button variant="outline" onClick={handleImport} className="gap-2">
+                <Upload className="w-4 h-4" />
+                Import templates
+              </Button>
+            </div>
           </Card>
         ) : (
           <div className="space-y-3">
