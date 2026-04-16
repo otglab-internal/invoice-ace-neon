@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -190,62 +190,6 @@ const TemplatesPage: React.FC = () => {
       toast.success("Template deleted");
       fetchTemplates();
     }
-  };
-
-  const handleExport = () => {
-    if (templates.length === 0) {
-      toast.error("No templates to export");
-      return;
-    }
-    const exportData = templates.map(({ id, created_at, ...rest }) => rest);
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `invoice-templates-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`Exported ${templates.length} template(s)`);
-  };
-
-  const handleImport = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const imported = JSON.parse(text);
-        const items = Array.isArray(imported) ? imported : [imported];
-        let count = 0;
-        for (const item of items) {
-          if (!item.name || !item.fields || !item.format_string) {
-            toast.error(`Skipped invalid template entry`);
-            continue;
-          }
-          const { error } = await neonInsert("invoice_templates", {
-            name: item.name,
-            fields: typeof item.fields === "string" ? JSON.parse(item.fields) : item.fields,
-            format_string: item.format_string,
-          });
-          if (!error) {
-            await logActivity("template_imported", "template", performerId, performerName, { name: item.name });
-            count++;
-          }
-        }
-        if (count > 0) {
-          toast.success(`Imported ${count} template(s)`);
-          fetchTemplates();
-        } else {
-          toast.error("No templates were imported");
-        }
-      } catch {
-        toast.error("Invalid JSON file");
-      }
-    };
-    input.click();
   };
 
   if (view === "create") {
