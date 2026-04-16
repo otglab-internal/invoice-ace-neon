@@ -467,14 +467,14 @@ const TemplatesPage: React.FC = () => {
   return (
     <AppLayout>
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Invoice Templates</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Create reusable templates for invoice line items
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleImport} className="gap-1.5">
               <Upload className="w-4 h-4" />
               Import
