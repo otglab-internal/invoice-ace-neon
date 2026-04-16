@@ -40,7 +40,9 @@ export async function neonQuery<T = any>(
   const res = await invoke({ action: "query", table, ...options });
   if (res.error) return { data: null, error: res.error };
   if (options?.maybeSingle) {
-    return { data: res.data?.rows ?? null, error: null };
+    const rows = res.data?.rows;
+    const single = Array.isArray(rows) ? (rows[0] ?? null) : (rows ?? null);
+    return { data: single, error: null };
   }
   return { data: res.data?.rows ?? [], error: null };
 }
