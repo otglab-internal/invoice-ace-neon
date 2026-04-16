@@ -411,27 +411,17 @@ const TemplatesPage: React.FC = () => {
   return (
     <AppLayout>
       <div className="max-w-3xl mx-auto">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Invoice Templates</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Create reusable templates for invoice line items
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleImport} className="gap-1.5">
-              <Upload className="w-4 h-4" />
-              Import
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={templates.length === 0} className="gap-1.5">
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
-            <Button onClick={openCreate} className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Template
-            </Button>
-          </div>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="w-4 h-4" />
+            New Template
+          </Button>
         </div>
 
         {loading ? (
@@ -445,16 +435,10 @@ const TemplatesPage: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-4">
               Create a template to speed up invoice creation
             </p>
-            <div className="flex items-center justify-center gap-2">
-              <Button onClick={openCreate} variant="outline" className="gap-2">
-                <Plus className="w-4 h-4" />
-                Create your first template
-              </Button>
-              <Button variant="outline" onClick={handleImport} className="gap-2">
-                <Upload className="w-4 h-4" />
-                Import templates
-              </Button>
-            </div>
+            <Button onClick={openCreate} variant="outline" className="gap-2">
+              <Plus className="w-4 h-4" />
+              Create your first template
+            </Button>
           </Card>
         ) : (
           <div className="space-y-3">
