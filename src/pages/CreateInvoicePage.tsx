@@ -125,6 +125,7 @@ const CreateInvoicePage: React.FC = () => {
   const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
   const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[] | null>(null);
   const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
+  const [currency, setCurrency] = useState("RM");
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
@@ -169,6 +170,11 @@ const CreateInvoicePage: React.FC = () => {
     };
 
     fetchTemplates();
+  }, []);
+
+  useEffect(() => {
+    neonQuery("global_config", { select: "value", filters: { key: "currency" }, maybeSingle: true })
+      .then(({ data }) => { if ((data as any)?.value) setCurrency((data as any).value); });
   }, []);
 
   useEffect(() => {
@@ -644,7 +650,7 @@ const CreateInvoicePage: React.FC = () => {
             <div className="text-sm text-muted-foreground">
               {total > 0 ? (
                 <span>
-                  Total: <strong className="text-foreground">RM {total.toFixed(2)}</strong>
+                  Total: <strong className="text-foreground">{currency} {total.toFixed(2)}</strong>
                   {lineItems.length > 1 && <span className="ml-2">({lineItems.length} items)</span>}
                 </span>
               ) : (
