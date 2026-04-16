@@ -46,13 +46,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({ onNavigate }) => {
   return (
     <aside className="flex flex-col h-full bg-sidebar">
       <div className="p-5 border-b border-sidebar-border">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {logoUrl ? (
-            <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
+            <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
           ) : (
-            <FileText className="w-6 h-6 text-sidebar-primary" />
+            <FileText className="w-6 h-6 shrink-0 text-sidebar-primary" />
           )}
-          <span className="font-display font-bold text-lg text-sidebar-foreground">Invoice Center</span>
+          <span className="font-display font-bold text-lg text-sidebar-foreground whitespace-nowrap truncate">Invoice Center</span>
         </div>
       </div>
 
