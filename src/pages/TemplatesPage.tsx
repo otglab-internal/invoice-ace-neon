@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText } from "lucide-react";
+import { Plus, Trash2, Save, Eye, ArrowLeft, GripVertical, FileText, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
