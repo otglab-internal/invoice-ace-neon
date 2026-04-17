@@ -218,14 +218,15 @@ export function buildApprovalEmailHtml(invoice: Record<string, any>): string {
 }
 
 export function buildApprovedEmailHtml(invoice: Record<string, any>): string {
+  const cur = invoice.currency || "RM";
   const lineItemsHtml = (invoice.line_items || [])
     .map(
       (li: any) =>
         `<tr>
           <td style="padding:8px;border:1px solid #e5e7eb;">${(li.description || "").replace(/\\n/g, "<br>").replace(/\n/g, "<br>")}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;text-align:center;">${li.quantity}</td>
-          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${Number(li.cost).toFixed(2)}</td>
-          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">RM ${(Number(li.quantity) * Number(li.cost)).toFixed(2)}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">${cur} ${Number(li.cost).toFixed(2)}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;text-align:right;">${cur} ${(Number(li.quantity) * Number(li.cost)).toFixed(2)}</td>
         </tr>`
     )
     .join("");
@@ -240,7 +241,7 @@ export function buildApprovedEmailHtml(invoice: Record<string, any>): string {
         <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${invoice.invoice_date || "N/A"}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${invoice.reference || "—"}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Submitted By:</td><td style="padding:4px 0;">${invoice.submitted_by_name || "N/A"}</td></tr>
-        <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(invoice.total).toFixed(2)}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">${cur} ${Number(invoice.total).toFixed(2)}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">APPROVED</span></td></tr>
       </table>
       <h3 style="color:#1a1a1a;margin-top:16px;">Line Items</h3>
