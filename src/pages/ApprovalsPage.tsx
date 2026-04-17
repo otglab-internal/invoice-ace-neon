@@ -48,6 +48,8 @@ interface Invoice {
   amendment_requested_at: string | null;
   amendment_note: string | null;
   invoice_pdf_url: string | null;
+  /** Per-invoice currency captured at submission time. */
+  currency?: string | null;
 }
 
 const ApprovalsPage: React.FC = () => {
