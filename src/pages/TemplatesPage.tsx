@@ -13,15 +13,22 @@ import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activity-logger";
+import { evaluateFormula, formatNumber, extractReferencedFields } from "@/lib/formula";
 
 interface TemplateField {
   id: string;
   name: string;
   label: string;
-  type: "text" | "number" | "date" | "select";
+  type: "text" | "number" | "date" | "select" | "programmatic";
   required: boolean;
   placeholder: string;
   options: string[];
+  /** Formula for programmatic fields, e.g. "{{qty}} * {{price}} + 5". */
+  formula?: string;
+  /** Decimal places for formatted output (programmatic only). */
+  decimals?: number;
+  /** Optional currency-style prefix prepended to the formatted value. */
+  prefix?: string;
 }
 
 interface Template {
@@ -43,6 +50,7 @@ const FIELD_TYPES = [
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
   { value: "select", label: "Dropdown" },
+  { value: "programmatic", label: "Programmatic (Formula)" },
 ];
 
 const createField = (): TemplateField => ({
@@ -53,6 +61,9 @@ const createField = (): TemplateField => ({
   required: false,
   placeholder: "",
   options: [],
+  formula: "",
+  decimals: 2,
+  prefix: "",
 });
 
 const TemplatesPage: React.FC = () => {
@@ -126,10 +137,27 @@ const TemplatesPage: React.FC = () => {
     setFormatString((prev) => prev + `{{${fieldName}}}`);
   };
 
+  /** Compute the value for a single field at preview time, auto-evaluating programmatic fields. */
+  const getFieldPreviewValue = (f: TemplateField): string => {
+    if (f.type === "programmatic" && f.formula?.trim()) {
+      // Build a numeric context from sibling field preview values.
+      const valuesByName: Record<string, string> = {};
+      fields.forEach((other) => {
+        if (other.name) valuesByName[other.name] = previewValues[other.id] || "";
+      });
+      const result = evaluateFormula(f.formula, { values: valuesByName });
+      if (result.ok && result.value !== null) {
+        return formatNumber(result.value, f.decimals ?? 2, f.prefix);
+      }
+      return previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+    }
+    return previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+  };
+
   const getPreviewOutput = (): string => {
     let output = formatString;
     fields.forEach((f) => {
-      const val = previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+      const val = getFieldPreviewValue(f);
       output = output.split(`{{${f.name}}}`).join(val);
     });
     return output;
@@ -367,6 +395,80 @@ const TemplatesPage: React.FC = () => {
                       </div>
                     )}
 
+                    {field.type === "programmatic" && (
+                      <div className="space-y-3 p-3 rounded-lg bg-background border border-dashed border-border">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Formula
+                          </Label>
+                          <Input
+                            value={field.formula || ""}
+                            onChange={(e) => updateField(field.id, { formula: e.target.value })}
+                            placeholder="e.g. {{quantity}} * {{price}} + 5"
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            Use <code className="font-mono">{"{{field_name}}"}</code> to reference other fields. Operators: <code className="font-mono">+ − × ÷ %</code> and parentheses.
+                          </p>
+                          {/* Show available numeric-friendly fields as quick chips */}
+                          {fields.filter((f) => f.name.trim() && f.id !== field.id).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {fields
+                                .filter((f) => f.name.trim() && f.id !== field.id && f.type !== "programmatic")
+                                .map((f) => (
+                                  <Button
+                                    key={f.id}
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="text-[11px] h-6 font-mono px-2"
+                                    onClick={() =>
+                                      updateField(field.id, {
+                                        formula: (field.formula || "") + `{{${f.name}}}`,
+                                      })
+                                    }
+                                  >
+                                    {`{{${f.name}}}`}
+                                  </Button>
+                                ))}
+                            </div>
+                          )}
+                          {field.formula?.trim() &&
+                            extractReferencedFields(field.formula).some(
+                              (n) => !fields.some((f) => f.name === n),
+                            ) && (
+                              <p className="text-[11px] text-destructive mt-1">
+                                Warning: formula references unknown field(s).
+                              </p>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Decimal places</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={8}
+                              value={field.decimals ?? 2}
+                              onChange={(e) =>
+                                updateField(field.id, {
+                                  decimals: Math.max(0, Math.min(8, Number(e.target.value) || 0)),
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Prefix (optional)</Label>
+                            <Input
+                              value={field.prefix || ""}
+                              onChange={(e) => updateField(field.id, { prefix: e.target.value })}
+                              placeholder="e.g. RM "
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={field.required}
@@ -429,13 +531,26 @@ const TemplatesPage: React.FC = () => {
                       .filter((f) => f.name.trim())
                       .map((f) => (
                         <div key={f.id}>
-                          <Label className="text-xs text-muted-foreground">{f.label || f.name}</Label>
-                          <Input
-                            value={previewValues[f.id] || ""}
-                            onChange={(e) => setPreviewValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
-                            placeholder={f.placeholder || `Sample ${f.label}`}
-                            className="h-8 text-sm"
-                          />
+                          <Label className="text-xs text-muted-foreground">
+                            {f.label || f.name}
+                            {f.type === "programmatic" && (
+                              <span className="ml-1 text-[10px] uppercase tracking-wide text-primary">auto</span>
+                            )}
+                          </Label>
+                          {f.type === "programmatic" ? (
+                            <Input
+                              value={getFieldPreviewValue(f)}
+                              readOnly
+                              className="h-8 text-sm bg-muted font-mono"
+                            />
+                          ) : (
+                            <Input
+                              value={previewValues[f.id] || ""}
+                              onChange={(e) => setPreviewValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                              placeholder={f.placeholder || `Sample ${f.label}`}
+                              className="h-8 text-sm"
+                            />
+                          )}
                         </div>
                       ))}
                   </div>
