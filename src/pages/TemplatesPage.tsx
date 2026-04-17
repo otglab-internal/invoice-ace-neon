@@ -474,12 +474,26 @@ const TemplatesPage: React.FC = () => {
               Create reusable templates for invoice line items
             </p>
           </div>
+          {/* Template actions: import / export / create */}
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleImport} className="gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleImport}
+              className="gap-1.5"
+              aria-label="Import templates from JSON"
+            >
               <Upload className="w-4 h-4" />
               Import
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={templates.length === 0} className="gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={templates.length === 0}
+              className="gap-1.5"
+              aria-label="Export templates to JSON"
+            >
               <Download className="w-4 h-4" />
               Export
             </Button>
