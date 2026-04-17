@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { neonQuery, neonInsert, neonUpdate, neonDelete } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { logActivity } from "@/lib/activity-logger";
+import { evaluateFormula, formatNumber, extractReferencedFields } from "@/lib/formula";
 
 interface TemplateField {
   id: string;
