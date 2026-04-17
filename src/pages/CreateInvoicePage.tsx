@@ -764,34 +764,70 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
         </div>
       ) : selectedTemplate ? (
         <div className="space-y-3 animate-fade-in">
-          {selectedTemplate.fields.map((field) => (
-            <div key={field.id}>
-              <Label className="text-xs text-muted-foreground">
-                {field.label}
-                {field.required && <span className="text-destructive ml-0.5">*</span>}
-              </Label>
-              {field.type === "select" ? (
-                <Select
-                  value={item.fieldValues[field.name] || ""}
-                  onValueChange={(v) => update({ fieldValues: { ...item.fieldValues, [field.name]: v } })}
-                >
-                  <SelectTrigger><SelectValue placeholder={field.placeholder || `Select ${field.label}`} /></SelectTrigger>
-                  <SelectContent>
-                    {field.options.map((opt) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                  value={item.fieldValues[field.name] || ""}
-                  onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
-                  placeholder={field.placeholder}
-                />
-              )}
-            </div>
-          ))}
+          {selectedTemplate.fields.map((field) => {
+            // Auto-computed value for programmatic fields, used as a placeholder/default.
+            const computed =
+              field.type === "programmatic"
+                ? computeProgrammaticValue(field, item.fieldValues)
+                : "";
+            const currentValue = item.fieldValues[field.name] ?? "";
+            const displayValue =
+              field.type === "programmatic" && currentValue === "" ? computed : currentValue;
+
+            return (
+              <div key={field.id}>
+                <Label className="text-xs text-muted-foreground">
+                  {field.label}
+                  {field.required && <span className="text-destructive ml-0.5">*</span>}
+                  {field.type === "programmatic" && (
+                    <span className="ml-1 text-[10px] uppercase tracking-wide text-primary">
+                      auto · editable
+                    </span>
+                  )}
+                </Label>
+                {field.type === "select" ? (
+                  <Select
+                    value={item.fieldValues[field.name] || ""}
+                    onValueChange={(v) => update({ fieldValues: { ...item.fieldValues, [field.name]: v } })}
+                  >
+                    <SelectTrigger><SelectValue placeholder={field.placeholder || `Select ${field.label}`} /></SelectTrigger>
+                    <SelectContent>
+                      {field.options.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : field.type === "programmatic" ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={displayValue}
+                      onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
+                      placeholder={computed || field.placeholder}
+                      className="font-mono"
+                    />
+                    {currentValue !== "" && currentValue !== computed && computed !== "" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => update({ fieldValues: { ...item.fieldValues, [field.name]: "" } })}
+                        title="Reset to auto-computed value"
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <Input
+                    type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                    value={item.fieldValues[field.name] || ""}
+                    onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
+                    placeholder={field.placeholder}
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {desc.trim() && (
             <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
