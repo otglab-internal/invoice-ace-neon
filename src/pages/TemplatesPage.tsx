@@ -49,6 +49,7 @@ const FIELD_TYPES = [
   { value: "number", label: "Number" },
   { value: "date", label: "Date" },
   { value: "select", label: "Dropdown" },
+  { value: "programmatic", label: "Programmatic (Formula)" },
 ];
 
 const createField = (): TemplateField => ({
@@ -59,6 +60,9 @@ const createField = (): TemplateField => ({
   required: false,
   placeholder: "",
   options: [],
+  formula: "",
+  decimals: 2,
+  prefix: "",
 });
 
 const TemplatesPage: React.FC = () => {
