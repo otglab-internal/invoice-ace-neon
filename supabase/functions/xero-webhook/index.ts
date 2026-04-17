@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
                     <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${inv.contact_name || "N/A"}</td></tr>
                     <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${inv.invoice_date || "N/A"}</td></tr>
                     <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${inv.reference || "—"}</td></tr>
-                    <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">RM ${Number(inv.total).toFixed(2)}</td></tr>
+                    <tr><td style="padding:4px 0;color:#6b7280;">Total:</td><td style="padding:4px 0;font-weight:600;font-size:18px;">${inv.currency || "RM"} ${Number(inv.total).toFixed(2)}</td></tr>
                     <tr><td style="padding:4px 0;color:#6b7280;">Status:</td><td style="padding:4px 0;"><span style="background:#16a34a;color:#fff;padding:2px 8px;border-radius:4px;font-size:12px;">PAID</span></td></tr>
                   </table>
                   <p style="color:#6b7280;font-size:12px;">You can now download the payment receipt from the Invoice Center.</p>
