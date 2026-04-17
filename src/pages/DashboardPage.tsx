@@ -97,7 +97,7 @@ const DashboardPage: React.FC = () => {
         total: inv.total,
         lineItems: inv.line_items,
         submittedByName: inv.submitted_by_name,
-        currency,
+        currency: inv.currency || currency,
         logoUrl,
       });
     } catch {
@@ -234,7 +234,7 @@ const DashboardPage: React.FC = () => {
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
                     <span className="text-sm font-medium text-foreground w-24 text-right">
-                      {formatCurrency(inv.total, currency)}
+                      {formatCurrency(inv.total, inv.currency || currency)}
                     </span>
                     {statusPill(inv.status, inv.amendment_status)}
                     {inv.invoice_pdf_url && (
