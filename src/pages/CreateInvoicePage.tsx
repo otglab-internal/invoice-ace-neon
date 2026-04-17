@@ -84,6 +84,32 @@ interface XeroAccount {
 
 
 
+function computeProgrammaticValue(field: TemplateField, fieldValues: Record<string, string>): string {
+  if (!field.formula?.trim()) return "";
+  const result = evaluateFormula(field.formula, { values: fieldValues });
+  if (!result.ok || result.value === null) return "";
+  return formatNumber(result.value, field.decimals ?? 2, field.prefix);
+}
+
+function getResolvedFieldValues(
+  template: { fields: TemplateField[] },
+  fieldValues: Record<string, string>,
+): Record<string, string> {
+  const resolved: Record<string, string> = { ...fieldValues };
+  // Compute programmatic fields using non-programmatic siblings.
+  template.fields.forEach((f) => {
+    if (f.type === "programmatic") {
+      const override = fieldValues[f.name];
+      if (override !== undefined && override !== "") {
+        resolved[f.name] = override;
+      } else {
+        resolved[f.name] = computeProgrammaticValue(f, fieldValues);
+      }
+    }
+  });
+  return resolved;
+}
+
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
     return item.freeDescription;
@@ -91,9 +117,10 @@ function getGeneratedDescription(item: LineItem, templates: Template[]): string 
   const template = templates.find((t) => t.id === item.templateId);
   if (!template) return item.freeDescription;
 
+  const resolved = getResolvedFieldValues(template, item.fieldValues);
   let output = template.format_string;
   template.fields.forEach((f) => {
-    const val = item.fieldValues[f.name] || "";
+    const val = resolved[f.name] || "";
     output = output.split(`{{${f.name}}}`).join(val);
   });
   return output;
