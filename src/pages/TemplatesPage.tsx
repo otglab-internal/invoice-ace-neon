@@ -137,10 +137,27 @@ const TemplatesPage: React.FC = () => {
     setFormatString((prev) => prev + `{{${fieldName}}}`);
   };
 
+  /** Compute the value for a single field at preview time, auto-evaluating programmatic fields. */
+  const getFieldPreviewValue = (f: TemplateField): string => {
+    if (f.type === "programmatic" && f.formula?.trim()) {
+      // Build a numeric context from sibling field preview values.
+      const valuesByName: Record<string, string> = {};
+      fields.forEach((other) => {
+        if (other.name) valuesByName[other.name] = previewValues[other.id] || "";
+      });
+      const result = evaluateFormula(f.formula, { values: valuesByName });
+      if (result.ok && result.value !== null) {
+        return formatNumber(result.value, f.decimals ?? 2, f.prefix);
+      }
+      return previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+    }
+    return previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+  };
+
   const getPreviewOutput = (): string => {
     let output = formatString;
     fields.forEach((f) => {
-      const val = previewValues[f.id] || f.placeholder || `[${f.label || f.name}]`;
+      const val = getFieldPreviewValue(f);
       output = output.split(`{{${f.name}}}`).join(val);
     });
     return output;
