@@ -16,15 +16,19 @@ import { apiClient } from "@/lib/api-client";
 import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
 import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
+import { evaluateFormula, formatNumber } from "@/lib/formula";
 
 interface TemplateField {
   id: string;
   name: string;
   label: string;
-  type: "text" | "number" | "date" | "select";
+  type: "text" | "number" | "date" | "select" | "programmatic";
   required: boolean;
   placeholder: string;
   options: string[];
+  formula?: string;
+  decimals?: number;
+  prefix?: string;
 }
 
 interface Template {
