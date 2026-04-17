@@ -27,6 +27,8 @@ interface Invoice {
   line_items: any[];
   amendment_status: string | null;
   invoice_pdf_url: string | null;
+  /** Per-invoice currency captured at submission time. */
+  currency?: string | null;
 }
 
 const statusPill = (status: string, amendmentStatus: string | null) => {
@@ -150,7 +152,7 @@ const AllInvoicesPage: React.FC = () => {
         total: inv.total,
         lineItems: inv.line_items,
         submittedByName: inv.submitted_by_name,
-        currency,
+        currency: inv.currency || currency,
         logoUrl,
       });
     } catch {
@@ -272,7 +274,7 @@ const AllInvoicesPage: React.FC = () => {
                   <span className="text-xs text-muted-foreground truncate">{inv.submitted_by_name}</span>
                   <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
                   <span className="text-sm font-medium text-foreground text-right">
-                    {formatCurrency(inv.total, currency)}
+                    {formatCurrency(inv.total, inv.currency || currency)}
                   </span>
                   <span>{statusPill(inv.status, inv.amendment_status)}</span>
                   <div className="flex items-center gap-1">

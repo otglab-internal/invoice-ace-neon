@@ -48,6 +48,8 @@ interface Invoice {
   amendment_requested_at: string | null;
   amendment_note: string | null;
   invoice_pdf_url: string | null;
+  /** Per-invoice currency captured at submission time. */
+  currency?: string | null;
 }
 
 const ApprovalsPage: React.FC = () => {
@@ -358,7 +360,7 @@ const ApprovalsPage: React.FC = () => {
             <td className="py-3 px-4 text-xs text-foreground">{inv.contact_name}</td>
             <td className="py-3 px-4 text-xs text-muted-foreground">{inv.submitted_by_name || "Unknown"}</td>
             <td className="py-3 px-4">{getStatusBadge(inv.status)}</td>
-            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">{inv.currency || "RM"} {Number(inv.total).toFixed(2)}</td>
             <td className="py-3 px-4 text-right text-xs text-muted-foreground">{inv.invoice_date}</td>
           </tr>
         ))}
@@ -390,8 +392,8 @@ const ApprovalsPage: React.FC = () => {
             </td>
             <td className="py-3 px-4 text-xs text-foreground">{inv.amendment_data?.contact_name || inv.contact_name}</td>
             <td className="py-3 px-4 text-xs text-muted-foreground">{inv.amendment_requested_by_name || "Unknown"}</td>
-            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.total).toFixed(2)}</td>
-            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">RM {Number(inv.amendment_data?.total || 0).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">{inv.currency || "RM"} {Number(inv.total).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">{inv.currency || "RM"} {Number(inv.amendment_data?.total || 0).toFixed(2)}</td>
             <td className="py-3 px-4 text-right text-xs text-muted-foreground">
               {inv.amendment_requested_at ? new Date(inv.amendment_requested_at).toLocaleDateString("en-MY") : "—"}
             </td>
@@ -469,12 +471,12 @@ const ApprovalsPage: React.FC = () => {
                       <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-xs">
                         <p><span className="text-muted-foreground">Contact:</span> {selectedAmendment.contact_name}</p>
                         <p><span className="text-muted-foreground">Reference:</span> {selectedAmendment.reference || "—"}</p>
-                        <p><span className="text-muted-foreground">Total:</span> RM {Number(selectedAmendment.total).toFixed(2)}</p>
+                        <p><span className="text-muted-foreground">Total:</span> {selectedAmendment.currency || "RM"} {Number(selectedAmendment.total).toFixed(2)}</p>
                         <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.line_items?.length || 0})</p>
                         {(selectedAmendment.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-border mt-1">
                             <p className="whitespace-pre-wrap">{(li.description || "").replace(/\\n/g, "\n")}</p>
-                            <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
+                            <p className="text-muted-foreground">Qty: {li.quantity} × {selectedAmendment.currency || "RM"} {Number(li.cost).toFixed(2)}</p>
                           </div>
                         ))}
                       </div>
@@ -484,12 +486,12 @@ const ApprovalsPage: React.FC = () => {
                       <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1 text-xs">
                         <p><span className="text-muted-foreground">Contact:</span> {selectedAmendment.amendment_data?.contact_name}</p>
                         <p><span className="text-muted-foreground">Reference:</span> {selectedAmendment.amendment_data?.reference || "—"}</p>
-                        <p><span className="text-muted-foreground">Total:</span> RM {Number(selectedAmendment.amendment_data?.total || 0).toFixed(2)}</p>
+                        <p><span className="text-muted-foreground">Total:</span> {selectedAmendment.currency || "RM"} {Number(selectedAmendment.amendment_data?.total || 0).toFixed(2)}</p>
                         <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.amendment_data?.line_items?.length || 0})</p>
                         {(selectedAmendment.amendment_data?.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-primary/30 mt-1">
                             <p className="whitespace-pre-wrap">{(li.description || "").replace(/\\n/g, "\n")}</p>
-                            <p className="text-muted-foreground">Qty: {li.quantity} × RM {Number(li.cost).toFixed(2)}</p>
+                            <p className="text-muted-foreground">Qty: {li.quantity} × {selectedAmendment.currency || "RM"} {Number(li.cost).toFixed(2)}</p>
                           </div>
                         ))}
                       </div>
@@ -604,7 +606,7 @@ const ApprovalsPage: React.FC = () => {
                                       />
                                     </div>
                                     <div>
-                                      <Label className="text-xs text-muted-foreground">Cost (RM)</Label>
+                                      <Label className="text-xs text-muted-foreground">Cost ({selected?.currency || "RM"})</Label>
                                       <Input
                                         type="number"
                                         step="0.01"
@@ -620,7 +622,7 @@ const ApprovalsPage: React.FC = () => {
                           </div>
 
                           <div className="text-sm font-medium text-foreground">
-                            Total: RM {editTotal.toFixed(2)}
+                            Total: {selected.currency || "RM"} {editTotal.toFixed(2)}
                           </div>
 
                           <div className="flex gap-2">
@@ -632,7 +634,7 @@ const ApprovalsPage: React.FC = () => {
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
-                            <p><span className="text-muted-foreground">Amount:</span> RM {Number(selected.total).toFixed(2)}</p>
+                            <p><span className="text-muted-foreground">Amount:</span> {selected.currency || "RM"} {Number(selected.total).toFixed(2)}</p>
                             <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
                             {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
                           </div>
@@ -642,7 +644,7 @@ const ApprovalsPage: React.FC = () => {
                             {(selected.line_items || []).map((item: any, idx: number) => (
                               <div key={idx} className="text-xs bg-muted/50 p-2 rounded-lg">
                                 <p className="text-foreground whitespace-pre-wrap">{(item.description || "").replace(/\\n/g, "\n")}</p>
-                                <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × RM {Number(item.cost).toFixed(2)}</p>
+                                <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × {selected.currency || "RM"} {Number(item.cost).toFixed(2)}</p>
                               </div>
                             ))}
                           </div>

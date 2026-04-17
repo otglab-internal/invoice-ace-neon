@@ -424,6 +424,9 @@ const CreateInvoicePage: React.FC = () => {
         reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
+        // Lock the currency in effect at submission time onto the invoice itself,
+        // so future display & downstream syncs ignore later global changes.
+        currency,
         submitted_by_system_id: submitterSystemId,
         submitted_by_name: requesterName,
         submitted_by_email: normalizeSubmittedEmail(userEmail),
