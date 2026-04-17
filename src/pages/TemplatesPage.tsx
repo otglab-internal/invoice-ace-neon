@@ -474,10 +474,6 @@ const TemplatesPage: React.FC = () => {
               Create reusable templates for invoice line items
             </p>
           </div>
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="w-4 h-4" />
-            New Template
-          </Button>
         </div>
 
         {loading ? (
