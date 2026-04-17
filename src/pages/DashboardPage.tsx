@@ -25,6 +25,8 @@ interface Invoice {
   line_items: any[];
   amendment_status: string | null;
   invoice_pdf_url: string | null;
+  /** Per-invoice currency captured at submission time. */
+  currency?: string | null;
 }
 
 const statusPill = (status: string, amendmentStatus: string | null) => {
