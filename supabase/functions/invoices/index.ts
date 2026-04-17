@@ -420,8 +420,12 @@ Deno.serve(async (req) => {
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
       if (n8nWebhookUrl) {
         try {
+          // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD").
+          const rawApprovedCurrency = (approvedInvoice.currency ?? "RM").toString();
+          const approvedCurrencyCode = rawApprovedCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
           const enrichedApproved = {
             ...approvedInvoice,
+            currency: approvedCurrencyCode,
             line_items: (approvedInvoice.line_items || []).map((li: any) => ({
               ...li,
               line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
