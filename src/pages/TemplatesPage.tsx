@@ -18,10 +18,16 @@ interface TemplateField {
   id: string;
   name: string;
   label: string;
-  type: "text" | "number" | "date" | "select";
+  type: "text" | "number" | "date" | "select" | "programmatic";
   required: boolean;
   placeholder: string;
   options: string[];
+  /** Formula for programmatic fields, e.g. "{{qty}} * {{price}} + 5". */
+  formula?: string;
+  /** Decimal places for formatted output (programmatic only). */
+  decimals?: number;
+  /** Optional currency-style prefix prepended to the formatted value. */
+  prefix?: string;
 }
 
 interface Template {
