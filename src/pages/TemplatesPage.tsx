@@ -395,6 +395,80 @@ const TemplatesPage: React.FC = () => {
                       </div>
                     )}
 
+                    {field.type === "programmatic" && (
+                      <div className="space-y-3 p-3 rounded-lg bg-background border border-dashed border-border">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Formula
+                          </Label>
+                          <Input
+                            value={field.formula || ""}
+                            onChange={(e) => updateField(field.id, { formula: e.target.value })}
+                            placeholder="e.g. {{quantity}} * {{price}} + 5"
+                            className="font-mono text-sm"
+                          />
+                          <p className="text-[11px] text-muted-foreground mt-1">
+                            Use <code className="font-mono">{"{{field_name}}"}</code> to reference other fields. Operators: <code className="font-mono">+ − × ÷ %</code> and parentheses.
+                          </p>
+                          {/* Show available numeric-friendly fields as quick chips */}
+                          {fields.filter((f) => f.name.trim() && f.id !== field.id).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {fields
+                                .filter((f) => f.name.trim() && f.id !== field.id && f.type !== "programmatic")
+                                .map((f) => (
+                                  <Button
+                                    key={f.id}
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    className="text-[11px] h-6 font-mono px-2"
+                                    onClick={() =>
+                                      updateField(field.id, {
+                                        formula: (field.formula || "") + `{{${f.name}}}`,
+                                      })
+                                    }
+                                  >
+                                    {`{{${f.name}}}`}
+                                  </Button>
+                                ))}
+                            </div>
+                          )}
+                          {field.formula?.trim() &&
+                            extractReferencedFields(field.formula).some(
+                              (n) => !fields.some((f) => f.name === n),
+                            ) && (
+                              <p className="text-[11px] text-destructive mt-1">
+                                Warning: formula references unknown field(s).
+                              </p>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Decimal places</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={8}
+                              value={field.decimals ?? 2}
+                              onChange={(e) =>
+                                updateField(field.id, {
+                                  decimals: Math.max(0, Math.min(8, Number(e.target.value) || 0)),
+                                })
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Prefix (optional)</Label>
+                            <Input
+                              value={field.prefix || ""}
+                              onChange={(e) => updateField(field.id, { prefix: e.target.value })}
+                              placeholder="e.g. RM "
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={field.required}
