@@ -170,9 +170,14 @@ Deno.serve(async (req) => {
       }
 
       try {
+        // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD", "RM" -> "RM").
+        const rawCurrency = (invoice?.currency ?? "RM").toString();
+        const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
+
         // Enrich line items with line_amount
         const enrichedInvoice = {
           ...invoice,
+          currency: currencyCode,
           line_items: (invoice?.line_items || []).map((li: any) => ({
             ...li,
             line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
@@ -415,8 +420,12 @@ Deno.serve(async (req) => {
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
       if (n8nWebhookUrl) {
         try {
+          // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD").
+          const rawApprovedCurrency = (approvedInvoice.currency ?? "RM").toString();
+          const approvedCurrencyCode = rawApprovedCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
           const enrichedApproved = {
             ...approvedInvoice,
+            currency: approvedCurrencyCode,
             line_items: (approvedInvoice.line_items || []).map((li: any) => ({
               ...li,
               line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
