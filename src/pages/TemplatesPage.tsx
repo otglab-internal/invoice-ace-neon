@@ -531,13 +531,26 @@ const TemplatesPage: React.FC = () => {
                       .filter((f) => f.name.trim())
                       .map((f) => (
                         <div key={f.id}>
-                          <Label className="text-xs text-muted-foreground">{f.label || f.name}</Label>
-                          <Input
-                            value={previewValues[f.id] || ""}
-                            onChange={(e) => setPreviewValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
-                            placeholder={f.placeholder || `Sample ${f.label}`}
-                            className="h-8 text-sm"
-                          />
+                          <Label className="text-xs text-muted-foreground">
+                            {f.label || f.name}
+                            {f.type === "programmatic" && (
+                              <span className="ml-1 text-[10px] uppercase tracking-wide text-primary">auto</span>
+                            )}
+                          </Label>
+                          {f.type === "programmatic" ? (
+                            <Input
+                              value={getFieldPreviewValue(f)}
+                              readOnly
+                              className="h-8 text-sm bg-muted font-mono"
+                            />
+                          ) : (
+                            <Input
+                              value={previewValues[f.id] || ""}
+                              onChange={(e) => setPreviewValues((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                              placeholder={f.placeholder || `Sample ${f.label}`}
+                              className="h-8 text-sm"
+                            />
+                          )}
                         </div>
                       ))}
                   </div>
