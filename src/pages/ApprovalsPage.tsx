@@ -606,7 +606,7 @@ const ApprovalsPage: React.FC = () => {
                                       />
                                     </div>
                                     <div>
-                                      <Label className="text-xs text-muted-foreground">Cost (RM)</Label>
+                                      <Label className="text-xs text-muted-foreground">Cost ({selected?.currency || "RM"})</Label>
                                       <Input
                                         type="number"
                                         step="0.01"
