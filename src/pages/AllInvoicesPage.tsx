@@ -97,12 +97,13 @@ const AllInvoicesPage: React.FC = () => {
     if (!error && data) {
       let invoices = data as Invoice[];
 
-      // Centre role: filter to invoices that have line items matching their centres
-      if (isCentre && !isAdmin && centreLocations.length > 0) {
+      // Centre role: show invoices in their centres + always include their own
+      if (isCentre && !isAdmin) {
         invoices = invoices.filter((inv) => {
-          // Include own invoices
-          if (inv.submitted_by_system_id === systemId) return true;
-          // Include invoices with line items in their centres
+          // Always include invoices the user submitted themselves
+          if (systemId && inv.submitted_by_system_id === systemId) return true;
+          // Include invoices with line items in their assigned centres
+          if (centreLocations.length === 0) return false;
           const invoiceCentres = (inv.line_items || []).map((li: any) => li.center).filter(Boolean);
           if (invoiceCentres.length === 0) return false;
           return invoiceCentres.some((c: string) => centreLocations.includes(c));
