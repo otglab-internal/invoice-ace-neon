@@ -16,15 +16,19 @@ import { apiClient } from "@/lib/api-client";
 import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
 import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
+import { evaluateFormula, formatNumber } from "@/lib/formula";
 
 interface TemplateField {
   id: string;
   name: string;
   label: string;
-  type: "text" | "number" | "date" | "select";
+  type: "text" | "number" | "date" | "select" | "programmatic";
   required: boolean;
   placeholder: string;
   options: string[];
+  formula?: string;
+  decimals?: number;
+  prefix?: string;
 }
 
 interface Template {
@@ -80,6 +84,32 @@ interface XeroAccount {
 
 
 
+function computeProgrammaticValue(field: TemplateField, fieldValues: Record<string, string>): string {
+  if (!field.formula?.trim()) return "";
+  const result = evaluateFormula(field.formula, { values: fieldValues });
+  if (!result.ok || result.value === null) return "";
+  return formatNumber(result.value, field.decimals ?? 2, field.prefix);
+}
+
+function getResolvedFieldValues(
+  template: { fields: TemplateField[] },
+  fieldValues: Record<string, string>,
+): Record<string, string> {
+  const resolved: Record<string, string> = { ...fieldValues };
+  // Compute programmatic fields using non-programmatic siblings.
+  template.fields.forEach((f) => {
+    if (f.type === "programmatic") {
+      const override = fieldValues[f.name];
+      if (override !== undefined && override !== "") {
+        resolved[f.name] = override;
+      } else {
+        resolved[f.name] = computeProgrammaticValue(f, fieldValues);
+      }
+    }
+  });
+  return resolved;
+}
+
 function getGeneratedDescription(item: LineItem, templates: Template[]): string {
   if (item.templateId === FREETEXT_ID) {
     return item.freeDescription;
@@ -87,9 +117,10 @@ function getGeneratedDescription(item: LineItem, templates: Template[]): string 
   const template = templates.find((t) => t.id === item.templateId);
   if (!template) return item.freeDescription;
 
+  const resolved = getResolvedFieldValues(template, item.fieldValues);
   let output = template.format_string;
   template.fields.forEach((f) => {
-    const val = item.fieldValues[f.name] || "";
+    const val = resolved[f.name] || "";
     output = output.split(`{{${f.name}}}`).join(val);
   });
   return output;
@@ -393,6 +424,9 @@ const CreateInvoicePage: React.FC = () => {
         reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
         total,
+        // Lock the currency in effect at submission time onto the invoice itself,
+        // so future display & downstream syncs ignore later global changes.
+        currency,
         submitted_by_system_id: submitterSystemId,
         submitted_by_name: requesterName,
         submitted_by_email: normalizeSubmittedEmail(userEmail),
@@ -733,34 +767,70 @@ const LineItemCard: React.FC<LineItemCardProps> = ({ item, index, canRemove, tem
         </div>
       ) : selectedTemplate ? (
         <div className="space-y-3 animate-fade-in">
-          {selectedTemplate.fields.map((field) => (
-            <div key={field.id}>
-              <Label className="text-xs text-muted-foreground">
-                {field.label}
-                {field.required && <span className="text-destructive ml-0.5">*</span>}
-              </Label>
-              {field.type === "select" ? (
-                <Select
-                  value={item.fieldValues[field.name] || ""}
-                  onValueChange={(v) => update({ fieldValues: { ...item.fieldValues, [field.name]: v } })}
-                >
-                  <SelectTrigger><SelectValue placeholder={field.placeholder || `Select ${field.label}`} /></SelectTrigger>
-                  <SelectContent>
-                    {field.options.map((opt) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-                  value={item.fieldValues[field.name] || ""}
-                  onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
-                  placeholder={field.placeholder}
-                />
-              )}
-            </div>
-          ))}
+          {selectedTemplate.fields.map((field) => {
+            // Auto-computed value for programmatic fields, used as a placeholder/default.
+            const computed =
+              field.type === "programmatic"
+                ? computeProgrammaticValue(field, item.fieldValues)
+                : "";
+            const currentValue = item.fieldValues[field.name] ?? "";
+            const displayValue =
+              field.type === "programmatic" && currentValue === "" ? computed : currentValue;
+
+            return (
+              <div key={field.id}>
+                <Label className="text-xs text-muted-foreground">
+                  {field.label}
+                  {field.required && <span className="text-destructive ml-0.5">*</span>}
+                  {field.type === "programmatic" && (
+                    <span className="ml-1 text-[10px] uppercase tracking-wide text-primary">
+                      auto · editable
+                    </span>
+                  )}
+                </Label>
+                {field.type === "select" ? (
+                  <Select
+                    value={item.fieldValues[field.name] || ""}
+                    onValueChange={(v) => update({ fieldValues: { ...item.fieldValues, [field.name]: v } })}
+                  >
+                    <SelectTrigger><SelectValue placeholder={field.placeholder || `Select ${field.label}`} /></SelectTrigger>
+                    <SelectContent>
+                      {field.options.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : field.type === "programmatic" ? (
+                  <div className="flex gap-2">
+                    <Input
+                      value={displayValue}
+                      onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
+                      placeholder={computed || field.placeholder}
+                      className="font-mono"
+                    />
+                    {currentValue !== "" && currentValue !== computed && computed !== "" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => update({ fieldValues: { ...item.fieldValues, [field.name]: "" } })}
+                        title="Reset to auto-computed value"
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <Input
+                    type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                    value={item.fieldValues[field.name] || ""}
+                    onChange={(e) => update({ fieldValues: { ...item.fieldValues, [field.name]: e.target.value } })}
+                    placeholder={field.placeholder}
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {desc.trim() && (
             <div className="mt-3 p-3 rounded-lg bg-muted border border-border">

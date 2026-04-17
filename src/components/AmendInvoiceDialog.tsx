@@ -30,6 +30,8 @@ interface Invoice {
   submitted_by_name: string;
   submitted_by_system_id: string;
   status: string;
+  /** Per-invoice currency captured at submission time. */
+  currency?: string | null;
 }
 
 interface AmendInvoiceDialogProps {
@@ -192,7 +194,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
                       <Input type="number" value={li.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="mt-1 text-xs" />
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Cost (RM)</Label>
+                      <Label className="text-xs text-muted-foreground">Cost ({invoice?.currency || "RM"})</Label>
                       <Input type="number" step="0.01" value={li.cost} onChange={(e) => updateItem(idx, { cost: Number(e.target.value) })} className="mt-1 text-xs" />
                     </div>
                     <div>
@@ -210,7 +212,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
           </div>
 
           <div className="text-sm font-medium text-foreground">
-            New Total: RM {total.toFixed(2)}
+            New Total: {invoice?.currency || "RM"} {total.toFixed(2)}
           </div>
 
           <div>
