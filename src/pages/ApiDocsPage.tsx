@@ -107,9 +107,15 @@ const ApiDocsPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr><td className="py-2 pr-4 font-mono text-foreground">reference</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Purchase order or reference number</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono text-foreground">user_email</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Requester email. If omitted, resolved automatically from <code>user_id</code> via the user directory. Required for payment notifications.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono text-foreground">template_id</td><td className="py-2 pr-4">uuid</td><td className="py-2 text-muted-foreground">Optional invoice template ID. If the template has <code>requires_approval=true</code>, the invoice will go through approval regardless of user flags.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono text-foreground">contact_id</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Xero contact ID. Omit to let downstream processing create/match the contact by name.</td></tr>
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              <strong>Approval behaviour:</strong> The invoice honours the same rules as the UI — it auto-approves unless the submitting user is in <code>user_approval_flags</code> or the chosen template requires approval. Flagged invoices land in <code>pending_approval</code> and trigger the standard approver email + n8n workflow.
+            </p>
           </div>
 
           <div>
