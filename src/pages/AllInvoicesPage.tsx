@@ -119,7 +119,7 @@ const AllInvoicesPage: React.FC = () => {
       setAllInvoices(invoices);
     }
     setLoading(false);
-  }, [systemId, isAdmin, isCentre, ownOnly, centreLocations]);
+  }, [systemId, user, isAdmin, isCentre, ownOnly, centreLocations]);
 
   useEffect(() => {
     fetchInvoices();
