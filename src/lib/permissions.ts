@@ -60,12 +60,17 @@ export function getPermissions(role: AppRole, tags: StaffTag[] = []): Permission
   const isApprover = hasTag("approver");
 
   const isAdmin = role === "admin";
+  const isManagement = role === "management";
 
   return {
     canCreateInvoice: isRequester,
-    canViewInvoices: isRequester || isApprover,
-    viewOwnInvoicesOnly: isRequester && !isApprover && role !== "management" && !isAdmin,
-    canViewAllInvoices: isApprover && (role === "management" || isAdmin),
+    // Admins and management always see invoices regardless of tags.
+    // Otherwise, requester or approver tag is required.
+    canViewInvoices: isAdmin || isManagement || isRequester || isApprover,
+    // Only "pure" requesters (no approver tag, not management/admin) are scoped to their own.
+    viewOwnInvoicesOnly: isRequester && !isApprover && !isManagement && !isAdmin,
+    // Admins and management see ALL invoices. Approver tag not required for visibility.
+    canViewAllInvoices: isAdmin || isManagement || (isApprover && role !== "centre"),
     canApproveInvoices: isApprover,
     approveSubordinatesOnly: isApprover && role === "centre",
     canAccessApprovals: isApprover,
