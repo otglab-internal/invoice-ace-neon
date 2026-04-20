@@ -48,6 +48,8 @@ const ApiDocsPage: React.FC = () => {
   action: "api-submit",
   system_id: "EXT-SYSTEM-001",
   user_id: "user-abc-123",
+  user_email: "requester@example.com",
+  template_id: "optional-template-uuid",
   contact_name: "Lee Music Academy",
   invoice_date: "22/03/2026",
   reference: "PO-12345",
