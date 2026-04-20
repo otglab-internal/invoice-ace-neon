@@ -218,6 +218,90 @@ const ApiDocsPage: React.FC = () => {
           </pre>
         </Card>
 
+        {/* Xero Contacts: List */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-emerald-600 text-xs">POST</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">List Xero Contacts</h2>
+          </div>
+          <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">
+            {`${SUPABASE_URL}/functions/v1/xero`}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Returns active Xero contacts for the current tenant. Supports search and pagination.
+          </p>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Request Body</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  action: "list-xero-contacts",
+  search: "Lee Music",
+  page: 1
+}, null, 2)}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              <code>search</code> (optional) — case-insensitive name match. <code>page</code> (optional, default 1) — Xero returns 100 contacts per page.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Response (200)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  success: true,
+  page: 1,
+  contacts: [
+    { contact_id: "uuid", name: "Lee Music Academy", email: "billing@lee.com" }
+  ]
+}, null, 2)}
+            </pre>
+          </div>
+        </Card>
+
+        {/* Xero Contacts: Create */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-emerald-600 text-xs">POST</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">Create Xero Contact (find-or-create)</h2>
+          </div>
+          <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">
+            {`${SUPABASE_URL}/functions/v1/xero`}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Looks up an active Xero contact by exact name. If none exists, creates a new one and returns it. Use this before <code>api-submit</code> if you want a guaranteed <code>contact_id</code>.
+          </p>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Request Body</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  action: "create-xero-contact",
+  name: "Acme Corp Sdn Bhd",
+  email: "ap@acme.com",
+  phone: "+60123456789"
+}, null, 2)}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              Only <code>name</code> is required. <code>email</code> and <code>phone</code> are optional and only applied when creating a new contact.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Response (200)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  success: true,
+  created: false,
+  contact: { contact_id: "uuid", name: "Acme Corp Sdn Bhd", email: "ap@acme.com" }
+}, null, 2)}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              <code>created</code> is <code>true</code> when a new Xero contact was created, <code>false</code> when an existing match was returned.
+            </p>
+          </div>
+        </Card>
+
         {/* PDF Webhook */}
         <Card className="p-5 space-y-3">
           <div className="flex items-center gap-2">
