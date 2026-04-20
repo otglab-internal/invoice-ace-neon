@@ -92,15 +92,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
-        setSystemId(storedSysId);
+        // CANONICAL: always prefer auth_user_id over auth_system_id.
+        // Older sessions may have stored a divergent value in auth_system_id;
+        // realign both to the user_id so downstream queries are consistent.
+        const canonicalId = storedUserId || storedSysId;
+        setSystemId(canonicalId);
+        if (canonicalId && canonicalId !== storedSysId) {
+          localStorage.setItem("auth_system_id", canonicalId);
+        }
         setUserEmail(storedEmail);
         if (storedEmail) {
           localStorage.setItem("auth_email", storedEmail);
         } else {
           localStorage.removeItem("auth_email");
         }
-        const tagLookupId = storedUserId || storedSysId;
-        if (tagLookupId) fetchTags(tagLookupId);
+        if (canonicalId) fetchTags(canonicalId);
       } catch {
         localStorage.removeItem("auth_user");
       }
