@@ -90,13 +90,25 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
     setSubmitting(true);
 
     try {
-      const amendmentData = sanitizeObject({
-        contact_name: contactName,
+      // Sanitize everything EXCEPT line item descriptions — those must keep
+      // real newlines for UI rendering. The \n→literal conversion is only
+      // applied at the n8n webhook boundary, not at storage time.
+      const amendmentData = {
+        contact_name: sanitizeString(contactName),
         contact_id: invoice.contact_id,
-        reference,
-        line_items: lineItems,
+        reference: sanitizeString(reference),
+        line_items: lineItems.map((li) => ({
+          ...li,
+          description: (li.description || "")
+            .replace(/<[^>]*>/g, "")
+            .replace(/javascript:/gi, "")
+            .replace(/on\w+\s*=/gi, "")
+            .trim(),
+          account: li.account ? sanitizeString(li.account) : li.account,
+          center: li.center ? sanitizeString(li.center) : li.center,
+        })),
         total,
-      });
+      };
 
       const { error } = await neonUpdate(
         "invoices",
