@@ -73,6 +73,7 @@ const AllInvoicesPage: React.FC = () => {
   const isAdmin = permissions.isSystemAdmin;
   const isCentre = role === "centre";
   const isRequester = permissions.canCreateInvoice;
+  const ownOnly = permissions.viewOwnInvoicesOnly;
 
   useEffect(() => {
     neonQuery("global_config", { select: "value", filters: { key: "currency" }, maybeSingle: true })
@@ -83,8 +84,9 @@ const AllInvoicesPage: React.FC = () => {
     setLoading(true);
     const filters: Record<string, any> = {};
 
-    // Sales users: only their own invoices
-    if (!isAdmin && !isCentre && role !== "management") {
+    // Requesters (without approver tag) only see their own invoices,
+    // regardless of role (sales / centre / management).
+    if (ownOnly) {
       if (systemId) filters.submitted_by_system_id = systemId;
     }
 
@@ -97,12 +99,11 @@ const AllInvoicesPage: React.FC = () => {
     if (!error && data) {
       let invoices = data as Invoice[];
 
-      // Centre role: show invoices in their centres + always include their own
-      if (isCentre && !isAdmin) {
+      // Centre approvers: show invoices in their centres + always include their own.
+      // (Centre requesters-only are already filtered server-side via `ownOnly`.)
+      if (isCentre && !isAdmin && !ownOnly) {
         invoices = invoices.filter((inv) => {
-          // Always include invoices the user submitted themselves
           if (systemId && inv.submitted_by_system_id === systemId) return true;
-          // Include invoices with line items in their assigned centres
           if (centreLocations.length === 0) return false;
           const invoiceCentres = (inv.line_items || []).map((li: any) => li.center).filter(Boolean);
           if (invoiceCentres.length === 0) return false;
@@ -113,7 +114,7 @@ const AllInvoicesPage: React.FC = () => {
       setAllInvoices(invoices);
     }
     setLoading(false);
-  }, [systemId, isAdmin, isCentre, role, centreLocations]);
+  }, [systemId, isAdmin, isCentre, ownOnly, centreLocations]);
 
   useEffect(() => {
     fetchInvoices();
@@ -193,11 +194,13 @@ const AllInvoicesPage: React.FC = () => {
     return result;
   }, [allInvoices, statusFilter, searchQuery]);
 
-  const scopeLabel = isAdmin || role === "management"
-    ? "All Invoices"
-    : isCentre
-      ? "Centre Invoices"
-      : "My Invoices";
+  const scopeLabel = ownOnly
+    ? "My Invoices"
+    : isAdmin || role === "management"
+      ? "All Invoices"
+      : isCentre
+        ? "Centre Invoices"
+        : "My Invoices";
 
   return (
     <AppLayout>
@@ -205,11 +208,13 @@ const AllInvoicesPage: React.FC = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold font-display text-foreground">{scopeLabel}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {isAdmin || role === "management"
-              ? "Viewing all invoices across the organisation"
-              : isCentre
-                ? "Viewing invoices from your centres"
-                : "Viewing your submitted invoices"}
+            {ownOnly
+              ? "Viewing your submitted invoices"
+              : isAdmin || role === "management"
+                ? "Viewing all invoices across the organisation"
+                : isCentre
+                  ? "Viewing invoices from your centres"
+                  : "Viewing your submitted invoices"}
           </p>
         </div>
 
