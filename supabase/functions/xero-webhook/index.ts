@@ -176,6 +176,8 @@ Deno.serve(async (req) => {
     const rawBody = await req.text();
     const xeroSignature = req.headers.get("x-xero-signature") || "";
 
+    console.log(`xero-webhook: [INCOMING] org=${orgId} env=${environment} bodyLen=${rawBody.length} hasSig=${!!xeroSignature}`);
+
     const sql = getDb(orgId, environment);
 
     // Resolve webhook key from environment secrets per org + environment
@@ -184,14 +186,14 @@ Deno.serve(async (req) => {
     const webhookKey = Deno.env.get(`XERO_WEBHOOK_KEY_${orgUpper}_${envSuffix}`) || "";
 
     if (!webhookKey) {
-      console.error("xero-webhook: No xero_webhook_key configured");
+      console.error(`xero-webhook: [NO-KEY] Missing XERO_WEBHOOK_KEY_${orgUpper}_${envSuffix}`);
       return new Response("", { status: 401 });
     }
 
     // Validate signature - Xero requires 200 for valid, non-200 for invalid
     const valid = await verifyXeroSignature(rawBody, xeroSignature, webhookKey);
     if (!valid) {
-      console.warn("xero-webhook: Invalid signature");
+      console.warn(`xero-webhook: [BAD-SIG] org=${orgId} env=${environment} sig=${xeroSignature.slice(0, 12)}…`);
       return new Response("", { status: 401 });
     }
 
@@ -200,10 +202,12 @@ Deno.serve(async (req) => {
     try {
       payload = JSON.parse(rawBody);
     } catch {
+      console.warn(`xero-webhook: [BAD-JSON] org=${orgId} env=${environment} body=${rawBody.slice(0, 200)}`);
       return new Response("", { status: 200 });
     }
 
     const events = payload.events || [];
+    console.log(`xero-webhook: [PARSED] org=${orgId} env=${environment} eventCount=${events.length} types=${events.map((e) => `${e.eventCategory}.${e.eventType}`).join(",")}`);
     if (events.length === 0) {
       // Xero validation ping - just return 200
       return new Response("", { status: 200 });
