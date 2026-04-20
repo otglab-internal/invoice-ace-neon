@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiClient } from "@/lib/api-client";
 import { getOrgId } from "@/lib/runtime-config";
 import { neonQuery, neonInsert } from "@/lib/neon-client";
+import { resolveUserEmail } from "@/lib/resolve-user-email";
 import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
 import { evaluateFormula, formatNumber } from "@/lib/formula";
 
@@ -417,6 +418,17 @@ const CreateInvoicePage: React.FC = () => {
       const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
       const submitterSystemId = resolvedSystemId || systemId || "";
 
+      // Guarantee submitted_by_email is never empty — older sessions may not
+      // have cached auth_email, so fall back to a live auth-gateway lookup.
+      let resolvedEmail: string;
+      try {
+        resolvedEmail = await resolveUserEmail(userEmail, submitterSystemId);
+      } catch (emailErr: any) {
+        toast.error(emailErr?.message || "Could not determine your account email.");
+        setSubmitting(false);
+        return;
+      }
+
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
         contact_name: contactName,
@@ -429,7 +441,7 @@ const CreateInvoicePage: React.FC = () => {
         currency,
         submitted_by_system_id: submitterSystemId,
         submitted_by_name: requesterName,
-        submitted_by_email: normalizeSubmittedEmail(userEmail),
+        submitted_by_email: resolvedEmail,
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
