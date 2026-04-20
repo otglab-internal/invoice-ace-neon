@@ -116,16 +116,23 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   const fetchInvoices = async () => {
-    const filters: Record<string, any> = {};
-    if (permissions.viewOwnInvoicesOnly && systemId) {
-      filters.submitted_by_system_id = systemId;
+    const queryOptions: any = {
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url",
+      order: { column: "created_at", ascending: false },
+    };
+
+    if (permissions.viewOwnInvoicesOnly) {
+      // Match on either system_id OR submitted name, since the auth system_id
+      // may differ from what was stored at submission time (UUID vs staff system_id).
+      const requesterName = user ? `${user.firstName} ${user.lastName}`.trim() : "";
+      const ors: Array<Record<string, any>> = [];
+      if (systemId) ors.push({ submitted_by_system_id: systemId });
+      if (requesterName) ors.push({ submitted_by_name: requesterName });
+      if (ors.length > 0) queryOptions.orFilters = ors;
+      else queryOptions.filters = { submitted_by_system_id: "__none__" };
     }
 
-    const { data, error } = await neonQuery("invoices", {
-      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url",
-      filters,
-      order: { column: "created_at", ascending: false },
-    });
+    const { data, error } = await neonQuery("invoices", queryOptions);
     if (!error && data) setInvoices(data as Invoice[]);
     setLoading(false);
   };
