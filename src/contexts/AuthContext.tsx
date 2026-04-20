@@ -159,8 +159,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expiryDate: data.user.expiry_date,
     };
 
+    // CANONICAL IDENTITY: always use `data.user.id` (the external users.id).
+    // It is the same key returned by get-users-proxy and stored in
+    // staff_centre_assignments.system_id, so all downstream references
+    // (invoice.submitted_by_system_id, approved_by, amendment_requested_by,
+    //  invoice_logs.performed_by, activity_logs.performed_by) line up.
     const userId = data.user.id || data.system_id || null;
-    const sysId = data.system_id || userId;
+    const sysId = userId;
     const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
     const resolvedEnv = pendingEnvironment || data.environment || "production";
