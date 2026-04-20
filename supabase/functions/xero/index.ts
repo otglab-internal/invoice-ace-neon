@@ -445,6 +445,144 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ACTION: list-xero-contacts — paginated/searchable contacts list (external API friendly)
+    if (action === "list-xero-contacts") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_access_token", "xero_refresh_token", "xero_client_id", "xero_client_secret", "xero_tenant_id"],
+      );
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected", contacts: [] }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const search = typeof body.search === "string" ? body.search.trim() : "";
+      const page = Number(body.page) > 0 ? Number(body.page) : 1;
+
+      let where = `ContactStatus=="ACTIVE"`;
+      if (search) {
+        const safe = search.replace(/"/g, '\\"');
+        where += ` AND Name!=null AND Name.Contains("${safe}")`;
+      }
+      const url = `${XERO_API_URL}/Contacts?where=${encodeURIComponent(where)}&order=Name&page=${page}`;
+
+      let accessToken = config.xero_access_token;
+      let res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}`, "Xero-Tenant-Id": config.xero_tenant_id, Accept: "application/json" },
+      });
+      if (res.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect.", contacts: [] }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        res = await fetch(url, {
+          headers: { Authorization: `Bearer ${accessToken}`, "Xero-Tenant-Id": config.xero_tenant_id, Accept: "application/json" },
+        });
+      }
+      if (!res.ok) {
+        console.error("Xero list-xero-contacts failed:", await res.text());
+        return new Response(JSON.stringify({ error: "Failed to fetch contacts", contacts: [] }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const data = await res.json();
+      const contacts = (data.Contacts || []).map((c: any) => ({
+        id: c.ContactID,
+        name: c.Name,
+        email: c.EmailAddress || null,
+        status: c.ContactStatus,
+      }));
+      return new Response(JSON.stringify({ contacts, page }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ACTION: create-xero-contact — find-or-create a Xero contact by name
+    if (action === "create-xero-contact") {
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!name) {
+        return new Response(JSON.stringify({ error: "Missing contact name" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const email = typeof body.email === "string" ? body.email.trim() : "";
+      const firstName = typeof body.first_name === "string" ? body.first_name.trim() : "";
+      const lastName = typeof body.last_name === "string" ? body.last_name.trim() : "";
+
+      const config = await getConfigMap(
+        sql,
+        ["xero_access_token", "xero_refresh_token", "xero_client_id", "xero_client_secret", "xero_tenant_id"],
+      );
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+
+      const safeName = name.replace(/"/g, '\\"');
+      const lookupUrl = `${XERO_API_URL}/Contacts?where=${encodeURIComponent(`Name=="${safeName}"`)}`;
+      const doFetch = (u: string, init?: RequestInit) => fetch(u, {
+        ...(init || {}),
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Xero-Tenant-Id": config.xero_tenant_id,
+          Accept: "application/json",
+          ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        },
+      });
+
+      let lookup = await doFetch(lookupUrl);
+      if (lookup.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect." }), {
+            status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        lookup = await doFetch(lookupUrl);
+      }
+      if (lookup.ok) {
+        const lj = await lookup.json();
+        const existing = (lj.Contacts || [])[0];
+        if (existing) {
+          return new Response(JSON.stringify({
+            contact: { id: existing.ContactID, name: existing.Name, email: existing.EmailAddress || null },
+            created: false,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
+      const payload: Record<string, unknown> = { Name: name };
+      if (email) payload.EmailAddress = email;
+      if (firstName) payload.FirstName = firstName;
+      if (lastName) payload.LastName = lastName;
+
+      const createRes = await doFetch(`${XERO_API_URL}/Contacts`, {
+        method: "POST",
+        body: JSON.stringify({ Contacts: [payload] }),
+      });
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        console.error("Xero create-xero-contact failed:", errText);
+        return new Response(JSON.stringify({ error: "Failed to create contact", detail: errText }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const cj = await createRes.json();
+      const created = (cj.Contacts || [])[0];
+      return new Response(JSON.stringify({
+        contact: created ? { id: created.ContactID, name: created.Name, email: created.EmailAddress || null } : null,
+        created: true,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ error: "Unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
