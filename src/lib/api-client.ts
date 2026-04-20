@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getOrgId } from "@/lib/runtime-config";
+import { parseEdgeError } from "@/lib/edge-error";
 
 
 const getEnvironment = (): string => {
@@ -32,12 +33,14 @@ export const apiClient = {
     });
 
     if (error) {
-      throw new Error(error.message || "Request failed");
+      const msg = await parseEdgeError(error, data, `${functionName}:${action} failed`);
+      throw new Error(msg);
     }
 
-    // Handle edge function returning error in body
-    if (data?.error) {
-      throw new Error(data.error);
+    // Handle edge function returning error in body (2xx)
+    if (data && typeof data === "object" && (data as any).error) {
+      const msg = await parseEdgeError(null, data, `${functionName}:${action} failed`);
+      throw new Error(msg);
     }
 
     return data as T;

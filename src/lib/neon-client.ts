@@ -6,6 +6,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import { getOrgId } from "@/lib/runtime-config";
+import { parseEdgeError } from "@/lib/edge-error";
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -21,8 +22,14 @@ async function invoke(body: Record<string, unknown>) {
     body,
     headers: getHeaders(),
   });
-  if (error) return { data: null, error: { message: error.message } };
-  if (data?.error) return { data: null, error: { message: data.error } };
+  if (error) {
+    const message = await parseEdgeError(error, data, "Database request failed");
+    return { data: null, error: { message } };
+  }
+  if (data?.error) {
+    const message = await parseEdgeError(null, data, "Database request failed");
+    return { data: null, error: { message } };
+  }
   return { data, error: null };
 }
 

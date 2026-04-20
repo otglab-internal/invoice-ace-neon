@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { neonQuery } from "@/lib/neon-client";
 import { normalizeRole, getPermissions, type AppRole, type StaffTag, type Permissions } from "@/lib/permissions";
 import { getOrgId } from "@/lib/runtime-config";
+import { parseEdgeError } from "@/lib/edge-error";
 
 export interface AuthUser {
   firstName: string;
@@ -115,10 +116,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      const bodyError = data?.error || data?.message || error?.message;
-      throw new Error(bodyError || "Login failed. Please try again.");
+      const msg = await parseEdgeError(error, data, "Login failed. Please try again.");
+      throw new Error(msg);
     }
-    if (data?.error) throw new Error(data.message || data.error);
+    if (data?.error) {
+      const msg = await parseEdgeError(null, data, "Login failed. Please try again.");
+      throw new Error(msg);
+    }
 
     if (data.requires_2fa) {
       setPendingEmail(email);
@@ -137,10 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (error) {
-      const bodyError = data?.error || data?.message || error?.message;
-      throw new Error(bodyError || "Verification failed. Please try again.");
+      const msg = await parseEdgeError(error, data, "Verification failed. Please try again.");
+      throw new Error(msg);
     }
-    if (data?.error) throw new Error(data.message || data.error);
+    if (data?.error) {
+      const msg = await parseEdgeError(null, data, "Verification failed. Please try again.");
+      throw new Error(msg);
+    }
     if (!data.success || !data.user) throw new Error("Verification failed");
 
     const authUser: AuthUser = {
