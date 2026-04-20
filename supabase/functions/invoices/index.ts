@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, contact_id, contact_name, invoice_date, reference, line_items } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id } = body;
 
       const missing: string[] = [];
       if (!system_id) missing.push("system_id");
@@ -95,10 +95,72 @@ Deno.serve(async (req) => {
 
       const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
       const dbSql = getDb(req, bodyOrgId);
+      const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
+      const envResolved = req.headers.get("x-environment") || "production";
+
+      // --- Resolve submitter email ---
+      // Priority: explicit user_email in payload → live get-users-proxy lookup by system_id.
+      // Never insert with empty email — payment notifications depend on it.
+      let resolvedEmail = (typeof user_email === "string" ? user_email.trim() : "");
+      let resolvedName = (typeof user_name === "string" ? user_name.trim() : "") || `API:${user_id}`;
+
+      if (!resolvedEmail || !user_name) {
+        try {
+          const proxyUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/get-users-proxy?environment=${encodeURIComponent(envResolved)}&org_id=${encodeURIComponent(orgIdResolved)}`;
+          const proxyRes = await fetch(proxyUrl, {
+            headers: {
+              apikey: Deno.env.get("SUPABASE_ANON_KEY") || "",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") || ""}`,
+              "x-org-id": orgIdResolved,
+              "x-environment": envResolved,
+            },
+          });
+          if (proxyRes.ok) {
+            const json = await proxyRes.json();
+            const users = Array.isArray(json?.data) ? json.data : [];
+            const match = users.find((u: any) => u?.id === system_id);
+            if (match) {
+              if (!resolvedEmail && typeof match.email === "string") resolvedEmail = match.email.trim();
+              if (!user_name && typeof match.name === "string" && match.name.trim()) resolvedName = match.name.trim();
+            }
+          } else {
+            console.warn(`api-submit: get-users-proxy returned ${proxyRes.status}`);
+          }
+        } catch (lookupErr) {
+          console.error("api-submit: user lookup failed:", lookupErr);
+        }
+      }
+
+      if (!resolvedEmail) {
+        return new Response(JSON.stringify({
+          error: "Could not resolve submitter email. Pass user_email in the payload or ensure system_id has a registered email in the auth system.",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // --- Determine requires_approval (honor user flags + template) ---
+      let requiresApproval = false;
+      try {
+        const flagRows = await dbSql`SELECT requires_approval FROM user_approval_flags WHERE system_id = ${system_id} LIMIT 1`;
+        if (flagRows[0]?.requires_approval === true) requiresApproval = true;
+      } catch (e) {
+        console.warn("api-submit: user_approval_flags lookup failed:", e);
+      }
+      if (!requiresApproval && template_id) {
+        try {
+          const tplRows = await dbSql`SELECT requires_approval FROM invoice_templates WHERE id = ${template_id} LIMIT 1`;
+          if (tplRows[0]?.requires_approval === true) requiresApproval = true;
+        } catch (e) {
+          console.warn("api-submit: invoice_templates lookup failed:", e);
+        }
+      }
+      const initialStatus = requiresApproval ? "pending_approval" : "approved";
 
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, requires_approval, status)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${'API:' + user_id}, ${true}, ${'pending_approval'})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${resolvedName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
         RETURNING *
       `;
       const created = result[0];
