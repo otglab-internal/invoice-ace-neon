@@ -92,15 +92,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setUser(JSON.parse(storedUser));
         setEnvironment(storedEnv);
-        setSystemId(storedSysId);
+        // CANONICAL: always prefer auth_user_id over auth_system_id.
+        // Older sessions may have stored a divergent value in auth_system_id;
+        // realign both to the user_id so downstream queries are consistent.
+        const canonicalId = storedUserId || storedSysId;
+        setSystemId(canonicalId);
+        if (canonicalId && canonicalId !== storedSysId) {
+          localStorage.setItem("auth_system_id", canonicalId);
+        }
         setUserEmail(storedEmail);
         if (storedEmail) {
           localStorage.setItem("auth_email", storedEmail);
         } else {
           localStorage.removeItem("auth_email");
         }
-        const tagLookupId = storedUserId || storedSysId;
-        if (tagLookupId) fetchTags(tagLookupId);
+        if (canonicalId) fetchTags(canonicalId);
       } catch {
         localStorage.removeItem("auth_user");
       }
@@ -159,8 +165,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expiryDate: data.user.expiry_date,
     };
 
+    // CANONICAL IDENTITY: always use `data.user.id` (the external users.id).
+    // It is the same key returned by get-users-proxy and stored in
+    // staff_centre_assignments.system_id, so all downstream references
+    // (invoice.submitted_by_system_id, approved_by, amendment_requested_by,
+    //  invoice_logs.performed_by, activity_logs.performed_by) line up.
     const userId = data.user.id || data.system_id || null;
-    const sysId = data.system_id || userId;
+    const sysId = userId;
     const resolvedEmail = normalizeAuthEmail(data.user.email) ?? normalizeAuthEmail(pendingEmail);
 
     const resolvedEnv = pendingEnvironment || data.environment || "production";
