@@ -281,7 +281,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
             <p className="text-xs font-semibold text-foreground mb-2">Payload Shape (same as api-get response)</p>
             <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
 {JSON.stringify({
-  event: "paid_invoice_pdf_ready",
+  event: "receipt_pdf_ready",
   sent_at: "2026-03-22T10:05:00.123Z",
   invoice: {
     id: "uuid",
@@ -297,7 +297,12 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
     base64: "JVBERi0xLjQK..."
   },
   invoice_pdf_error: null,
-  receipt_pdf: null
+  receipt_pdf: {
+    filename: "Receipt_INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQK..."
+  },
+  receipt_pdf_error: null
 }, null, 2)}
             </pre>
           </div>
@@ -313,8 +318,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
             {ENDPOINT}
           </code>
           <p className="text-xs text-muted-foreground">
-            Returns the current state of an invoice (status, totals, line items, approver info) plus the INV PDF (Xero-generated) inlined as base64.
-            Receipt PDFs are generated on demand in the UI and not persisted, so they are not returned by this endpoint.
+            Returns the current state of an invoice (status, totals, line items, approver info) plus the INV PDF and, once paid, the receipt PDF inlined as base64.
             Required headers: <code>x-org-id</code> and <code>x-environment</code>.
           </p>
 
@@ -358,12 +362,16 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
     base64: "JVBERi0xLjQKJeLjz9MK..."
   },
   invoice_pdf_error: null,
-  receipt_pdf: null,
-  receipt_pdf_note: "Receipt PDFs are generated on demand in the UI and not persisted; not available via API."
+  receipt_pdf: {
+    filename: "Receipt_INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQKJeLjz9MK..."
+  },
+  receipt_pdf_error: null
 }, null, 2)}
             </pre>
             <p className="text-xs text-muted-foreground mt-2">
-              <code>invoice_pdf</code> is <code>null</code> until Xero has generated the PDF (after approval/sync). If retrieval fails, <code>invoice_pdf_error</code> contains the reason.
+              <code>invoice_pdf</code> is <code>null</code> until Xero has generated the PDF (after approval/sync). <code>receipt_pdf</code> is <code>null</code> until the invoice is paid and the backend has generated the receipt.
             </p>
           </div>
 
