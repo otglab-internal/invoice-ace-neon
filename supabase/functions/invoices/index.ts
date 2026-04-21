@@ -77,7 +77,12 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name } = body;
+
+      // Normalise source identifiers (external system that pushed this invoice, e.g. "OPENTEXT-001" / "Open Text")
+      const sourceSystemId = typeof source_system === "string" ? source_system.trim() : "";
+      const sourceSystemName = typeof source_system_name === "string" ? source_system_name.trim() : "";
+      const sourceLabel = sourceSystemName || sourceSystemId || "";
 
       const missing: string[] = [];
       if (!system_id) missing.push("system_id");
