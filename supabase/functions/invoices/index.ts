@@ -164,17 +164,25 @@ Deno.serve(async (req) => {
       }
       const initialStatus = requiresApproval ? "pending_approval" : "approved";
 
+      // Append source-system suffix to submitter name so it's visible everywhere the name shows up
+      const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
+
       const result = await dbSql`
         INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${resolvedName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
         RETURNING *
       `;
       const created = result[0];
 
-      // Log
+      // Log — include source system info in details so audit trail captures origin
+      const logDetails = {
+        ...created,
+        source_system: sourceSystemId || null,
+        source_system_name: sourceSystemName || null,
+      };
       await dbSql`
         INSERT INTO invoice_logs (invoice_id, action_type, source, performed_by, performed_by_name, details)
-        VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
+        VALUES (${created.id}, ${'request'}, ${sourceLabel ? `api:${sourceSystemId || sourceSystemName}` : 'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(logDetails)}::jsonb)
       `;
 
       // Send approval notice emails to configured addresses
