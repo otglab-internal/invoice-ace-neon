@@ -1,6 +1,7 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
+import { dispatchApiPush } from "../_shared/api-push.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -334,6 +335,23 @@ Deno.serve(async (req) => {
       }
 
       console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}`);
+
+      // Push to external app on paid (with refreshed PDF if available).
+      // Only push when the invoice has just been marked paid AND the PDF was refreshed,
+      // so the receiver always gets the latest paid PDF.
+      if (newLocalStatus === "paid" && newPdfPath) {
+        try {
+          await dispatchApiPush({
+            sql: sql as any,
+            invoiceId: localInvoice.id as string,
+            orgId,
+            environment,
+            event: "paid_invoice_pdf_ready",
+          });
+        } catch (pushErr) {
+          console.error("xero-webhook: api push failed:", pushErr);
+        }
+      }
 
       try {
         await sql.query(

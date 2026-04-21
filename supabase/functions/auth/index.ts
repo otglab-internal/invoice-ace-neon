@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`);
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`);
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS submitted_by_email TEXT`);
+        await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`);
         await sql`
           CREATE TABLE IF NOT EXISTS invoice_templates (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
