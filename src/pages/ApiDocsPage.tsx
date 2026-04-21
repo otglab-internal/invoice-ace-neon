@@ -222,6 +222,86 @@ const ApiDocsPage: React.FC = () => {
           </pre>
         </Card>
 
+        {/* api-get: fetch invoice + INV PDF */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-emerald-600 text-xs">POST</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">Fetch Invoice (api-get)</h2>
+          </div>
+          <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">
+            {ENDPOINT}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Returns the current state of an invoice (status, totals, line items, approver info) plus the INV PDF (Xero-generated) inlined as base64.
+            Receipt PDFs are generated on demand in the UI and not persisted, so they are not returned by this endpoint.
+            Required headers: <code>x-org-id</code> and <code>x-environment</code>.
+          </p>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Request Body</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  action: "api-get",
+  invoice_id: "uuid-returned-by-api-submit"
+}, null, 2)}
+            </pre>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Response (200)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  success: true,
+  invoice: {
+    id: "uuid",
+    invoice_number: "INV-001",
+    status: "paid",
+    contact_id: "xero-contact-uuid",
+    contact_name: "Lee Music Academy",
+    invoice_date: "22/03/2026",
+    reference: "PO-99",
+    line_items: ["..."],
+    total: 650.00,
+    requires_approval: true,
+    submitted_by_system_id: "system-id",
+    submitted_by_name: "Jane Doe",
+    submitted_by_email: "jane@example.com",
+    approved_by: "approver-system-id",
+    approved_at: "2026-03-22T10:00:00+08:00",
+    approval_note: null,
+    created_at: "2026-03-22T09:55:00+08:00"
+  },
+  invoice_pdf: {
+    filename: "INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQKJeLjz9MK..."
+  },
+  invoice_pdf_error: null,
+  receipt_pdf: null,
+  receipt_pdf_note: "Receipt PDFs are generated on demand in the UI and not persisted; not available via API."
+}, null, 2)}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              <code>invoice_pdf</code> is <code>null</code> until Xero has generated the PDF (after approval/sync). If retrieval fails, <code>invoice_pdf_error</code> contains the reason.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">cURL</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`curl -X POST '${ENDPOINT}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'apikey: <your-anon-key>' \\
+  -H 'x-org-id: stridekidz' \\
+  -H 'x-environment: production' \\
+  -d '{
+    "action": "api-get",
+    "invoice_id": "00000000-0000-0000-0000-000000000000"
+  }'`}
+            </pre>
+          </div>
+        </Card>
+
         {/* Xero Contacts: List */}
         <Card className="p-5 space-y-4">
           <div className="flex items-center gap-3">
