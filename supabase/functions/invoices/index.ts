@@ -3,8 +3,9 @@ import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmai
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+  "Access-Control-Max-Age": "86400",
 };
 
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
@@ -77,7 +78,12 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name } = body;
+
+      // Normalise source identifiers (external system that pushed this invoice, e.g. "OPENTEXT-001" / "Open Text")
+      const sourceSystemId = typeof source_system === "string" ? source_system.trim() : "";
+      const sourceSystemName = typeof source_system_name === "string" ? source_system_name.trim() : "";
+      const sourceLabel = sourceSystemName || sourceSystemId || "";
 
       const missing: string[] = [];
       if (!system_id) missing.push("system_id");
@@ -102,7 +108,8 @@ Deno.serve(async (req) => {
       // Priority: explicit user_email in payload → live get-users-proxy lookup by system_id.
       // Never insert with empty email — payment notifications depend on it.
       let resolvedEmail = (typeof user_email === "string" ? user_email.trim() : "");
-      let resolvedName = (typeof user_name === "string" ? user_name.trim() : "") || `API:${user_id}`;
+      const baseName = (typeof user_name === "string" ? user_name.trim() : "") || `API:${user_id}`;
+      let resolvedName = baseName;
 
       if (!resolvedEmail || !user_name) {
         try {
@@ -158,17 +165,25 @@ Deno.serve(async (req) => {
       }
       const initialStatus = requiresApproval ? "pending_approval" : "approved";
 
+      // Append source-system suffix to submitter name so it's visible everywhere the name shows up
+      const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
+
       const result = await dbSql`
         INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${resolvedName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
         RETURNING *
       `;
       const created = result[0];
 
-      // Log
+      // Log — include source system info in details so audit trail captures origin
+      const logDetails = {
+        ...created,
+        source_system: sourceSystemId || null,
+        source_system_name: sourceSystemName || null,
+      };
       await dbSql`
         INSERT INTO invoice_logs (invoice_id, action_type, source, performed_by, performed_by_name, details)
-        VALUES (${created.id}, ${'request'}, ${'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(created)}::jsonb)
+        VALUES (${created.id}, ${'request'}, ${sourceLabel ? `api:${sourceSystemId || sourceSystemName}` : 'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(logDetails)}::jsonb)
       `;
 
       // Send approval notice emails to configured addresses
