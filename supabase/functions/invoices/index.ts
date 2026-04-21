@@ -100,9 +100,33 @@ Deno.serve(async (req) => {
       }
 
       const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
-      const dbSql = getDb(req, bodyOrgId);
       const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
       const envResolved = req.headers.get("x-environment") || "production";
+
+      // Validate org explicitly so external callers get a clear 400 instead of a generic 500
+      if (!orgIdResolved || !ORG_DB_MAP[orgIdResolved]) {
+        return new Response(JSON.stringify({
+          error: `Missing or unknown org. Pass "org_id" in the body (or "x-org-id" header). Allowed values: ${Object.keys(ORG_DB_MAP).join(", ")}.`,
+          received_org_id: orgIdResolved || null,
+          received_environment: envResolved,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let dbSql;
+      try {
+        dbSql = getDb(req, orgIdResolved);
+      } catch (dbErr) {
+        console.error("api-submit: getDb failed:", dbErr);
+        return new Response(JSON.stringify({
+          error: `Database not configured for org="${orgIdResolved}" env="${envResolved}".`,
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // --- Resolve submitter email ---
       // Priority: explicit user_email in payload → live get-users-proxy lookup by system_id.
@@ -616,8 +640,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Invoices error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Invoices error:", msg, err instanceof Error ? err.stack : "");
+    return new Response(JSON.stringify({ error: "Internal server error", detail: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
