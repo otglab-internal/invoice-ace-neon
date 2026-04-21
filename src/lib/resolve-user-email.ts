@@ -73,9 +73,24 @@ export async function resolveUserEmail(
     users = Array.isArray(json?.data) ? json.data : [];
   }
 
-  const match = (users || []).find((u: any) => u?.id === sysId);
+  // Match by id first, then fall back to alternate id shapes the external
+  // auth API may return (system_id, user_id, prefixed `${env}_${id}` form).
+  const match =
+    (users || []).find((u: any) => u?.id === sysId) ||
+    (users || []).find((u: any) => u?.system_id === sysId) ||
+    (users || []).find((u: any) => u?.user_id === sysId) ||
+    (users || []).find((u: any) => typeof u?.id === "string" && u.id.endsWith(sysId)) ||
+    (users || []).find((u: any) => typeof u?.system_id === "string" && u.system_id.endsWith(sysId));
+
   const resolved = normalize(match?.email);
   if (!resolved) {
+    // Last-ditch fallback: the email captured at login (stored separately so
+    // we can always recover even if the user-list endpoint shape drifts).
+    const loginEmail = normalize(localStorage.getItem("auth_login_email"));
+    if (loginEmail) {
+      try { localStorage.setItem("auth_email", loginEmail); } catch { /* ignore */ }
+      return loginEmail;
+    }
     throw new Error(
       "Your account does not have a registered email. Please contact an administrator.",
     );
