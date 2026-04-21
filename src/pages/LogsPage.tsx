@@ -59,6 +59,12 @@ const sourceBadge = (source: string) => (
   <Badge variant="outline" className="text-xs">{source.toUpperCase()}</Badge>
 );
 
+const performerLabel = (log: LogEntry) => {
+  const name = log.details?.source_system_name || log.details?.source_system;
+  if (name) return String(name);
+  return log.performed_by_name || log.performed_by || "—";
+};
+
 const LogsPage: React.FC = () => {
   const [invoiceLogs, setInvoiceLogs] = useState<LogEntry[]>([]);
   const [activityLogs, setActivityLogs] = useState<LogEntry[]>([]);
@@ -98,8 +104,8 @@ const LogsPage: React.FC = () => {
   };
 
   const renderInvoiceTable = (logs: LogEntry[]) => (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="bg-card border border-border rounded-xl overflow-x-auto">
+      <table className="w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-border bg-muted/50">
             <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">No.</th>
@@ -115,7 +121,7 @@ const LogsPage: React.FC = () => {
             <tr key={log.id} className="hover:bg-muted/30 transition-colors">
               <td className="py-3 px-4 text-xs text-muted-foreground">{idx + 1}</td>
               <td className="py-3 px-4 text-xs text-foreground">{formatDate(log.created_at)}</td>
-              <td className="py-3 px-4 text-xs text-foreground">{log.performed_by_name || log.performed_by || "—"}</td>
+              <td className="py-3 px-4 text-xs text-foreground">{performerLabel(log)}</td>
               <td className="py-3 px-4">{actionBadge(log.action_type)}</td>
               <td className="py-3 px-4">{sourceBadge(log.source || "ui")}</td>
               <td className="py-3 px-4 text-right">
@@ -131,8 +137,8 @@ const LogsPage: React.FC = () => {
   );
 
   const renderActivityTable = (logs: LogEntry[]) => (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="bg-card border border-border rounded-xl overflow-x-auto">
+      <table className="w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-border bg-muted/50">
             <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">No.</th>
@@ -148,7 +154,7 @@ const LogsPage: React.FC = () => {
             <tr key={log.id} className="hover:bg-muted/30 transition-colors">
               <td className="py-3 px-4 text-xs text-muted-foreground">{idx + 1}</td>
               <td className="py-3 px-4 text-xs text-foreground">{formatDate(log.created_at)}</td>
-              <td className="py-3 px-4 text-xs text-foreground">{log.performed_by_name || log.performed_by || "—"}</td>
+              <td className="py-3 px-4 text-xs text-foreground">{performerLabel(log)}</td>
               <td className="py-3 px-4">{actionBadge(log.action_type)}</td>
               <td className="py-3 px-4">{categoryBadge(log.category || "system")}</td>
               <td className="py-3 px-4 text-right">
@@ -222,7 +228,7 @@ const LogsPage: React.FC = () => {
               <p><span className="text-muted-foreground">Action:</span> {detailLog.action_type}</p>
               {detailLog.source && <p><span className="text-muted-foreground">Source:</span> {detailLog.source.toUpperCase()}</p>}
               {detailLog.category && <p><span className="text-muted-foreground">Category:</span> {detailLog.category.toUpperCase()}</p>}
-              <p><span className="text-muted-foreground">By:</span> {detailLog.performed_by_name || detailLog.performed_by}</p>
+              <p><span className="text-muted-foreground">By:</span> {performerLabel(detailLog)}</p>
               <p><span className="text-muted-foreground">Date:</span> {new Date(detailLog.created_at).toLocaleString()}</p>
               <div>
                 <p className="text-muted-foreground mb-1">Payload:</p>

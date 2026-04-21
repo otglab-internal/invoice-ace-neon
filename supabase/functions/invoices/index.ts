@@ -253,6 +253,44 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${sourceLabel ? `api:${sourceSystemId || sourceSystemName}` : 'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(logDetails)}::jsonb)
       `;
 
+      // If auto-approved (no approval required), fire n8n webhook immediately so Xero
+      // gets the invoice with the correct currency. Without this, api-submit auto-approved
+      // invoices never reach Xero through the n8n flow.
+      if (!created.requires_approval && created.status === "approved") {
+        const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+        if (n8nWebhookUrl) {
+          try {
+            const rawCurrency = (created.currency ?? "RM").toString();
+            const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
+            const enriched = {
+              ...created,
+              currency: currencyCode,
+              line_items: (created.line_items || []).map((li: any) => ({
+                ...li,
+                line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
+              })),
+            };
+            await fetch(n8nWebhookUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                event: "invoice_approved",
+                invoice: enriched,
+                approved_by: "api",
+                approved_at: created.created_at,
+                org_id: orgIdResolved,
+                environment: envResolved,
+                supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
+                supabase_url: Deno.env.get("SUPABASE_URL"),
+              }),
+            });
+            console.log(`api-submit: n8n webhook fired for auto-approved invoice ${created.id} (currency=${currencyCode})`);
+          } catch (webhookErr) {
+            console.error("api-submit: n8n webhook call failed:", webhookErr);
+          }
+        }
+      }
+
       // Send approval notice emails to configured addresses
       if (created.requires_approval) {
         try {
