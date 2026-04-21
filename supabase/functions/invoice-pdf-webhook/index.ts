@@ -159,6 +159,7 @@ Deno.serve(async (req) => {
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`;
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`;
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`;
+    await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_pdf_url TEXT`;
 
     if (invoiceNumber) {
       await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath}, invoice_number = ${invoiceNumber} WHERE id = ${invoiceId}`;
