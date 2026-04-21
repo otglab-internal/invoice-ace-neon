@@ -49,6 +49,8 @@ const ApiDocsPage: React.FC = () => {
   system_id: "EXT-SYSTEM-001",
   user_id: "user-abc-123",
   user_email: "requester@example.com",
+  source_system: "OPENTEXT-PROD",
+  source_system_name: "Open Text",
   template_id: "optional-template-uuid",
   contact_name: "Lee Music Academy",
   invoice_date: "22/03/2026",
@@ -112,6 +114,8 @@ const ApiDocsPage: React.FC = () => {
                   <tr><td className="py-2 pr-4 font-mono text-foreground">user_email</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Requester email. If omitted, resolved automatically from <code>user_id</code> via the user directory. Required for payment notifications.</td></tr>
                   <tr><td className="py-2 pr-4 font-mono text-foreground">template_id</td><td className="py-2 pr-4">uuid</td><td className="py-2 text-muted-foreground">Optional invoice template ID. If the template has <code>requires_approval=true</code>, the invoice will go through approval regardless of user flags.</td></tr>
                   <tr><td className="py-2 pr-4 font-mono text-foreground">contact_id</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Xero contact ID. Omit to let downstream processing create/match the contact by name.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono text-foreground">source_system</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Identifier of the calling external system (e.g. <code>"OPENTEXT-PROD"</code>). Recorded in the invoice audit log and appended to the submitter name as <code>(via …)</code> so the source is visible in the UI.</td></tr>
+                  <tr><td className="py-2 pr-4 font-mono text-foreground">source_system_name</td><td className="py-2 pr-4">string</td><td className="py-2 text-muted-foreground">Human-readable name of the calling system (e.g. <code>"Open Text"</code>). Preferred over <code>source_system</code> for the <code>(via …)</code> label when both are provided.</td></tr>
                 </tbody>
               </table>
             </div>
