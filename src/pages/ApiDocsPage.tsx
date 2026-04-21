@@ -277,13 +277,11 @@ const ApiDocsPage: React.FC = () => {
             <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
 {JSON.stringify({
   action: "create-xero-contact",
-  name: "Acme Corp Sdn Bhd",
-  email: "ap@acme.com",
-  phone: "+60123456789"
+  name: "Acme Corp Sdn Bhd"
 }, null, 2)}
             </pre>
             <p className="text-xs text-muted-foreground mt-2">
-              Only <code>name</code> is required. <code>email</code> and <code>phone</code> are optional and only applied when creating a new contact.
+              Only <code>action</code> and <code>name</code> are required. Optional fields when creating a new contact: <code>email</code>, <code>first_name</code>, <code>last_name</code>.
             </p>
           </div>
 
