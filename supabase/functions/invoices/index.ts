@@ -79,9 +79,24 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, source_system, source_system_name, callback_url } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, source_system, source_system_name, callback_url, currency: bodyCurrency } = body;
       // External API submissions are always treated as free-text — templates are a UI-only concept.
       const template_id = null;
+
+      // Currency: accept SGD or MYR (case-insensitive). Normalize to canonical storage form
+      // matching the global setting style ("SGD$" or "RM"). If omitted, fall back to global_config.
+      let resolvedCurrency: string | null = null;
+      if (bodyCurrency !== undefined && bodyCurrency !== null && bodyCurrency !== "") {
+        const raw = String(bodyCurrency).trim().toUpperCase().replace(/[^A-Z]/g, "");
+        if (raw === "SGD") resolvedCurrency = "SGD$";
+        else if (raw === "MYR" || raw === "RM") resolvedCurrency = "RM";
+        else {
+          return new Response(JSON.stringify({ error: "currency must be 'SGD' or 'MYR'" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
       // Validate callback_url if provided — must be http(s)
       const callbackUrlClean = typeof callback_url === "string" ? callback_url.trim() : "";
@@ -204,12 +219,25 @@ Deno.serve(async (req) => {
       // Append source-system suffix to submitter name so it's visible everywhere the name shows up
       const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
 
-      // Make sure the callback_url column exists (older tenant DBs may predate this).
+      // Make sure the callback_url + currency columns exist (older tenant DBs may predate them).
       try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`; } catch (e) { console.warn("api-submit: ensure callback_url column failed:", e); }
+      try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT`; } catch (e) { console.warn("api-submit: ensure currency column failed:", e); }
+
+      // If caller did not specify currency, fall back to org's global_config.currency (or "RM")
+      if (!resolvedCurrency) {
+        try {
+          const cfgRows = await dbSql`SELECT value FROM global_config WHERE key = 'currency' LIMIT 1`;
+          const cfgVal = (cfgRows[0]?.value || "").toString().trim();
+          resolvedCurrency = cfgVal || "RM";
+        } catch (e) {
+          console.warn("api-submit: currency global_config lookup failed:", e);
+          resolvedCurrency = "RM";
+        }
+      }
 
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency})
         RETURNING *
       `;
       const created = result[0];
