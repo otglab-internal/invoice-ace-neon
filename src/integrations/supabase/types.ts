@@ -182,6 +182,7 @@ export type Database = {
           invoice_pdf_url: string | null
           line_items: Json
           org_id: string
+          receipt_pdf_url: string | null
           reference: string | null
           requires_approval: boolean
           status: string
@@ -212,6 +213,7 @@ export type Database = {
           invoice_pdf_url?: string | null
           line_items?: Json
           org_id?: string
+          receipt_pdf_url?: string | null
           reference?: string | null
           requires_approval?: boolean
           status?: string
@@ -242,6 +244,7 @@ export type Database = {
           invoice_pdf_url?: string | null
           line_items?: Json
           org_id?: string
+          receipt_pdf_url?: string | null
           reference?: string | null
           requires_approval?: boolean
           status?: string

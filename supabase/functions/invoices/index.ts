@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
-import { getR2PresignedUrl } from "../_shared/r2-utils.ts";
+import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -322,30 +322,8 @@ Deno.serve(async (req) => {
       }
       const invoice = rows[0];
 
-      // Fetch INV PDF from R2 (if present) and inline as base64
-      let invoicePdfBase64: string | null = null;
-      let invoicePdfError: string | null = null;
-      if (invoice.invoice_pdf_url) {
-        try {
-          const presigned = await getR2PresignedUrl(invoice.invoice_pdf_url, 300);
-          const pdfRes = await fetch(presigned);
-          if (!pdfRes.ok) {
-            invoicePdfError = `Failed to download INV PDF (status ${pdfRes.status})`;
-          } else {
-            const buf = new Uint8Array(await pdfRes.arrayBuffer());
-            // Chunked base64 encoding to avoid call-stack issues on large PDFs
-            let binary = "";
-            const CHUNK = 0x8000;
-            for (let i = 0; i < buf.length; i += CHUNK) {
-              binary += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK) as unknown as number[]);
-            }
-            invoicePdfBase64 = btoa(binary);
-          }
-        } catch (e) {
-          console.error("api-get: INV PDF fetch failed:", e);
-          invoicePdfError = (e as Error).message || "Unknown error fetching INV PDF";
-        }
-      }
+      const invoicePdfResult = await fetchPdfBase64FromR2(invoice.invoice_pdf_url || null);
+      const receiptPdfResult = await fetchPdfBase64FromR2(invoice.receipt_pdf_url || null);
 
       return new Response(JSON.stringify({
         success: true,
@@ -368,15 +346,10 @@ Deno.serve(async (req) => {
           approval_note: invoice.approval_note,
           created_at: invoice.created_at,
         },
-        invoice_pdf: invoicePdfBase64 ? {
-          filename: `${invoice.invoice_number || invoice.id}.pdf`,
-          mime_type: "application/pdf",
-          base64: invoicePdfBase64,
-        } : null,
-        invoice_pdf_error: invoicePdfError,
-        // Receipt PDFs are generated client-side and never stored — always null here.
-        receipt_pdf: null,
-        receipt_pdf_note: "Receipt PDFs are generated on demand in the UI and not persisted; not available via API.",
+        invoice_pdf: buildPdfAttachment(`${invoice.invoice_number || invoice.id}.pdf`, invoicePdfResult.base64),
+        invoice_pdf_error: invoicePdfResult.error,
+        receipt_pdf: buildPdfAttachment(`Receipt_${invoice.invoice_number || invoice.id}.pdf`, receiptPdfResult.base64),
+        receipt_pdf_error: receiptPdfResult.error,
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

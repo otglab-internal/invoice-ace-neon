@@ -1,5 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
+import { createReceiptPdfBytes } from "../_shared/receipt-pdf.ts";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
 import { dispatchApiPush } from "../_shared/api-push.ts";
 
@@ -154,6 +155,22 @@ async function uploadPdfToStorage(
   }
 }
 
+async function uploadReceiptPdfToStorage(
+  localInvoiceId: string,
+  pdfBytes: Uint8Array,
+  invoiceNumber: string,
+): Promise<string | null> {
+  const storagePath = `${localInvoiceId}/receipt.pdf`;
+
+  try {
+    await uploadToR2(storagePath, pdfBytes, "application/pdf");
+    return storagePath;
+  } catch (err) {
+    console.error(`xero-webhook: Failed to upload receipt PDF for ${invoiceNumber}:`, err);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -221,6 +238,7 @@ Deno.serve(async (req) => {
       "xero_access_token",
       "xero_refresh_token",
       "xero_tenant_id",
+      "logo_url",
     ]);
 
     if (!config.xero_access_token || !config.xero_tenant_id) {
@@ -310,6 +328,33 @@ Deno.serve(async (req) => {
         console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
       }
 
+      let receiptPdfPath: string | null = null;
+      if (newLocalStatus === "paid") {
+        try {
+          const invoiceRows = await sql.query(
+            `SELECT invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency FROM invoices WHERE id = $1 LIMIT 1`,
+            [localInvoice.id],
+          );
+          const invoiceRecord = invoiceRows[0];
+          if (invoiceRecord) {
+            const receiptPdfBytes = await createReceiptPdfBytes({
+              invoiceNumber: (invoiceRecord.invoice_number as string | null) || xeroInvoiceNumber,
+              contactName: (invoiceRecord.contact_name as string) || "—",
+              invoiceDate: (invoiceRecord.invoice_date as string) || "—",
+              reference: (invoiceRecord.reference as string | null) || null,
+              total: Number(invoiceRecord.total || 0),
+              lineItems: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items as Array<Record<string, unknown>> : [],
+              submittedByName: (invoiceRecord.submitted_by_name as string) || "—",
+              currency: (invoiceRecord.currency as string | null) || "RM",
+              logoUrl: config.logo_url || null,
+            });
+            receiptPdfPath = await uploadReceiptPdfToStorage(localInvoice.id as string, receiptPdfBytes, xeroInvoiceNumber);
+          }
+        } catch (receiptErr) {
+          console.error(`xero-webhook: Receipt generation/upload error for ${xeroInvoiceNumber}:`, receiptErr);
+        }
+      }
+
       // For fully paid, clear amendment fields; for partial, just update status
       const clearAmendments = newLocalStatus === "paid";
       const amendmentClause = clearAmendments
@@ -322,10 +367,20 @@ Deno.serve(async (req) => {
            amendment_requested_at = NULL`
         : "";
 
-      if (newPdfPath) {
+      if (newPdfPath && receiptPdfPath) {
+        await sql.query(
+          `UPDATE invoices SET status = $2, invoice_pdf_url = $3, receipt_pdf_url = $4${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus, newPdfPath, receiptPdfPath],
+        );
+      } else if (newPdfPath) {
         await sql.query(
           `UPDATE invoices SET status = $2, invoice_pdf_url = $3${amendmentClause} WHERE id = $1`,
           [localInvoice.id, newLocalStatus, newPdfPath],
+        );
+      } else if (receiptPdfPath) {
+        await sql.query(
+          `UPDATE invoices SET status = $2, receipt_pdf_url = $3${amendmentClause} WHERE id = $1`,
+          [localInvoice.id, newLocalStatus, receiptPdfPath],
         );
       } else {
         await sql.query(
@@ -334,20 +389,28 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}`);
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}${receiptPdfPath ? " + receipt generated" : ""}`);
 
-      // Push to external app on paid (with refreshed PDF if available).
-      // Only push when the invoice has just been marked paid AND the PDF was refreshed,
-      // so the receiver always gets the latest paid PDF.
-      if (newLocalStatus === "paid" && newPdfPath) {
+      if (newLocalStatus === "paid") {
         try {
-          await dispatchApiPush({
-            sql: sql as any,
-            invoiceId: localInvoice.id as string,
-            orgId,
-            environment,
-            event: "paid_invoice_pdf_ready",
-          });
+          if (newPdfPath) {
+            await dispatchApiPush({
+              sql: sql as any,
+              invoiceId: localInvoice.id as string,
+              orgId,
+              environment,
+              event: "paid_invoice_pdf_ready",
+            });
+          }
+          if (receiptPdfPath) {
+            await dispatchApiPush({
+              sql: sql as any,
+              invoiceId: localInvoice.id as string,
+              orgId,
+              environment,
+              event: "receipt_pdf_ready",
+            });
+          }
         } catch (pushErr) {
           console.error("xero-webhook: api push failed:", pushErr);
         }
@@ -363,7 +426,7 @@ Deno.serve(async (req) => {
             "xero-webhook",
             "Xero Webhook",
             "webhook",
-            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath, new_status: newLocalStatus }),
+            JSON.stringify({ xero_invoice_id: xeroInvoiceId, xero_invoice_number: xeroInvoiceNumber, pdf_updated: !!newPdfPath, receipt_generated: !!receiptPdfPath, new_status: newLocalStatus }),
           ],
         );
       } catch (logErr) {
@@ -374,7 +437,7 @@ Deno.serve(async (req) => {
       if (newLocalStatus === "paid") {
       try {
         const invoiceRows = await sql.query(
-          `SELECT submitted_by_system_id, submitted_by_name, submitted_by_email, contact_name, total, invoice_date, reference FROM invoices WHERE id = $1 LIMIT 1`,
+          `SELECT submitted_by_system_id, submitted_by_name, submitted_by_email, contact_name, total, invoice_date, reference, currency FROM invoices WHERE id = $1 LIMIT 1`,
           [localInvoice.id],
         );
         if (invoiceRows.length > 0) {
