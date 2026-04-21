@@ -1,5 +1,6 @@
 import { neon } from "https://esm.sh/@neondatabase/serverless@0.9.0";
 import { uploadToR2, getR2PresignedUrl } from "../_shared/r2-utils.ts";
+import { dispatchApiPush } from "../_shared/api-push.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,6 +158,7 @@ Deno.serve(async (req) => {
     const sql = neon(dbUrl);
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`;
     await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`;
+    await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`;
 
     if (invoiceNumber) {
       await sql`UPDATE invoices SET invoice_pdf_url = ${storagePath}, invoice_number = ${invoiceNumber} WHERE id = ${invoiceId}`;
@@ -165,6 +167,17 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Updated invoice ${invoiceId} in ${orgId}/${environment} with R2 path: ${storagePath}`);
+
+    // Push to external app if this invoice was submitted via api-submit with a callback_url.
+    // Distinguish unpaid vs paid by reading the current status (Xero may re-deliver the PDF after payment).
+    try {
+      const statusRows = await sql`SELECT status FROM invoices WHERE id = ${invoiceId} LIMIT 1` as any[];
+      const currentStatus = (statusRows[0]?.status || "").toString().toLowerCase();
+      const event = currentStatus === "paid" ? "paid_invoice_pdf_ready" : "invoice_pdf_ready";
+      await dispatchApiPush({ sql: sql as any, invoiceId, orgId, environment, event });
+    } catch (pushErr) {
+      console.error("invoice-pdf-webhook: api push failed:", pushErr);
+    }
 
     return new Response(
       JSON.stringify({

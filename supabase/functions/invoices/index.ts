@@ -79,7 +79,16 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name, callback_url } = body;
+
+      // Validate callback_url if provided — must be http(s)
+      const callbackUrlClean = typeof callback_url === "string" ? callback_url.trim() : "";
+      if (callbackUrlClean && !/^https?:\/\//i.test(callbackUrlClean)) {
+        return new Response(JSON.stringify({ error: "callback_url must start with http:// or https://" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // Normalise source identifiers (external system that pushed this invoice, e.g. "OPENTEXT-001" / "Open Text")
       const sourceSystemId = typeof source_system === "string" ? source_system.trim() : "";
@@ -193,9 +202,12 @@ Deno.serve(async (req) => {
       // Append source-system suffix to submitter name so it's visible everywhere the name shows up
       const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
 
+      // Make sure the callback_url column exists (older tenant DBs may predate this).
+      try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`; } catch (e) { console.warn("api-submit: ensure callback_url column failed:", e); }
+
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null})
         RETURNING *
       `;
       const created = result[0];
