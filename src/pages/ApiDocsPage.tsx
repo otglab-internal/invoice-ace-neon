@@ -49,6 +49,8 @@ const ApiDocsPage: React.FC = () => {
   system_id: "EXT-SYSTEM-001",
   user_id: "user-abc-123",
   user_email: "requester@example.com",
+  source_system: "OPENTEXT-PROD",
+  source_system_name: "Open Text",
   template_id: "optional-template-uuid",
   contact_name: "Lee Music Academy",
   invoice_date: "22/03/2026",
