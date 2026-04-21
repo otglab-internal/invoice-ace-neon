@@ -98,8 +98,8 @@ const LogsPage: React.FC = () => {
   };
 
   const renderInvoiceTable = (logs: LogEntry[]) => (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="bg-card border border-border rounded-xl overflow-x-auto">
+      <table className="w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-border bg-muted/50">
             <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">No.</th>
@@ -131,8 +131,8 @@ const LogsPage: React.FC = () => {
   );
 
   const renderActivityTable = (logs: LogEntry[]) => (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <table className="w-full text-sm">
+    <div className="bg-card border border-border rounded-xl overflow-x-auto">
+      <table className="w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-border bg-muted/50">
             <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground">No.</th>
