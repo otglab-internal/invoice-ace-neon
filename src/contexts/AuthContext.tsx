@@ -133,6 +133,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.requires_2fa) {
       setPendingEmail(email);
       setPendingEnvironment(env);
+      // Persist the email the user typed at login as a guaranteed fallback
+      // for submitted_by_email. The external auth API's user-list shape can
+      // drift, so we never want to depend solely on it.
+      try { localStorage.setItem("auth_login_email", email.trim()); } catch { /* ignore */ }
       return { requires2FA: true, challengeToken: data.challenge_token };
     }
 
