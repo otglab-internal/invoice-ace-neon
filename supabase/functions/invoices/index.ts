@@ -79,9 +79,24 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, source_system, source_system_name, callback_url } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, source_system, source_system_name, callback_url, currency: bodyCurrency } = body;
       // External API submissions are always treated as free-text — templates are a UI-only concept.
       const template_id = null;
+
+      // Currency: accept SGD or MYR (case-insensitive). Normalize to canonical storage form
+      // matching the global setting style ("SGD$" or "RM"). If omitted, fall back to global_config.
+      let resolvedCurrency: string | null = null;
+      if (bodyCurrency !== undefined && bodyCurrency !== null && bodyCurrency !== "") {
+        const raw = String(bodyCurrency).trim().toUpperCase().replace(/[^A-Z]/g, "");
+        if (raw === "SGD") resolvedCurrency = "SGD$";
+        else if (raw === "MYR" || raw === "RM") resolvedCurrency = "RM";
+        else {
+          return new Response(JSON.stringify({ error: "currency must be 'SGD' or 'MYR'" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
       // Validate callback_url if provided — must be http(s)
       const callbackUrlClean = typeof callback_url === "string" ? callback_url.trim() : "";
