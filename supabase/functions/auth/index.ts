@@ -225,12 +225,14 @@ Deno.serve(async (req) => {
             amendment_requested_at TIMESTAMPTZ,
             amendment_note TEXT,
             invoice_pdf_url TEXT,
+            receipt_pdf_url TEXT,
             submitted_by_email TEXT,
             created_at TIMESTAMPTZ DEFAULT NOW()
           )
         `;
         // Add columns that may be missing from older schemas
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`);
+        await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_pdf_url TEXT`);
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_number TEXT`);
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS submitted_by_email TEXT`);
         await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`);

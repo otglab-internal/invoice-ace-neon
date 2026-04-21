@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
-import { getR2PresignedUrl } from "../_shared/r2-utils.ts";
+import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

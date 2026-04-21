@@ -3,7 +3,7 @@
  *
  * When an invoice that was created via api-submit has a `callback_url`, we
  * POST a signed payload to that URL whenever a new artifact becomes available
- * (Xero-generated INV PDF, paid INV PDF, etc.).
+ * (Xero-generated INV PDF, paid INV PDF, receipt PDF, etc.).
  *
  * Payload shape mirrors `api-get` so receivers can reuse the same parsing
  * code regardless of whether they polled or were pushed.
@@ -17,13 +17,14 @@
  * what was sent and whether the receiver acknowledged it.
  */
 
-import { getR2PresignedUrl } from "./r2-utils.ts";
+import { buildPdfAttachment, fetchPdfBase64FromR2 } from "./pdf-artifacts.ts";
 
 type SqlClient = (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
 
 export type PushEvent =
-  | "invoice_pdf_ready"        // Xero delivered the unpaid INV PDF
-  | "paid_invoice_pdf_ready";  // Xero updated the PDF after payment
+  | "invoice_pdf_ready"
+  | "paid_invoice_pdf_ready"
+  | "receipt_pdf_ready";
 
 const ORG_SECRET_MAP: Record<string, string> = {
   otg_lab: "API_PUSH_SIGNING_SECRET_OTG",
@@ -46,27 +47,6 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   );
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function fetchInvoicePdfBase64(invoicePdfUrl: string | null): Promise<{
-  base64: string | null;
-  error: string | null;
-}> {
-  if (!invoicePdfUrl) return { base64: null, error: null };
-  try {
-    const presigned = await getR2PresignedUrl(invoicePdfUrl, 300);
-    const res = await fetch(presigned);
-    if (!res.ok) return { base64: null, error: `Failed to download PDF (status ${res.status})` };
-    const buf = new Uint8Array(await res.arrayBuffer());
-    let binary = "";
-    const CHUNK = 0x8000;
-    for (let i = 0; i < buf.length; i += CHUNK) {
-      binary += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK) as unknown as number[]);
-    }
-    return { base64: btoa(binary), error: null };
-  } catch (e) {
-    return { base64: null, error: (e as Error).message || "Unknown PDF fetch error" };
-  }
 }
 
 function buildInvoicePayload(invoice: any) {
@@ -99,12 +79,6 @@ interface DispatchOptions {
   event: PushEvent;
 }
 
-/**
- * Look up the invoice, build the payload, sign it, POST to callback_url,
- * retry on failure, and log the outcome.
- *
- * Safe to call for any invoice — no-op if the invoice has no callback_url.
- */
 export async function dispatchApiPush({
   sql,
   invoiceId,
@@ -137,22 +111,19 @@ export async function dispatchApiPush({
     return;
   }
 
-  const { base64, error: pdfError } = await fetchInvoicePdfBase64(invoice.invoice_pdf_url);
+  const [invoicePdf, receiptPdf] = await Promise.all([
+    fetchPdfBase64FromR2(invoice.invoice_pdf_url),
+    fetchPdfBase64FromR2(invoice.receipt_pdf_url || null),
+  ]);
 
   const payload = {
     event,
     sent_at: new Date().toISOString(),
     invoice: buildInvoicePayload(invoice),
-    invoice_pdf: base64
-      ? {
-          filename: `${invoice.invoice_number || invoice.id}.pdf`,
-          mime_type: "application/pdf",
-          base64,
-        }
-      : null,
-    invoice_pdf_error: pdfError,
-    receipt_pdf: null,
-    receipt_pdf_note: "Receipt PDFs are generated on demand in the UI and not persisted; not pushed.",
+    invoice_pdf: buildPdfAttachment(`${invoice.invoice_number || invoice.id}.pdf`, invoicePdf.base64),
+    invoice_pdf_error: invoicePdf.error,
+    receipt_pdf: buildPdfAttachment(`Receipt_${invoice.invoice_number || invoice.id}.pdf`, receiptPdf.base64),
+    receipt_pdf_error: receiptPdf.error,
   };
 
   const rawBody = JSON.stringify(payload);
@@ -175,7 +146,6 @@ export async function dispatchApiPush({
         body: rawBody,
       });
       lastStatus = res.status;
-      // Drain body to free the connection
       try { await res.text(); } catch { /* ignore */ }
       if (res.ok) {
         await safeLog(sql, {
@@ -189,7 +159,6 @@ export async function dispatchApiPush({
       lastError = (e as Error).message || "fetch failed";
     }
     if (attempt < maxAttempts) {
-      // 1s, 3s
       await new Promise((r) => setTimeout(r, 1000 * Math.pow(3, attempt - 1)));
     }
   }
