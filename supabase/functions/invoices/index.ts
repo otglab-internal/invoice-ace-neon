@@ -259,6 +259,118 @@ Deno.serve(async (req) => {
       });
     }
 
+    // api-get — external system invoice fetch (no auth required, mirrors api-submit)
+    // Returns invoice metadata + INV PDF as base64 inline.
+    // Receipt PDFs are generated client-side only and never persisted, so they are not returned.
+    if (action === "api-get") {
+      const { invoice_id } = body;
+
+      if (!invoice_id || typeof invoice_id !== "string") {
+        return new Response(JSON.stringify({
+          error: "Missing required field: invoice_id (the UUID returned by api-submit)",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
+      const envResolved = req.headers.get("x-environment") || "production";
+
+      if (!orgIdResolved || !ORG_DB_MAP[orgIdResolved]) {
+        return new Response(JSON.stringify({
+          error: `Missing or unknown org. Pass "org_id" in the body (or "x-org-id" header). Allowed values: ${Object.keys(ORG_DB_MAP).join(", ")}.`,
+          received_org_id: orgIdResolved || null,
+          received_environment: envResolved,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let dbSql;
+      try {
+        dbSql = getDb(req, orgIdResolved);
+      } catch (dbErr) {
+        console.error("api-get: getDb failed:", dbErr);
+        return new Response(JSON.stringify({
+          error: `Database not configured for org="${orgIdResolved}" env="${envResolved}".`,
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const rows = await dbSql`SELECT * FROM invoices WHERE id = ${invoice_id} LIMIT 1`;
+      if (!rows[0]) {
+        return new Response(JSON.stringify({ error: `Invoice not found: ${invoice_id}` }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const invoice = rows[0];
+
+      // Fetch INV PDF from R2 (if present) and inline as base64
+      let invoicePdfBase64: string | null = null;
+      let invoicePdfError: string | null = null;
+      if (invoice.invoice_pdf_url) {
+        try {
+          const presigned = await getR2PresignedUrl(invoice.invoice_pdf_url, 300);
+          const pdfRes = await fetch(presigned);
+          if (!pdfRes.ok) {
+            invoicePdfError = `Failed to download INV PDF (status ${pdfRes.status})`;
+          } else {
+            const buf = new Uint8Array(await pdfRes.arrayBuffer());
+            // Chunked base64 encoding to avoid call-stack issues on large PDFs
+            let binary = "";
+            const CHUNK = 0x8000;
+            for (let i = 0; i < buf.length; i += CHUNK) {
+              binary += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK) as unknown as number[]);
+            }
+            invoicePdfBase64 = btoa(binary);
+          }
+        } catch (e) {
+          console.error("api-get: INV PDF fetch failed:", e);
+          invoicePdfError = (e as Error).message || "Unknown error fetching INV PDF";
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        invoice: {
+          id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          status: invoice.status,
+          contact_id: invoice.contact_id,
+          contact_name: invoice.contact_name,
+          invoice_date: invoice.invoice_date,
+          reference: invoice.reference,
+          line_items: invoice.line_items,
+          total: invoice.total,
+          requires_approval: invoice.requires_approval,
+          submitted_by_system_id: invoice.submitted_by_system_id,
+          submitted_by_name: invoice.submitted_by_name,
+          submitted_by_email: invoice.submitted_by_email,
+          approved_by: invoice.approved_by,
+          approved_at: invoice.approved_at,
+          approval_note: invoice.approval_note,
+          created_at: invoice.created_at,
+        },
+        invoice_pdf: invoicePdfBase64 ? {
+          filename: `${invoice.invoice_number || invoice.id}.pdf`,
+          mime_type: "application/pdf",
+          base64: invoicePdfBase64,
+        } : null,
+        invoice_pdf_error: invoicePdfError,
+        // Receipt PDFs are generated client-side and never stored — always null here.
+        receipt_pdf: null,
+        receipt_pdf_note: "Receipt PDFs are generated on demand in the UI and not persisted; not available via API.",
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // notify-approval — webhook proxy
     if (action === "notify-approval") {
       const { invoice } = body;
