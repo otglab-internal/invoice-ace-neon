@@ -219,12 +219,25 @@ Deno.serve(async (req) => {
       // Append source-system suffix to submitter name so it's visible everywhere the name shows up
       const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
 
-      // Make sure the callback_url column exists (older tenant DBs may predate this).
+      // Make sure the callback_url + currency columns exist (older tenant DBs may predate them).
       try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`; } catch (e) { console.warn("api-submit: ensure callback_url column failed:", e); }
+      try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT`; } catch (e) { console.warn("api-submit: ensure currency column failed:", e); }
+
+      // If caller did not specify currency, fall back to org's global_config.currency (or "RM")
+      if (!resolvedCurrency) {
+        try {
+          const cfgRows = await dbSql`SELECT value FROM global_config WHERE key = 'currency' LIMIT 1`;
+          const cfgVal = (cfgRows[0]?.value || "").toString().trim();
+          resolvedCurrency = cfgVal || "RM";
+        } catch (e) {
+          console.warn("api-submit: currency global_config lookup failed:", e);
+          resolvedCurrency = "RM";
+        }
+      }
 
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency})
         RETURNING *
       `;
       const created = result[0];
