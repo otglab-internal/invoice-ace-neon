@@ -55,10 +55,14 @@ const categoryBadge = (cat: string) => {
   return <Badge variant="outline" className={`text-xs ${colors[cat] || ""}`}>{cat.toUpperCase()}</Badge>;
 };
 
-const sourceBadge = (source: string, details?: any) => {
-  const name = details?.source_system_name || details?.source_system;
-  const label = name ? String(name) : source.toUpperCase();
-  return <Badge variant="outline" className="text-xs">{label}</Badge>;
+const sourceBadge = (source: string) => (
+  <Badge variant="outline" className="text-xs">{source.toUpperCase()}</Badge>
+);
+
+const performerLabel = (log: LogEntry) => {
+  const name = log.details?.source_system_name || log.details?.source_system;
+  if (name) return String(name);
+  return log.performed_by_name || log.performed_by || "—";
 };
 
 const LogsPage: React.FC = () => {
@@ -117,9 +121,9 @@ const LogsPage: React.FC = () => {
             <tr key={log.id} className="hover:bg-muted/30 transition-colors">
               <td className="py-3 px-4 text-xs text-muted-foreground">{idx + 1}</td>
               <td className="py-3 px-4 text-xs text-foreground">{formatDate(log.created_at)}</td>
-              <td className="py-3 px-4 text-xs text-foreground">{log.performed_by_name || log.performed_by || "—"}</td>
+              <td className="py-3 px-4 text-xs text-foreground">{performerLabel(log)}</td>
               <td className="py-3 px-4">{actionBadge(log.action_type)}</td>
-              <td className="py-3 px-4">{sourceBadge(log.source || "ui", log.details)}</td>
+              <td className="py-3 px-4">{sourceBadge(log.source || "ui")}</td>
               <td className="py-3 px-4 text-right">
                 <Button variant="ghost" size="sm" onClick={() => setDetailLog(log)} className="gap-1">
                   <Eye className="w-3.5 h-3.5" /> View
@@ -150,7 +154,7 @@ const LogsPage: React.FC = () => {
             <tr key={log.id} className="hover:bg-muted/30 transition-colors">
               <td className="py-3 px-4 text-xs text-muted-foreground">{idx + 1}</td>
               <td className="py-3 px-4 text-xs text-foreground">{formatDate(log.created_at)}</td>
-              <td className="py-3 px-4 text-xs text-foreground">{log.performed_by_name || log.performed_by || "—"}</td>
+              <td className="py-3 px-4 text-xs text-foreground">{performerLabel(log)}</td>
               <td className="py-3 px-4">{actionBadge(log.action_type)}</td>
               <td className="py-3 px-4">{categoryBadge(log.category || "system")}</td>
               <td className="py-3 px-4 text-right">
@@ -222,14 +226,9 @@ const LogsPage: React.FC = () => {
                 <p><span className="text-muted-foreground">Invoice ID:</span> <code className="text-xs">{detailLog.invoice_id}</code></p>
               )}
               <p><span className="text-muted-foreground">Action:</span> {detailLog.action_type}</p>
-              {detailLog.source && (
-                <p>
-                  <span className="text-muted-foreground">Source:</span>{" "}
-                  {detailLog.details?.source_system_name || detailLog.details?.source_system || detailLog.source.toUpperCase()}
-                </p>
-              )}
+              {detailLog.source && <p><span className="text-muted-foreground">Source:</span> {detailLog.source.toUpperCase()}</p>}
               {detailLog.category && <p><span className="text-muted-foreground">Category:</span> {detailLog.category.toUpperCase()}</p>}
-              <p><span className="text-muted-foreground">By:</span> {detailLog.performed_by_name || detailLog.performed_by}</p>
+              <p><span className="text-muted-foreground">By:</span> {performerLabel(detailLog)}</p>
               <p><span className="text-muted-foreground">Date:</span> {new Date(detailLog.created_at).toLocaleString()}</p>
               <div>
                 <p className="text-muted-foreground mb-1">Payload:</p>
