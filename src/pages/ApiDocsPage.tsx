@@ -52,6 +52,7 @@ const ApiDocsPage: React.FC = () => {
   source_system: "OPENTEXT-PROD",
   source_system_name: "Open Text",
   template_id: "optional-template-uuid",
+  callback_url: "https://your-app.example.com/webhooks/invoice-updates",
   contact_name: "Lee Music Academy",
   invoice_date: "22/03/2026",
   reference: "PO-12345",
