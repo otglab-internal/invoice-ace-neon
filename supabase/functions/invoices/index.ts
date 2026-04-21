@@ -1,5 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
+import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,7 +79,16 @@ Deno.serve(async (req) => {
 
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
-      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name } = body;
+      const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, template_id, source_system, source_system_name, callback_url } = body;
+
+      // Validate callback_url if provided — must be http(s)
+      const callbackUrlClean = typeof callback_url === "string" ? callback_url.trim() : "";
+      if (callbackUrlClean && !/^https?:\/\//i.test(callbackUrlClean)) {
+        return new Response(JSON.stringify({ error: "callback_url must start with http:// or https://" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // Normalise source identifiers (external system that pushed this invoice, e.g. "OPENTEXT-001" / "Open Text")
       const sourceSystemId = typeof source_system === "string" ? source_system.trim() : "";
@@ -100,9 +110,33 @@ Deno.serve(async (req) => {
       }
 
       const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
-      const dbSql = getDb(req, bodyOrgId);
       const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
       const envResolved = req.headers.get("x-environment") || "production";
+
+      // Validate org explicitly so external callers get a clear 400 instead of a generic 500
+      if (!orgIdResolved || !ORG_DB_MAP[orgIdResolved]) {
+        return new Response(JSON.stringify({
+          error: `Missing or unknown org. Pass "org_id" in the body (or "x-org-id" header). Allowed values: ${Object.keys(ORG_DB_MAP).join(", ")}.`,
+          received_org_id: orgIdResolved || null,
+          received_environment: envResolved,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let dbSql;
+      try {
+        dbSql = getDb(req, orgIdResolved);
+      } catch (dbErr) {
+        console.error("api-submit: getDb failed:", dbErr);
+        return new Response(JSON.stringify({
+          error: `Database not configured for org="${orgIdResolved}" env="${envResolved}".`,
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // --- Resolve submitter email ---
       // Priority: explicit user_email in payload → live get-users-proxy lookup by system_id.
@@ -168,9 +202,12 @@ Deno.serve(async (req) => {
       // Append source-system suffix to submitter name so it's visible everywhere the name shows up
       const finalSubmitterName = sourceLabel ? `${resolvedName} (via ${sourceLabel})` : resolvedName;
 
+      // Make sure the callback_url column exists (older tenant DBs may predate this).
+      try { await dbSql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS callback_url TEXT`; } catch (e) { console.warn("api-submit: ensure callback_url column failed:", e); }
+
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null})
         RETURNING *
       `;
       const created = result[0];
@@ -230,6 +267,91 @@ Deno.serve(async (req) => {
         total: created.total,
       }), {
         status: 201,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // api-get — external system invoice fetch (no auth required, mirrors api-submit)
+    // Returns invoice metadata + INV PDF as base64 inline.
+    // Receipt PDFs are generated client-side only and never persisted, so they are not returned.
+    if (action === "api-get") {
+      const { invoice_id } = body;
+
+      if (!invoice_id || typeof invoice_id !== "string") {
+        return new Response(JSON.stringify({
+          error: "Missing required field: invoice_id (the UUID returned by api-submit)",
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
+      const envResolved = req.headers.get("x-environment") || "production";
+
+      if (!orgIdResolved || !ORG_DB_MAP[orgIdResolved]) {
+        return new Response(JSON.stringify({
+          error: `Missing or unknown org. Pass "org_id" in the body (or "x-org-id" header). Allowed values: ${Object.keys(ORG_DB_MAP).join(", ")}.`,
+          received_org_id: orgIdResolved || null,
+          received_environment: envResolved,
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let dbSql;
+      try {
+        dbSql = getDb(req, orgIdResolved);
+      } catch (dbErr) {
+        console.error("api-get: getDb failed:", dbErr);
+        return new Response(JSON.stringify({
+          error: `Database not configured for org="${orgIdResolved}" env="${envResolved}".`,
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const rows = await dbSql`SELECT * FROM invoices WHERE id = ${invoice_id} LIMIT 1`;
+      if (!rows[0]) {
+        return new Response(JSON.stringify({ error: `Invoice not found: ${invoice_id}` }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const invoice = rows[0];
+
+      const invoicePdfResult = await fetchPdfBase64FromR2(invoice.invoice_pdf_url || null);
+      const receiptPdfResult = await fetchPdfBase64FromR2(invoice.receipt_pdf_url || null);
+
+      return new Response(JSON.stringify({
+        success: true,
+        invoice: {
+          id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          status: invoice.status,
+          contact_id: invoice.contact_id,
+          contact_name: invoice.contact_name,
+          invoice_date: invoice.invoice_date,
+          reference: invoice.reference,
+          line_items: invoice.line_items,
+          total: invoice.total,
+          requires_approval: invoice.requires_approval,
+          submitted_by_system_id: invoice.submitted_by_system_id,
+          submitted_by_name: invoice.submitted_by_name,
+          submitted_by_email: invoice.submitted_by_email,
+          approved_by: invoice.approved_by,
+          approved_at: invoice.approved_at,
+          approval_note: invoice.approval_note,
+          created_at: invoice.created_at,
+        },
+        invoice_pdf: buildPdfAttachment(`${invoice.invoice_number || invoice.id}.pdf`, invoicePdfResult.base64),
+        invoice_pdf_error: invoicePdfResult.error,
+        receipt_pdf: buildPdfAttachment(`Receipt_${invoice.invoice_number || invoice.id}.pdf`, receiptPdfResult.base64),
+        receipt_pdf_error: receiptPdfResult.error,
+      }), {
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -616,8 +738,9 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Invoices error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("Invoices error:", msg, err instanceof Error ? err.stack : "");
+    return new Response(JSON.stringify({ error: "Internal server error", detail: msg }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

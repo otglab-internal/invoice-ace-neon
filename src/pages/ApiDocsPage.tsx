@@ -52,6 +52,7 @@ const ApiDocsPage: React.FC = () => {
   source_system: "OPENTEXT-PROD",
   source_system_name: "Open Text",
   template_id: "optional-template-uuid",
+  callback_url: "https://your-app.example.com/webhooks/invoice-updates",
   contact_name: "Lee Music Academy",
   invoice_date: "22/03/2026",
   reference: "PO-12345",
@@ -220,6 +221,174 @@ const ApiDocsPage: React.FC = () => {
     ]
   }'`}
           </pre>
+        </Card>
+
+        {/* Push notifications */}
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-indigo-600 text-xs">PUSH</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">Webhook Push Notifications</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            If you include a <code>callback_url</code> in <code>api-submit</code>, we will POST a signed JSON payload to that URL whenever a new artifact becomes available for the invoice.
+            No polling required.
+          </p>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Events</p>
+            <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
+              <li><code>invoice_pdf_ready</code> — Xero generated the unpaid INV PDF (typically right after approval).</li>
+              <li><code>paid_invoice_pdf_ready</code> — invoice marked paid in Xero; refreshed PDF is included.</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mt-2">
+              Receipt PDFs are generated client-side in this app and are not pushed.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Headers we send</p>
+            <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
+              <li><code>X-Event</code> — the event name (see above).</li>
+              <li><code>X-Invoice-Id</code> — the invoice UUID (same as <code>invoice.id</code> in the body).</li>
+              <li><code>X-Signature</code> — <code>sha256=&lt;hex&gt;</code> where <code>&lt;hex&gt;</code> is HMAC-SHA256 of the raw request body using your org's signing secret.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Verifying the signature (Node.js example)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`import crypto from "node:crypto";
+
+app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }), (req, res) => {
+  const sigHeader = req.header("X-Signature") || "";
+  const expected = "sha256=" + crypto
+    .createHmac("sha256", process.env.PUSH_SECRET)
+    .update(req.body)               // raw bytes, not parsed JSON
+    .digest("hex");
+  if (sigHeader !== expected) return res.status(401).end();
+
+  const payload = JSON.parse(req.body.toString("utf8"));
+  // payload.event, payload.invoice, payload.invoice_pdf.base64, ...
+  res.status(200).end();
+});`}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              The signing secret is shared out-of-band per org. Always respond with <code>2xx</code> within ~10s; we retry up to 3 times with exponential backoff (1s, 3s) on non-2xx or network errors.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Payload Shape (same as api-get response)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  event: "receipt_pdf_ready",
+  sent_at: "2026-03-22T10:05:00.123Z",
+  invoice: {
+    id: "uuid",
+    invoice_number: "INV-001",
+    status: "paid",
+    contact_name: "Lee Music Academy",
+    total: 650.00,
+    "...": "see api-get response"
+  },
+  invoice_pdf: {
+    filename: "INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQK..."
+  },
+  invoice_pdf_error: null,
+  receipt_pdf: {
+    filename: "Receipt_INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQK..."
+  },
+  receipt_pdf_error: null
+}, null, 2)}
+            </pre>
+          </div>
+        </Card>
+
+        {/* api-get: fetch invoice + INV PDF */}
+        <Card className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-emerald-600 text-xs">POST</Badge>
+            <h2 className="text-sm font-semibold font-display text-foreground">Fetch Invoice (api-get)</h2>
+          </div>
+          <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">
+            {ENDPOINT}
+          </code>
+          <p className="text-xs text-muted-foreground">
+            Returns the current state of an invoice (status, totals, line items, approver info) plus the INV PDF and, once paid, the receipt PDF inlined as base64.
+            Required headers: <code>x-org-id</code> and <code>x-environment</code>.
+          </p>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Request Body</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  action: "api-get",
+  invoice_id: "uuid-returned-by-api-submit"
+}, null, 2)}
+            </pre>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Response (200)</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{JSON.stringify({
+  success: true,
+  invoice: {
+    id: "uuid",
+    invoice_number: "INV-001",
+    status: "paid",
+    contact_id: "xero-contact-uuid",
+    contact_name: "Lee Music Academy",
+    invoice_date: "22/03/2026",
+    reference: "PO-99",
+    line_items: ["..."],
+    total: 650.00,
+    requires_approval: true,
+    submitted_by_system_id: "system-id",
+    submitted_by_name: "Jane Doe",
+    submitted_by_email: "jane@example.com",
+    approved_by: "approver-system-id",
+    approved_at: "2026-03-22T10:00:00+08:00",
+    approval_note: null,
+    created_at: "2026-03-22T09:55:00+08:00"
+  },
+  invoice_pdf: {
+    filename: "INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQKJeLjz9MK..."
+  },
+  invoice_pdf_error: null,
+  receipt_pdf: {
+    filename: "Receipt_INV-001.pdf",
+    mime_type: "application/pdf",
+    base64: "JVBERi0xLjQKJeLjz9MK..."
+  },
+  receipt_pdf_error: null
+}, null, 2)}
+            </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              <code>invoice_pdf</code> is <code>null</code> until Xero has generated the PDF (after approval/sync). <code>receipt_pdf</code> is <code>null</code> until the invoice is paid and the backend has generated the receipt.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">cURL</p>
+            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
+{`curl -X POST '${ENDPOINT}' \\
+  -H 'Content-Type: application/json' \\
+  -H 'apikey: <your-anon-key>' \\
+  -H 'x-org-id: stridekidz' \\
+  -H 'x-environment: production' \\
+  -d '{
+    "action": "api-get",
+    "invoice_id": "00000000-0000-0000-0000-000000000000"
+  }'`}
+            </pre>
+          </div>
         </Card>
 
         {/* Xero Contacts: List */}
