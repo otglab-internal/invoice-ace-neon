@@ -83,7 +83,7 @@ const AllInvoicesPage: React.FC = () => {
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
     const queryOptions: any = {
-      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url",
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url, currency",
       order: { column: "created_at", ascending: false },
     };
 
