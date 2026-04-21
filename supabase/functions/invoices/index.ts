@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
       // Priority: explicit user_email in payload → live get-users-proxy lookup by system_id.
       // Never insert with empty email — payment notifications depend on it.
       let resolvedEmail = (typeof user_email === "string" ? user_email.trim() : "");
-      let resolvedName = (typeof user_name === "string" ? user_name.trim() : "") || `API:${user_id}`;
+      const baseName = (typeof user_name === "string" ? user_name.trim() : "") || `API:${user_id}`;
+      let resolvedName = baseName;
 
       if (!resolvedEmail || !user_name) {
         try {
