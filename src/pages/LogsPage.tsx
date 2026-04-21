@@ -55,10 +55,14 @@ const categoryBadge = (cat: string) => {
   return <Badge variant="outline" className={`text-xs ${colors[cat] || ""}`}>{cat.toUpperCase()}</Badge>;
 };
 
-const sourceBadge = (source: string, details?: any) => {
-  const name = details?.source_system_name || details?.source_system;
-  const label = name ? String(name) : source.toUpperCase();
-  return <Badge variant="outline" className="text-xs">{label}</Badge>;
+const sourceBadge = (source: string) => (
+  <Badge variant="outline" className="text-xs">{source.toUpperCase()}</Badge>
+);
+
+const performerLabel = (log: LogEntry) => {
+  const name = log.details?.source_system_name || log.details?.source_system;
+  if (name) return String(name);
+  return log.performed_by_name || log.performed_by || "—";
 };
 
 const LogsPage: React.FC = () => {
