@@ -30,8 +30,29 @@ function formatCurrency(amount: number, currency = "RM") {
   return `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// Replace characters that the WinAnsi-encoded standard fonts cannot encode.
+// pdf-lib's StandardFonts (Helvetica, etc.) only support the WinAnsi code page,
+// so glyphs like → ✓ — “ ” ’ etc. would otherwise crash PDF generation.
+function sanitizeWinAnsi(input: string): string {
+  if (!input) return "";
+  return input
+    .replace(/→/g, "->")
+    .replace(/←/g, "<-")
+    .replace(/↔/g, "<->")
+    .replace(/[•●◦]/g, "-")
+    .replace(/[–—]/g, "-")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/…/g, "...")
+    .replace(/[✓✔]/g, "v")
+    .replace(/[✗✘]/g, "x")
+    .replace(/\u00A0/g, " ")
+    // Strip anything still outside printable WinAnsi range
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "?");
+}
+
 function wrapText(text: string, maxWidth: number, font: any, size: number): string[] {
-  const source = (text || "—").replace(/\\n/g, "\n");
+  const source = sanitizeWinAnsi((text || "—").replace(/\\n/g, "\n"));
   const paragraphs = source.split("\n");
   const lines: string[] = [];
 
@@ -106,9 +127,10 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
     const size = options.size ?? 9;
     const font = options.font ?? regular;
     const color = options.color ?? TEXT_DARK;
-    const width = font.widthOfTextAtSize(text, size);
+    const safe = sanitizeWinAnsi(text);
+    const width = font.widthOfTextAtSize(safe, size);
     const drawX = options.align === "right" ? x - width : x;
-    page.drawText(text, { x: drawX, y: yPos, size, font, color });
+    page.drawText(safe, { x: drawX, y: yPos, size, font, color });
   };
 
   const drawLine = (x1: number, y1: number, x2: number, y2: number, color = MID_GRAY, thickness = 0.6) => {
