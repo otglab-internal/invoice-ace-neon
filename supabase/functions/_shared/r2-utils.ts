@@ -123,6 +123,49 @@ export async function uploadToR2(
 }
 
 /**
+ * Copy an object within the same R2 bucket. Returns true on success,
+ * false if the source key does not exist (404). Throws on other errors.
+ */
+export async function copyR2Object(sourceKey: string, destinationKey: string): Promise<boolean> {
+  const config = getR2Config();
+  const copySource = `/${config.bucket}/${sourceKey}`;
+  const payloadHash = await sha256(new Uint8Array());
+
+  const { url, headers } = await signRequest(
+    "PUT",
+    destinationKey,
+    { "x-amz-copy-source": copySource },
+    payloadHash,
+    config,
+  );
+
+  const res = await fetch(url, { method: "PUT", headers });
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`R2 copy failed [${res.status}] ${sourceKey} -> ${destinationKey}: ${text}`);
+  }
+  return true;
+}
+
+/**
+ * Delete an object from R2. Returns true if deleted (or already absent).
+ */
+export async function deleteR2Object(objectKey: string): Promise<boolean> {
+  const config = getR2Config();
+  const payloadHash = await sha256(new Uint8Array());
+
+  const { url, headers } = await signRequest("DELETE", objectKey, {}, payloadHash, config);
+
+  const res = await fetch(url, { method: "DELETE", headers });
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    throw new Error(`R2 delete failed [${res.status}] ${objectKey}: ${text}`);
+  }
+  return true;
+}
+
+/**
  * Generate a presigned URL for reading an object from R2.
  * Uses query-string signing (no body needed).
  */
