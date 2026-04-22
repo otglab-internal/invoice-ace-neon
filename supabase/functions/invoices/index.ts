@@ -126,6 +126,19 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Normalize line items to match in-app invoice JSON shape: in-app uses `account`
+      // (the Xero account code) while external API callers historically send `account_code`
+      // or `accountCode`. Standardize on `account` and drop the alternates so downstream
+      // payloads (n8n -> Xero) are identical to in-app invoices.
+      for (const li of line_items) {
+        if (li && typeof li === "object") {
+          const acct = li.account ?? li.account_code ?? li.accountCode ?? "";
+          li.account = typeof acct === "string" ? acct : String(acct ?? "");
+          delete li.account_code;
+          delete li.accountCode;
+        }
+      }
+
       const total = line_items.reduce((sum: number, li: any) => sum + (Number(li.quantity) || 0) * (Number(li.cost) || 0), 0);
       const orgIdResolved = bodyOrgId || req.headers.get("x-org-id") || "";
       const envResolved = req.headers.get("x-environment") || "production";
