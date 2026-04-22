@@ -132,6 +132,10 @@ async function migrateTenant(
 
   try {
     const sql = neon(dbUrl);
+    // Ensure expected columns exist on this tenant (older tenants may pre-date receipt_pdf_url).
+    await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_pdf_url TEXT`);
+    await sql.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_pdf_url TEXT`);
+
     const rows = await sql.query(
       `SELECT id, invoice_pdf_url, receipt_pdf_url
          FROM invoices
