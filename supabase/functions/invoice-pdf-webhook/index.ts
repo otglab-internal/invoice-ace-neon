@@ -140,8 +140,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upload PDF to Cloudflare R2 (strip any password / permission protection first)
-    const storagePath = `${invoiceId}/${pdfFilename}`;
+    // Upload PDF to Cloudflare R2 (strip any password / permission protection first).
+    // Flat-folder layout: invoices/<invoiceId>.pdf — pdfFilename is intentionally ignored.
+    void pdfFilename;
+    const storagePath = `invoices/${invoiceId}.pdf`;
     try {
       const originalBytes = new Uint8Array(await pdfBlob.arrayBuffer());
       const cleanBytes = await stripPdfProtection(originalBytes);
