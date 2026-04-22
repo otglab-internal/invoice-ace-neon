@@ -1,6 +1,7 @@
 import { neon } from "https://esm.sh/@neondatabase/serverless@0.9.0";
 import { uploadToR2, getR2PresignedUrl } from "../_shared/r2-utils.ts";
 import { dispatchApiPush } from "../_shared/api-push.ts";
+import { stripPdfProtection } from "../_shared/pdf-strip.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -139,10 +140,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upload PDF to Cloudflare R2
+    // Upload PDF to Cloudflare R2 (strip any password / permission protection first)
     const storagePath = `${invoiceId}/${pdfFilename}`;
     try {
-      await uploadToR2(storagePath, pdfBlob, "application/pdf");
+      const originalBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+      const cleanBytes = await stripPdfProtection(originalBytes);
+      await uploadToR2(storagePath, cleanBytes, "application/pdf");
     } catch (uploadErr) {
       console.error("R2 upload error:", uploadErr);
       return new Response(JSON.stringify({ error: "Failed to upload PDF", details: String(uploadErr) }), {
