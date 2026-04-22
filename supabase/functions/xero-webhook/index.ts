@@ -145,7 +145,7 @@ async function uploadPdfToStorage(
   pdfBytes: Uint8Array,
   invoiceNumber: string,
 ): Promise<string | null> {
-  const storagePath = `${localInvoiceId}/invoice.pdf`;
+  const storagePath = `invoices/${localInvoiceId}.pdf`;
 
   try {
     const cleanBytes = await stripPdfProtection(pdfBytes);
@@ -162,7 +162,7 @@ async function uploadReceiptPdfToStorage(
   pdfBytes: Uint8Array,
   invoiceNumber: string,
 ): Promise<string | null> {
-  const storagePath = `${localInvoiceId}/receipt.pdf`;
+  const storagePath = `receipts/${localInvoiceId}.pdf`;
 
   try {
     await uploadToR2(storagePath, pdfBytes, "application/pdf");
