@@ -39,8 +39,8 @@ const displayCurrency = (currency?: string | null) => {
   return c.replace(/\$$/, "");
 };
 
-const formatCurrency = (amount: number, currency = "RM") =>
-  `${displayCurrency(currency)} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+const formatAmount = (amount: number) =>
+  amount.toLocaleString("en-MY", { minimumFractionDigits: 2 });
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
@@ -274,9 +274,10 @@ const AllInvoicesPage: React.FC = () => {
                   <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
                   <span className="text-xs text-muted-foreground truncate">{inv.submitted_by_name}</span>
                   <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
-                  <span className="text-sm font-medium text-foreground tabular-nums text-right">
-                    {formatCurrency(inv.total, inv.currency || currency)}
-                  </span>
+                  <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
+                    <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
+                    <span>{formatAmount(inv.total)}</span>
+                  </div>
                   <div className="flex justify-start">
                     <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
                   </div>
