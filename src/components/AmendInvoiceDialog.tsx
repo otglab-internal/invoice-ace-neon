@@ -4,11 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Plus, Trash2, Loader2, ChevronsUpDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { neonUpdate, neonInsert } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
-import { sanitizeString, sanitizeObject } from "@/lib/sanitize";
+import { sanitizeString } from "@/lib/sanitize";
+import { supabase } from "@/integrations/supabase/client";
+import { getOrgId } from "@/lib/runtime-config";
 
 interface LineItem {
   description: string;
@@ -16,6 +21,11 @@ interface LineItem {
   cost: number;
   account?: string;
   center?: string;
+}
+
+interface XeroContact {
+  id: string;
+  name: string;
 }
 
 interface Invoice {
@@ -48,15 +58,22 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
   onAmendmentSubmitted,
 }) => {
   const { systemId, user } = useAuth();
-  const [contactName, setContactName] = useState("");
   const [reference, setReference] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Contact picker state (mirrors CreateInvoicePage)
+  const [contacts, setContacts] = useState<XeroContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactMode, setContactMode] = useState<"select" | "new">("select");
+  const [contactId, setContactId] = useState("");
+  const [newContactName, setNewContactName] = useState("");
+
   useEffect(() => {
     if (invoice && open) {
-      setContactName(invoice.contact_name);
       setReference(invoice.reference || "");
       setLineItems(
         (invoice.line_items || []).map((li: any) => ({
@@ -68,8 +85,41 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         }))
       );
       setNote("");
+      // Seed contact selection from existing invoice
+      if (invoice.contact_id && invoice.contact_id !== "__new__") {
+        setContactMode("select");
+        setContactId(invoice.contact_id);
+        setNewContactName("");
+      } else {
+        setContactMode("new");
+        setContactId("");
+        setNewContactName(invoice.contact_name || "");
+      }
     }
   }, [invoice, open]);
+
+  // Fetch Xero contacts when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    const xeroHeaders = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+    setLoadingContacts(true);
+    (async () => {
+      try {
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "contacts" },
+          headers: xeroHeaders,
+        });
+        if (data?.contacts) setContacts(data.contacts);
+      } catch (err) {
+        console.warn("Failed to fetch Xero contacts:", err);
+      } finally {
+        setLoadingContacts(false);
+      }
+    })();
+  }, [open]);
 
   const updateItem = (idx: number, updates: Partial<LineItem>) => {
     setLineItems((prev) => prev.map((li, i) => (i === idx ? { ...li, ...updates } : li)));
@@ -85,17 +135,26 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
 
   const total = lineItems.reduce((s, li) => s + (li.quantity || 0) * (li.cost || 0), 0);
 
+  const resolvedContactName =
+    contactMode === "select"
+      ? contacts.find((c) => c.id === contactId)?.name || invoice?.contact_name || ""
+      : newContactName.trim();
+
+  const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
+
   const handleSubmit = async () => {
     if (!invoice) return;
     setSubmitting(true);
 
     try {
+      const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
+
       // Sanitize everything EXCEPT line item descriptions — those must keep
       // real newlines for UI rendering. The \n→literal conversion is only
       // applied at the n8n webhook boundary, not at storage time.
       const amendmentData = {
-        contact_name: sanitizeString(contactName),
-        contact_id: invoice.contact_id,
+        contact_name: sanitizeString(resolvedContactName),
+        contact_id: finalContactId,
         reference: sanitizeString(reference),
         line_items: lineItems.map((li) => ({
           ...li,
@@ -165,8 +224,97 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Contact Name</Label>
-              <Input value={contactName} onChange={(e) => setContactName(e.target.value)} className="mt-1 text-sm" />
+              <Label className="text-xs text-muted-foreground">Contact</Label>
+              <Popover open={contactOpen} onOpenChange={setContactOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={contactOpen}
+                    className="mt-1 w-full justify-between font-normal text-sm h-9"
+                  >
+                    <span className="truncate">
+                      {contactMode === "new"
+                        ? newContactName || "New contact..."
+                        : contactId
+                        ? contacts.find((c) => c.id === contactId)?.name || invoice.contact_name
+                        : loadingContacts
+                        ? "Loading contacts..."
+                        : "Search contacts..."}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search contacts..."
+                      value={contactSearch}
+                      onValueChange={setContactSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No contacts found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__create_new__"
+                          onSelect={() => {
+                            setContactMode("new");
+                            setNewContactName(contactSearch);
+                            setContactId("");
+                            setContactOpen(false);
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4 text-primary" />
+                          <span className="text-primary font-medium">Create New Contact</span>
+                        </CommandItem>
+                        {contacts.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setContactId(c.id);
+                              setContactMode("select");
+                              setNewContactName("");
+                              setContactOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                contactId === c.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {contactMode === "new" && (
+                <div className="flex items-center gap-2 mt-2 animate-fade-in">
+                  <Input
+                    placeholder="New contact name"
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    className="text-sm h-8"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setContactMode("select");
+                      setNewContactName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Reference</Label>
@@ -239,7 +387,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button onClick={handleSubmit} disabled={submitting || !contactName.trim() || lineItems.length === 0} className="flex-1">
+            <Button onClick={handleSubmit} disabled={submitting || !contactValid || lineItems.length === 0} className="flex-1">
               {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Submit Amendment for Approval
             </Button>

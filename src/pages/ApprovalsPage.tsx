@@ -275,7 +275,7 @@ const ApprovalsPage: React.FC = () => {
       });
 
       try {
-        await apiClient.invoices("notify-approval", {
+        await apiClient.invoices("notify-amendment", {
           invoice: {
             ...invoice,
             contact_name: aData.contact_name,
@@ -286,8 +286,17 @@ const ApprovalsPage: React.FC = () => {
             status: "approved",
             amendment_approved: true,
           },
+          previous: {
+            id: invoice.id,
+            invoice_number: invoice.invoice_number,
+            contact_id: invoice.contact_id,
+            contact_name: invoice.contact_name,
+            reference: invoice.reference,
+            line_items: invoice.line_items,
+            total: invoice.total,
+          },
         });
-        toast.success("Amendment approved and resubmitted to Xero");
+        toast.success("Amendment approved and sent to Xero");
       } catch {
         toast.success("Amendment approved (Xero resubmit may have failed)");
       }
