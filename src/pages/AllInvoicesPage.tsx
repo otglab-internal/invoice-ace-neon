@@ -31,26 +31,6 @@ interface Invoice {
   currency?: string | null;
 }
 
-const statusPill = (status: string, amendmentStatus: string | null) => {
-  if (status === "paid") {
-    return <Badge className="text-xs bg-green-600 text-white border-green-600">Paid</Badge>;
-  }
-  if (status === "partially_paid") {
-    return <Badge className="text-xs bg-amber-500 text-white border-amber-500">Partially Paid</Badge>;
-  }
-  if (amendmentStatus === "pending") {
-    return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Amendment Pending</Badge>;
-  }
-  const map: Record<string, string> = {
-    submitted: "pill-automated",
-    approved: "pill-automated",
-    pushed: "pill-automated",
-    pending_approval: "pill-pending",
-    rejected: "pill-failed",
-    failed: "pill-failed",
-  };
-  return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
-};
 
 const formatCurrency = (amount: number, currency = "RM") =>
   `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
