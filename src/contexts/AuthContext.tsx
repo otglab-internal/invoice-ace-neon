@@ -210,6 +210,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem("auth_user_id", userId || "");
     if (resolvedEmail) {
       localStorage.setItem("auth_email", resolvedEmail);
+      // Mirror to auth_login_email as a guaranteed secondary fallback.
+      localStorage.setItem("auth_login_email", resolvedEmail);
     } else {
       localStorage.removeItem("auth_email");
     }
