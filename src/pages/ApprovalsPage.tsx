@@ -455,12 +455,12 @@ const ApprovalsPage: React.FC = () => {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : activeTab === "amendments" && pendingAmendments.length > 0 ? (
-          <div className="flex gap-4">
-            <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-x-auto">
               <AmendmentTable items={pendingAmendments} onSelect={(id) => { setSelectedAmendmentId(id); setAmendmentNote(""); }} selectedId={selectedAmendmentId} />
             </div>
 
-            <div className="shrink-0 bg-card border border-border rounded-xl p-5 overflow-y-auto max-h-[80vh]" style={{ width: 768 }}>
+            <div className="w-full lg:shrink-0 lg:w-[768px] bg-card border border-border rounded-xl p-5 overflow-y-auto lg:max-h-[80vh]">
               {selectedAmendment ? (
                 <div className="space-y-4 animate-fade-in">
                   <h3 className="font-semibold font-display text-foreground text-sm">
