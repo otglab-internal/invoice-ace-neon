@@ -23,13 +23,12 @@ const CHECK_INTERVAL_MS = 30 * 1000; // poll every 30s
 const ACTIVITY_KEY = "auth_last_activity";
 const LOGIN_TIME_KEY = "auth_login_time";
 
-const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = [
+const ACTIVITY_EVENTS = [
   "mousedown",
   "keydown",
   "touchstart",
   "scroll",
-  "visibilitychange",
-];
+] as const;
 
 export type SessionTimeoutReason = "idle" | "absolute" | "cross-tab";
 
