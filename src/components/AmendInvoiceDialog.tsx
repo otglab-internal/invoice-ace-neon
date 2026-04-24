@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Plus, Trash2, Loader2, ChevronsUpDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { neonUpdate, neonInsert } from "@/lib/neon-client";
+import { neonUpdate, neonInsert, neonQuery } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
 import { sanitizeString } from "@/lib/sanitize";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,12 +21,28 @@ interface LineItem {
   quantity: number;
   cost: number;
   account?: string;
+  /** categoryId -> optionName */
+  trackingValues?: Record<string, string>;
+  /** legacy fields preserved for back-compat */
   center?: string;
+  tracking?: Array<{ name: string; option: string }>;
 }
 
 interface XeroContact {
   id: string;
   name: string;
+}
+
+interface XeroAccount {
+  code: string;
+  name: string;
+  type: string;
+}
+
+interface TrackingCategory {
+  id: string;
+  name: string;
+  options: { id: string; name: string; status: string }[];
 }
 
 interface Invoice {
@@ -72,17 +89,35 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
 
+  // Xero accounts + tracking categories
+  const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
+  const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[] | null>(null);
+  const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
+
   useEffect(() => {
     if (invoice && open) {
       setReference(invoice.reference || "");
       setLineItems(
-        (invoice.line_items || []).map((li: any) => ({
-          description: li.description || "",
-          quantity: Number(li.quantity) || 0,
-          cost: Number(li.cost) || 0,
-          account: li.account || "",
-          center: li.center || "",
-        }))
+        (invoice.line_items || []).map((li: any) => {
+          // Reconstruct trackingValues map from legacy `tracking` array if present
+          const trackingValues: Record<string, string> = {};
+          if (Array.isArray(li.tracking)) {
+            li.tracking.forEach((t: any) => {
+              if (t?.name && t?.option) trackingValues[t.name] = t.option;
+            });
+          }
+          if (li.trackingValues && typeof li.trackingValues === "object") {
+            Object.assign(trackingValues, li.trackingValues);
+          }
+          return {
+            description: li.description || "",
+            quantity: Number(li.quantity) || 0,
+            cost: Number(li.cost) || 0,
+            account: li.account || "",
+            trackingValues,
+            center: li.center || "",
+          };
+        })
       );
       setNote("");
       // Seed contact selection from existing invoice
@@ -98,15 +133,17 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
     }
   }, [invoice, open]);
 
-  // Fetch Xero contacts when dialog opens
+  // Fetch Xero contacts, accounts, tracking categories, and visible-account config
   useEffect(() => {
     if (!open) return;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
     };
-    setLoadingContacts(true);
-    (async () => {
+
+    const loadAll = async () => {
+      setLoadingContacts(true);
+      // Serialize Xero calls to avoid token refresh races
       try {
         const { data } = await supabase.functions.invoke("xero", {
           body: { action: "contacts" },
@@ -115,14 +152,66 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         if (data?.contacts) setContacts(data.contacts);
       } catch (err) {
         console.warn("Failed to fetch Xero contacts:", err);
-      } finally {
-        setLoadingContacts(false);
       }
-    })();
+      setLoadingContacts(false);
+
+      try {
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "tracking-categories" },
+          headers: xeroHeaders,
+        });
+        if (data?.categories) {
+          const active = (data.categories as TrackingCategory[]).filter(
+            (tc) => tc.options.some((o) => o.status === "ACTIVE")
+          );
+          setTrackingCategories(active);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Xero tracking categories:", err);
+      }
+
+      try {
+        const { data } = await supabase.functions.invoke("xero", {
+          body: { action: "accounts" },
+          headers: xeroHeaders,
+        });
+        if (data?.accounts) setXeroAccounts(data.accounts);
+      } catch (err) {
+        console.warn("Failed to fetch Xero accounts:", err);
+      }
+
+      try {
+        const { data } = await neonQuery("global_config", {
+          select: "value",
+          filters: { key: "xero_visible_accounts" },
+          maybeSingle: true,
+        });
+        if (data && (data as any).value) {
+          const parsed = JSON.parse((data as any).value);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setVisibleAccountCodes(parsed);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    loadAll();
   }, [open]);
 
   const updateItem = (idx: number, updates: Partial<LineItem>) => {
     setLineItems((prev) => prev.map((li, i) => (i === idx ? { ...li, ...updates } : li)));
+  };
+
+  const updateTracking = (idx: number, categoryId: string, optionName: string) => {
+    setLineItems((prev) =>
+      prev.map((li, i) =>
+        i === idx
+          ? { ...li, trackingValues: { ...(li.trackingValues || {}), [categoryId]: optionName } }
+          : li
+      )
+    );
   };
 
   const removeItem = (idx: number) => {
@@ -130,7 +219,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
   };
 
   const addItem = () => {
-    setLineItems((prev) => [...prev, { description: "", quantity: 1, cost: 0 }]);
+    setLineItems((prev) => [...prev, { description: "", quantity: 1, cost: 0, trackingValues: {} }]);
   };
 
   const total = lineItems.reduce((s, li) => s + (li.quantity || 0) * (li.cost || 0), 0);
@@ -141,6 +230,11 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
       : newContactName.trim();
 
   const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
+
+  // Filter accounts by visibility config
+  const visibleAccounts = visibleAccountCodes
+    ? xeroAccounts.filter((a) => visibleAccountCodes.includes(a.code))
+    : xeroAccounts;
 
   const handleSubmit = async () => {
     if (!invoice) return;
@@ -156,16 +250,25 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
         contact_name: sanitizeString(resolvedContactName),
         contact_id: finalContactId,
         reference: sanitizeString(reference),
-        line_items: lineItems.map((li) => ({
-          ...li,
-          description: (li.description || "")
-            .replace(/<[^>]*>/g, "")
-            .replace(/javascript:/gi, "")
-            .replace(/on\w+\s*=/gi, "")
-            .trim(),
-          account: li.account ? sanitizeString(li.account) : li.account,
-          center: li.center ? sanitizeString(li.center) : li.center,
-        })),
+        line_items: lineItems.map((li) => {
+          const base: any = {
+            description: (li.description || "")
+              .replace(/<[^>]*>/g, "")
+              .replace(/javascript:/gi, "")
+              .replace(/on\w+\s*=/gi, "")
+              .trim(),
+            quantity: li.quantity,
+            cost: li.cost,
+            account: li.account ? sanitizeString(li.account) : li.account,
+          };
+          if (trackingCategories.length > 0) {
+            base.tracking = trackingCategories.map((tc) => ({
+              name: tc.name,
+              option: li.trackingValues?.[tc.id] || "",
+            }));
+          }
+          return base;
+        }),
         total,
       };
 
@@ -348,7 +451,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
                       </Button>
                     )}
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <Label className="text-xs text-muted-foreground">Quantity</Label>
                       <Input type="number" value={li.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="mt-1 text-xs" />
@@ -359,13 +462,53 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Account</Label>
-                      <Input value={li.account || ""} onChange={(e) => updateItem(idx, { account: e.target.value })} className="mt-1 text-xs" />
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Centre</Label>
-                      <Input value={li.center || ""} onChange={(e) => updateItem(idx, { center: e.target.value })} className="mt-1 text-xs" />
+                      <Select
+                        value={li.account || ""}
+                        onValueChange={(v) => updateItem(idx, { account: v })}
+                      >
+                        <SelectTrigger className="mt-1 h-8 text-xs">
+                          <SelectValue placeholder="Select account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {visibleAccounts.length === 0 && li.account && (
+                            <SelectItem value={li.account}>{li.account}</SelectItem>
+                          )}
+                          {visibleAccounts.map((a) => (
+                            <SelectItem key={a.code} value={a.code}>
+                              {a.code} — {a.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
+
+                  {trackingCategories.length > 0 && (
+                    <div className={cn("grid gap-2", trackingCategories.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                      {trackingCategories.map((tc) => (
+                        <div key={tc.id}>
+                          <Label className="text-xs text-muted-foreground">{tc.name}</Label>
+                          <Select
+                            value={li.trackingValues?.[tc.id] || ""}
+                            onValueChange={(v) => updateTracking(idx, tc.id, v)}
+                          >
+                            <SelectTrigger className="mt-1 h-8 text-xs">
+                              <SelectValue placeholder={`Select ${tc.name.toLowerCase()}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tc.options
+                                .filter((o) => o.status === "ACTIVE")
+                                .map((o) => (
+                                  <SelectItem key={o.id} value={o.name}>
+                                    {o.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
