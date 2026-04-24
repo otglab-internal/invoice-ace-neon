@@ -171,6 +171,7 @@ export function startSessionTimeout(
       window.removeEventListener(evt, recordActivity);
     }
     window.removeEventListener("storage", onStorage);
+    document.removeEventListener("visibilitychange", onVisibility);
     if (activeHandle && activeHandle.stop === handle.stop) {
       activeHandle = null;
     }
