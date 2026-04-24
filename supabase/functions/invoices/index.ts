@@ -437,6 +437,70 @@ Deno.serve(async (req) => {
       });
     }
 
+    // notify-amendment — sends amended invoice to dedicated amendment webhook
+    if (action === "notify-amendment") {
+      const { invoice, previous } = body;
+      const amendmentWebhookUrl = "https://n8n.srv1031900.hstgr.cloud/webhook-test/989fb99f-80c1-420a-9f92-614322b00c08";
+
+      try {
+        const rawCurrency = (invoice?.currency ?? "RM").toString();
+        const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
+
+        const enrichedInvoice = {
+          ...invoice,
+          currency: currencyCode,
+          line_items: (invoice?.line_items || []).map((li: any) => ({
+            ...li,
+            line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
+          })),
+        };
+
+        const webhookResponse = await fetch(amendmentWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "invoice_amended",
+            invoice_id: invoice?.id,
+            xero_invoice_id: invoice?.contact_id ? invoice?.xero_invoice_id ?? null : null,
+            invoice_number: invoice?.invoice_number ?? null,
+            contact_id: invoice?.contact_id ?? null,
+            template_id: invoice?.template_id ?? null,
+            invoice: enrichedInvoice,
+            previous: previous ?? null,
+            approved_by: invoice?.approved_by ?? null,
+            approved_at: invoice?.approved_at ?? null,
+            org_id: req.headers.get("x-org-id") || body.org_id || "",
+            environment: req.headers.get("x-environment") || "production",
+          }),
+        });
+
+        const responseStatus = webhookResponse.status;
+        const responseBody = await webhookResponse.text();
+
+        if (!webhookResponse.ok) {
+          console.error("amendment webhook returned non-2xx", { responseStatus, responseBody });
+          return new Response(JSON.stringify({
+            error: `amendment webhook returned ${responseStatus}`,
+            webhookStatus: responseStatus,
+            webhookBody: responseBody,
+          }), {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (webhookErr) {
+        console.error("amendment webhook call failed:", webhookErr);
+        return new Response(JSON.stringify({ error: "Amendment webhook call failed" }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // notify-approval — webhook proxy
     if (action === "notify-approval") {
       const { invoice } = body;
