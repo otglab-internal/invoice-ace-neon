@@ -87,10 +87,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
     const storedUserId = localStorage.getItem("auth_user_id");
-    const storedEmail = normalizeAuthEmail(localStorage.getItem("auth_email"));
+    let storedEmail = normalizeAuthEmail(localStorage.getItem("auth_email"));
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
         setEnvironment(storedEnv);
         // CANONICAL: always prefer auth_user_id over auth_system_id.
         // Older sessions may have stored a divergent value in auth_system_id;
@@ -100,6 +101,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (canonicalId && canonicalId !== storedSysId) {
           localStorage.setItem("auth_system_id", canonicalId);
         }
+
+        // Self-heal stale sessions that predate the email-capture logic by
+        // promoting any email-shaped value already in localStorage to the
+        // canonical `auth_email` / `auth_login_email` keys. This means
+        // resolveUserEmail's fast-path hits without forcing a re-login.
+        if (!storedEmail) {
+          const fromAuthUser = normalizeAuthEmail(parsed?.email);
+          const fromLogin = normalizeAuthEmail(localStorage.getItem("auth_login_email"));
+          const recovered = fromAuthUser || fromLogin;
+          if (recovered) {
+            storedEmail = recovered;
+            localStorage.setItem("auth_email", recovered);
+          }
+        }
+        if (storedEmail && !normalizeAuthEmail(localStorage.getItem("auth_login_email"))) {
+          // Mirror to auth_login_email so the secondary fallback also works.
+          localStorage.setItem("auth_login_email", storedEmail);
+        }
+
         setUserEmail(storedEmail);
         if (storedEmail) {
           localStorage.setItem("auth_email", storedEmail);
