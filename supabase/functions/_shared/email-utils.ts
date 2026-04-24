@@ -236,7 +236,7 @@ export function buildApprovedEmailHtml(invoice: Record<string, any>): string {
       <h2 style="color:#16a34a;">Invoice Approved</h2>
       <p style="color:#6b7280;">An invoice has been approved and is being processed.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-        <tr><td style="padding:4px 0;color:#6b7280;">Invoice ID:</td><td style="padding:4px 0;font-weight:600;">${invoice.invoice_number || invoice.id?.slice(0, 8).toUpperCase() || "N/A"}</td></tr>
+        <tr><td style="padding:4px 0;color:#6b7280;">Invoice Number:</td><td style="padding:4px 0;font-weight:600;">${invoice.invoice_number || "N/A"}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Contact:</td><td style="padding:4px 0;">${invoice.contact_name || "N/A"}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Date:</td><td style="padding:4px 0;">${invoice.invoice_date || "N/A"}</td></tr>
         <tr><td style="padding:4px 0;color:#6b7280;">Reference:</td><td style="padding:4px 0;">${invoice.reference || "—"}</td></tr>
