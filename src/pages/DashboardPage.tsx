@@ -211,9 +211,9 @@ const DashboardPage: React.FC = () => {
             <span>Invoice #</span>
             <span>Contact</span>
             <span>Date</span>
-            <span className="text-right">Amount</span>
-            <span className="text-center">Status</span>
-            <span className="text-right">Actions</span>
+            <span>Amount</span>
+            <span>Status</span>
+            <span>Actions</span>
           </div>
           <div className="divide-y divide-border">
             {loading ? (
@@ -231,10 +231,10 @@ const DashboardPage: React.FC = () => {
                   </span>
                   <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
                   <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
-                  <span className="text-sm font-medium text-foreground text-right tabular-nums">
+                  <span className="text-sm font-medium text-foreground tabular-nums">
                     {formatCurrency(inv.total, inv.currency || currency)}
                   </span>
-                  <div className="flex justify-center">
+                  <div className="flex justify-start">
                     <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
                   </div>
                   <InvoiceRowActions
