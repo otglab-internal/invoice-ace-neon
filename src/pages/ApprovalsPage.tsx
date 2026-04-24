@@ -541,12 +541,12 @@ const ApprovalsPage: React.FC = () => {
         ) : (
           <div className="space-y-6">
             {pendingInvoices.length > 0 && (
-              <div className="flex gap-4">
-                <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-hidden">
+              <div className="flex flex-col lg:flex-row gap-4">
+                <div className="flex-1 min-w-0 bg-card border border-border rounded-xl overflow-x-auto">
                   <InvoiceTable items={pendingInvoices} onSelect={(id) => { setSelectedId(id); cancelEditing(); }} selectedId={selectedId} />
                 </div>
 
-                <div className="shrink-0 bg-card border border-border rounded-xl p-5 overflow-y-auto max-h-[80vh]" style={{ width: 768 }}>
+                <div className="w-full lg:shrink-0 lg:w-[768px] bg-card border border-border rounded-xl p-5 overflow-y-auto lg:max-h-[80vh]">
                   {selected && selected.status === "pending_approval" ? (
                     <div className="space-y-4 animate-fade-in">
                       <div className="flex items-center justify-between">
