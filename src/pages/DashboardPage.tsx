@@ -2,13 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye, Download } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX } from "lucide-react";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
 import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
 import { useBranding } from "@/hooks/use-branding";
+import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
+import InvoiceRowActions from "@/components/InvoiceRowActions";
 
 interface Invoice {
   id: string;
@@ -29,23 +29,6 @@ interface Invoice {
   currency?: string | null;
 }
 
-const statusPill = (status: string, amendmentStatus: string | null) => {
-  if (status === "paid") {
-    return <Badge className="text-xs bg-green-600 text-white border-green-600">Paid</Badge>;
-  }
-  if (amendmentStatus === "pending") {
-    return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Amendment Pending</Badge>;
-  }
-  const map: Record<string, string> = {
-    submitted: "pill-automated",
-    approved: "pill-automated",
-    pushed: "pill-automated",
-    pending_approval: "pill-pending",
-    rejected: "pill-failed",
-    failed: "pill-failed",
-  };
-  return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
-};
 
 const formatCurrency = (amount: number, currency = "RM") =>
   `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
