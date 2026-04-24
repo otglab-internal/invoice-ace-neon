@@ -30,8 +30,15 @@ interface Invoice {
 }
 
 
+const displayCurrency = (currency?: string | null) => {
+  const c = (currency || "RM").trim();
+  if (c === "RM") return "MYR";
+  if (c === "SGD$") return "SGD";
+  return c.replace(/\$$/, "");
+};
+
 const formatCurrency = (amount: number, currency = "RM") =>
-  `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+  `${displayCurrency(currency)} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
@@ -211,7 +218,7 @@ const DashboardPage: React.FC = () => {
             <span>Invoice #</span>
             <span>Contact</span>
             <span>Date</span>
-            <span>Amount</span>
+            <span className="text-right">Amount</span>
             <span>Status</span>
             <span>Actions</span>
           </div>
@@ -231,7 +238,7 @@ const DashboardPage: React.FC = () => {
                   </span>
                   <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
                   <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
-                  <span className="text-sm font-medium text-foreground tabular-nums">
+                  <span className="text-sm font-medium text-foreground tabular-nums text-right">
                     {formatCurrency(inv.total, inv.currency || currency)}
                   </span>
                   <div className="flex justify-start">
