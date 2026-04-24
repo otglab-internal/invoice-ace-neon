@@ -1,9 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { neonQuery } from "@/lib/neon-client";
 import { normalizeRole, getPermissions, type AppRole, type StaffTag, type Permissions } from "@/lib/permissions";
 import { getOrgId } from "@/lib/runtime-config";
 import { parseEdgeError } from "@/lib/edge-error";
+import {
+  startSessionTimeout,
+  markSessionStart,
+  ensureSessionMarkers,
+  clearSessionMarkers,
+  type SessionTimeoutReason,
+} from "@/lib/session-timeout";
 
 export interface AuthUser {
   firstName: string;
