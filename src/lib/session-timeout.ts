@@ -155,6 +155,15 @@ export function startSessionTimeout(
     window.addEventListener(evt, recordActivity, { passive: true });
   }
   window.addEventListener("storage", onStorage);
+  // When the tab regains focus, treat it as activity AND immediately check
+  // — covers the "laptop opened after lunch" case.
+  const onVisibility = () => {
+    if (document.visibilityState === "visible") {
+      recordActivity();
+      check();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibility);
 
   function cleanup() {
     window.clearInterval(interval);
