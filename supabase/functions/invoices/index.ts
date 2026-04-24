@@ -654,7 +654,7 @@ Deno.serve(async (req) => {
         console.log(`invoices: [SEND-APPROVED-EMAIL] Sending to:`, recipients);
 
         const htmlBody = buildApprovedEmailHtml(invoice);
-        await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${invoice.contact_name || "N/A"}`, htmlBody);
+        await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${invoice.invoice_number || "N/A"} – ${invoice.contact_name || "N/A"}`, htmlBody);
         console.log(`invoices: [SEND-APPROVED-EMAIL] Email sent successfully`);
 
         await dbSql`
