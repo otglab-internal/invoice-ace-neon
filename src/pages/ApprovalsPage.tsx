@@ -526,7 +526,7 @@ const ApprovalsPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+                <div className="hidden lg:flex items-center justify-center h-32 text-xs text-muted-foreground">
                   Select a pending amendment
                 </div>
               )}
