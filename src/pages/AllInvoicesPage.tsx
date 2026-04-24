@@ -2,15 +2,15 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Eye, Pencil, Search, Filter, Download } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { FileText, Search, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
 import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
 import { useBranding } from "@/hooks/use-branding";
+import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
+import InvoiceRowActions from "@/components/InvoiceRowActions";
 
 interface Invoice {
   id: string;
