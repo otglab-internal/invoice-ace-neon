@@ -2,13 +2,13 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import AmendInvoiceDialog from "@/components/AmendInvoiceDialog";
-import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX, Pencil, Eye, Download } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { FileText, Clock, CheckCircle, AlertTriangle, ShieldX } from "lucide-react";
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
 import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
 import { useBranding } from "@/hooks/use-branding";
+import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
+import InvoiceRowActions from "@/components/InvoiceRowActions";
 
 interface Invoice {
   id: string;
@@ -29,26 +29,16 @@ interface Invoice {
   currency?: string | null;
 }
 
-const statusPill = (status: string, amendmentStatus: string | null) => {
-  if (status === "paid") {
-    return <Badge className="text-xs bg-green-600 text-white border-green-600">Paid</Badge>;
-  }
-  if (amendmentStatus === "pending") {
-    return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Amendment Pending</Badge>;
-  }
-  const map: Record<string, string> = {
-    submitted: "pill-automated",
-    approved: "pill-automated",
-    pushed: "pill-automated",
-    pending_approval: "pill-pending",
-    rejected: "pill-failed",
-    failed: "pill-failed",
-  };
-  return <span className={map[status] || "pill-pending"}>{status.replace("_", " ")}</span>;
+
+const displayCurrency = (currency?: string | null) => {
+  const c = (currency || "RM").trim();
+  if (c === "RM") return "MYR";
+  if (c === "SGD$") return "SGD";
+  return c.replace(/\$$/, "");
 };
 
-const formatCurrency = (amount: number, currency = "RM") =>
-  `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2 })}`;
+const formatAmount = (amount: number) =>
+  amount.toLocaleString("en-MY", { minimumFractionDigits: 2 });
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
@@ -220,9 +210,17 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="bg-card border border-border rounded-xl">
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-sm font-semibold font-display text-foreground">Recent Invoices</h2>
+          </div>
+          <div className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-3 border-b border-border bg-muted/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <span>Invoice #</span>
+            <span>Contact</span>
+            <span>Date</span>
+            <span className="text-right">Amount</span>
+            <span>Status</span>
+            <span>Actions</span>
           </div>
           <div className="divide-y divide-border">
             {loading ? (
@@ -231,52 +229,32 @@ const DashboardPage: React.FC = () => {
               <div className="px-5 py-8 text-center text-sm text-muted-foreground">No invoices yet</div>
             ) : (
               recentInvoices.map((inv) => (
-                <div key={inv.id} className="px-5 py-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-foreground w-20">
-                      {inv.invoice_number || "—"}
-                    </span>
-                    <span className="text-sm text-foreground">{inv.contact_name}</span>
+                <div
+                  key={inv.id}
+                  className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-2.5 items-center hover:bg-muted/30 transition-colors"
+                >
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {inv.invoice_number || "—"}
+                  </span>
+                  <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
+                  <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
+                  <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
+                    <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
+                    <span>{formatAmount(inv.total)}</span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">{formatDate(inv.created_at)}</span>
-                    <span className="text-sm font-medium text-foreground w-24 text-right">
-                      {formatCurrency(inv.total, inv.currency || currency)}
-                    </span>
-                    {statusPill(inv.status, inv.amendment_status)}
-                    {inv.invoice_pdf_url && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => handleViewPdf(inv)}
-                        disabled={loadingPdf === inv.id}
-                      >
-                      <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "Loading…" : "INV PDF"}
-                      </Button>
-                    )}
-                    {inv.status === "paid" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => handleDownloadReceipt(inv)}
-                        disabled={loadingReceipt === inv.id}
-                      >
-                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt PDF"}
-                      </Button>
-                    )}
-                    {canAmendInvoice(inv) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => setAmendInvoice(inv)}
-                      >
-                        <Pencil className="w-3 h-3" /> Amend
-                      </Button>
-                    )}
+                  <div className="flex justify-start">
+                    <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
                   </div>
+                  <InvoiceRowActions
+                    canViewPdf={!!inv.invoice_pdf_url}
+                    canDownloadReceipt={inv.status === "paid"}
+                    canAmend={canAmendInvoice(inv)}
+                    loadingPdf={loadingPdf === inv.id}
+                    loadingReceipt={loadingReceipt === inv.id}
+                    onViewPdf={() => handleViewPdf(inv)}
+                    onDownloadReceipt={() => handleDownloadReceipt(inv)}
+                    onAmend={() => setAmendInvoice(inv)}
+                  />
                 </div>
               ))
             )}
