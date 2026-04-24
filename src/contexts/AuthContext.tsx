@@ -228,6 +228,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.token) {
       localStorage.setItem("auth_token", data.token);
     }
+    // Anchor the absolute-timeout clock to this fresh login.
+    markSessionStart();
 
     if (userId) await fetchTags(userId);
   }, [fetchTags, pendingEmail]);
