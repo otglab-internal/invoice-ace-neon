@@ -246,7 +246,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_email");
     localStorage.removeItem("auth_login_email");
+    clearSessionMarkers();
   }, []);
+
+  // Auto-logout on idle / absolute / cross-tab events. The session-timeout
+  // module guarantees a fresh login at predictable intervals so stale
+  // localStorage state can never accumulate indefinitely.
+  const isAuthed = !!user;
+  const reasonRef = useRef<SessionTimeoutReason | null>(null);
+  useEffect(() => {
+    if (!isAuthed) return;
+    ensureSessionMarkers();
+    const handle = startSessionTimeout((reason) => {
+      reasonRef.current = reason;
+      logout();
+      const message =
+        reason === "idle"
+          ? "You've been signed out due to inactivity. Please sign in again."
+          : reason === "absolute"
+            ? "Your session has expired. Please sign in again."
+            : "Signed out in another tab.";
+      try { toast.info(message); } catch { /* ignore */ }
+    });
+    return () => handle.stop();
+  }, [isAuthed, logout]);
 
   const role = normalizeRole(user?.role);
   const permissions = user ? getPermissions(role, tags) : defaultPermissions;
