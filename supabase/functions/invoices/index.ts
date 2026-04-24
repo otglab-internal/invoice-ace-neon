@@ -803,7 +803,7 @@ Deno.serve(async (req) => {
             console.log(`invoices: [APPROVE] Sending to recipients:`, recipients, `(env: ${environment}, sandbox override: ${sandboxEmail})`);
 
             const htmlBody = buildApprovedEmailHtml(approvedInvoice);
-            await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${approvedInvoice.contact_name || "N/A"}`, htmlBody);
+            await sendEmailViaSMTP(smtpConfig, recipients, `Invoice Approved – ${approvedInvoice.invoice_number || "N/A"} – ${approvedInvoice.contact_name || "N/A"}`, htmlBody);
             console.log(`invoices: [APPROVE] sendEmailViaSMTP completed successfully`);
 
             await sql`
