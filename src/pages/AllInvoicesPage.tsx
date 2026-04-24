@@ -289,38 +289,44 @@ const AllInvoicesPage: React.FC = () => {
                   </span>
                   <span>{statusPill(inv.status, inv.amendment_status)}</span>
                   <div className="flex items-center gap-1">
-                    {inv.invoice_pdf_url && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => handleViewPdf(inv)}
-                        disabled={loadingPdf === inv.id}
-                      >
-                        <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "…" : "INV PDF"}
-                      </Button>
-                    )}
-                    {inv.status === "paid" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => handleDownloadReceipt(inv)}
-                        disabled={loadingReceipt === inv.id}
-                      >
-                        <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt PDF"}
-                      </Button>
-                    )}
-                    {canAmendInvoice(inv) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 gap-1 text-xs"
-                        onClick={() => setAmendInvoice(inv)}
-                      >
-                        <Pencil className="w-3 h-3" /> Amend
-                      </Button>
-                    )}
+                    <div className="w-[88px] flex justify-start">
+                      {inv.invoice_pdf_url ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 gap-1 text-xs"
+                          onClick={() => handleViewPdf(inv)}
+                          disabled={loadingPdf === inv.id}
+                        >
+                          <Eye className="w-3 h-3" /> {loadingPdf === inv.id ? "…" : "INV PDF"}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="w-[108px] flex justify-start">
+                      {inv.status === "paid" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 gap-1 text-xs"
+                          onClick={() => handleDownloadReceipt(inv)}
+                          disabled={loadingReceipt === inv.id}
+                        >
+                          <Download className="w-3 h-3" /> {loadingReceipt === inv.id ? "…" : "Receipt PDF"}
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="w-[80px] flex justify-start">
+                      {canAmendInvoice(inv) ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 gap-1 text-xs"
+                          onClick={() => setAmendInvoice(inv)}
+                        >
+                          <Pencil className="w-3 h-3" /> Amend
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ))
