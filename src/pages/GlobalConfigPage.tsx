@@ -2,11 +2,12 @@ import React, { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks, Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { nowGMT8 } from "@/lib/utils";
@@ -42,6 +43,12 @@ interface ConfigEntry {
 const BRANDING_KEYS = [
   { key: "logo_url", label: "Logo URL", icon: Image, description: "URL for the application logo displayed across all pages", placeholder: "https://example.com/logo.png" },
   { key: "favicon_url", label: "Favicon URL", icon: Star, description: "URL for the browser tab icon (favicon)", placeholder: "https://example.com/favicon.ico" },
+];
+
+const COMPANY_KEYS = [
+  { key: "company_name", label: "Company Name", description: "Legal company name shown on payment receipts", placeholder: "Acme Sdn Bhd" },
+  { key: "company_ssm", label: "SSM / UEN Number", description: "Company registration number (SSM for Malaysia, UEN for Singapore)", placeholder: "202301234567 (1234567-A)" },
+  { key: "company_address", label: "Company Address", description: "Registered company address shown on payment receipts", placeholder: "123 Business St, City, Postcode, Country", multiline: true },
 ];
 
 const SMTP_KEYS = [
@@ -166,6 +173,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       const allKeys = [
         ...BRANDING_KEYS.map((k) => k.key),
+        ...COMPANY_KEYS.map((k) => k.key),
         ...SMTP_KEYS.map((k) => k.key),
         ...XERO_KEYS.map((k) => k.key),
         "sandbox_test_email",
@@ -182,6 +190,9 @@ const GlobalConfigPage: React.FC = () => {
       invalidateBrandingCache({
         logoUrl: config["logo_url"]?.trim() || null,
         faviconUrl: config["favicon_url"]?.trim() || null,
+        companyName: config["company_name"]?.trim() || null,
+        companySsm: config["company_ssm"]?.trim() || null,
+        companyAddress: config["company_address"]?.trim() || null,
       });
       await logActivity("config_saved", "config", performerId, performerName, { keys: allKeys });
       toast({ title: "Configuration saved" });
@@ -344,6 +355,42 @@ const GlobalConfigPage: React.FC = () => {
                   </CardContent>
                 </Card>
               ))}
+
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Company Information</h2>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Receipt Header Details</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Shown on payment receipt PDFs sent to customers.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {COMPANY_KEYS.map(({ key, label, description, placeholder, multiline }) => (
+                    <div key={key} className="space-y-1.5">
+                      <Label htmlFor={key} className="text-sm">{label}</Label>
+                      {multiline ? (
+                        <Textarea
+                          id={key}
+                          placeholder={placeholder}
+                          rows={3}
+                          value={config[key] ?? ""}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      ) : (
+                        <Input
+                          id={key}
+                          type="text"
+                          placeholder={placeholder}
+                          value={config[key] ?? ""}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      )}
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
 
               {isAdmin && (
                 <>
