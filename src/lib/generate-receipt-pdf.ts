@@ -19,6 +19,9 @@ interface ReceiptData {
   currency?: string;
   logoUrl?: string | null;
   orgName?: string | null;
+  companyName?: string | null;
+  companySsm?: string | null;
+  companyAddress?: string | null;
 }
 
 function formatCurrency(amount: number, currency = "RM") {
