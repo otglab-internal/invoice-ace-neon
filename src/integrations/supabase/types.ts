@@ -185,6 +185,7 @@ export type Database = {
           receipt_pdf_url: string | null
           reference: string | null
           requires_approval: boolean
+          send_to_client: boolean
           status: string
           submitted_by_email: string | null
           submitted_by_name: string
@@ -216,6 +217,7 @@ export type Database = {
           receipt_pdf_url?: string | null
           reference?: string | null
           requires_approval?: boolean
+          send_to_client?: boolean
           status?: string
           submitted_by_email?: string | null
           submitted_by_name?: string
@@ -247,6 +249,7 @@ export type Database = {
           receipt_pdf_url?: string | null
           reference?: string | null
           requires_approval?: boolean
+          send_to_client?: boolean
           status?: string
           submitted_by_email?: string | null
           submitted_by_name?: string
