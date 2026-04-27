@@ -24,8 +24,9 @@ interface ReceiptData {
   companyAddress?: string | null;
 }
 
-function formatCurrency(amount: number, currency = "RM") {
-  return `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatCurrency(amount: number | string | null | undefined, currency = "RM") {
+  const value = Number(amount) || 0;
+  return `${currency} ${value.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 async function loadImageAsDataUrl(url: string): Promise<string | null> {

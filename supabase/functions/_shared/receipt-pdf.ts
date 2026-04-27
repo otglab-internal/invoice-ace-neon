@@ -29,8 +29,9 @@ const MID_GRAY = rgb(0.78, 0.78, 0.78);
 const TEXT_GRAY = rgb(0.39, 0.39, 0.39);
 const TEXT_DARK = rgb(0.16, 0.16, 0.16);
 
-function formatCurrency(amount: number, currency = "RM") {
-  return `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatCurrency(amount: number | string | null | undefined, currency = "RM") {
+  const value = Number(amount) || 0;
+  return `${currency} ${value.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // Replace characters that the WinAnsi-encoded standard fonts cannot encode.
