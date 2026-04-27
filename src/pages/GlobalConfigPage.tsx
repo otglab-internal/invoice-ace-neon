@@ -356,6 +356,42 @@ const GlobalConfigPage: React.FC = () => {
                 </Card>
               ))}
 
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Company Information</h2>
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-primary" />
+                    <CardTitle className="text-base">Receipt Header Details</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Shown on payment receipt PDFs sent to customers.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {COMPANY_KEYS.map(({ key, label, description, placeholder, multiline }) => (
+                    <div key={key} className="space-y-1.5">
+                      <Label htmlFor={key} className="text-sm">{label}</Label>
+                      {multiline ? (
+                        <Textarea
+                          id={key}
+                          placeholder={placeholder}
+                          rows={3}
+                          value={config[key] ?? ""}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      ) : (
+                        <Input
+                          id={key}
+                          type="text"
+                          placeholder={placeholder}
+                          value={config[key] ?? ""}
+                          onChange={(e) => setConfig((prev) => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      )}
+                      <p className="text-xs text-muted-foreground">{description}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
               {isAdmin && (
                 <>
                   <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider pt-4">Xero Integration</h2>
