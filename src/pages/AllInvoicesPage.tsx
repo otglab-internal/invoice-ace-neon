@@ -55,7 +55,7 @@ const AllInvoicesPage: React.FC = () => {
   const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { logoUrl } = useBranding();
+  const { logoUrl, companyName, companySsm, companyAddress } = useBranding();
 
   const isAdmin = permissions.isSystemAdmin;
   const isCentre = role === "centre";
