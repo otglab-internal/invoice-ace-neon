@@ -172,6 +172,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       const allKeys = [
         ...BRANDING_KEYS.map((k) => k.key),
+        ...COMPANY_KEYS.map((k) => k.key),
         ...SMTP_KEYS.map((k) => k.key),
         ...XERO_KEYS.map((k) => k.key),
         "sandbox_test_email",
@@ -188,6 +189,9 @@ const GlobalConfigPage: React.FC = () => {
       invalidateBrandingCache({
         logoUrl: config["logo_url"]?.trim() || null,
         faviconUrl: config["favicon_url"]?.trim() || null,
+        companyName: config["company_name"]?.trim() || null,
+        companySsm: config["company_ssm"]?.trim() || null,
+        companyAddress: config["company_address"]?.trim() || null,
       });
       await logActivity("config_saved", "config", performerId, performerName, { keys: allKeys });
       toast({ title: "Configuration saved" });
