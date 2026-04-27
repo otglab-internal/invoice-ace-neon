@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 event: "invoice_approved",
                 invoice: enriched,
+                send_to_client: created.send_to_client === true,
                 approved_by: "api",
                 approved_at: created.created_at,
                 org_id: orgIdResolved,
