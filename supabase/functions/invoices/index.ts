@@ -249,8 +249,8 @@ Deno.serve(async (req) => {
       }
 
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency, send_to_client)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency}, ${body.send_to_client === true})
         RETURNING *
       `;
       const created = result[0];
@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify({
                 event: "invoice_approved",
                 invoice: enriched,
+                send_to_client: created.send_to_client === true,
                 approved_by: "api",
                 approved_at: created.created_at,
                 org_id: orgIdResolved,
@@ -534,6 +535,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             event: "invoice_approved",
             invoice: enrichedInvoice,
+            send_to_client: invoice?.send_to_client === true,
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
             org_id: req.headers.get("x-org-id") || body.org_id || "",
@@ -778,7 +780,7 @@ Deno.serve(async (req) => {
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);

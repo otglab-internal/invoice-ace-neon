@@ -51,7 +51,7 @@ const DashboardPage: React.FC = () => {
   const [amendInvoice, setAmendInvoice] = useState<Invoice | null>(null);
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
-  const { logoUrl } = useBranding();
+  const { logoUrl, companyName, companySsm, companyAddress } = useBranding();
 
   const handleViewPdf = useCallback(async (inv: Invoice) => {
     if (!inv.invoice_pdf_url) return;
@@ -89,13 +89,16 @@ const DashboardPage: React.FC = () => {
         submittedByName: inv.submitted_by_name,
         currency: inv.currency || currency,
         logoUrl,
+        companyName,
+        companySsm,
+        companyAddress,
       });
     } catch {
       toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
     } finally {
       setLoadingReceipt(null);
     }
-  }, [currency, logoUrl]);
+  }, [currency, logoUrl, companyName, companySsm, companyAddress]);
 
   const canView = permissions.canViewInvoices;
   const isRequester = permissions.canCreateInvoice;

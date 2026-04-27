@@ -16,6 +16,9 @@ interface ReceiptPdfData {
   submittedByName: string;
   currency?: string;
   logoUrl?: string | null;
+  companyName?: string | null;
+  companySsm?: string | null;
+  companyAddress?: string | null;
 }
 
 const A4_WIDTH = 595.28;
@@ -26,8 +29,9 @@ const MID_GRAY = rgb(0.78, 0.78, 0.78);
 const TEXT_GRAY = rgb(0.39, 0.39, 0.39);
 const TEXT_DARK = rgb(0.16, 0.16, 0.16);
 
-function formatCurrency(amount: number, currency = "RM") {
-  return `${currency} ${amount.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function formatCurrency(amount: number | string | null | undefined, currency = "RM") {
+  const value = Number(amount) || 0;
+  return `${currency} ${value.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // Replace characters that the WinAnsi-encoded standard fonts cannot encode.
@@ -163,7 +167,32 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   }
 
   drawText("PAYMENT RECEIPT", pageWidth - MARGIN, y - 2, { size: 22, font: bold, align: "right" });
-  y -= 46;
+  y -= 22;
+
+  // Company block (right aligned)
+  const companyLines: Array<{ text: string; bold?: boolean }> = [];
+  if (data.companyName) companyLines.push({ text: data.companyName, bold: true });
+  if (data.companySsm) companyLines.push({ text: `Reg. No: ${data.companySsm}` });
+  if (data.companyAddress) {
+    const rawLines = data.companyAddress.split(/\r?\n/);
+    for (const raw of rawLines) {
+      const wrapped = wrapText(raw, 220, regular, 9);
+      for (const w of wrapped) companyLines.push({ text: w });
+    }
+  }
+
+  for (const line of companyLines) {
+    drawText(line.text, pageWidth - MARGIN, y, {
+      size: 9,
+      font: line.bold ? bold : regular,
+      color: TEXT_GRAY,
+      align: "right",
+    });
+    y -= 12;
+  }
+
+  if (companyLines.length > 0) y -= 6;
+  else y -= 18;
 
   drawLine(MARGIN, y, pageWidth - MARGIN, y);
   y -= 22;

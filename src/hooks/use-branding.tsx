@@ -4,10 +4,19 @@ import { neonQuery } from "@/lib/neon-client";
 interface Branding {
   logoUrl: string | null;
   faviconUrl: string | null;
+  companyName: string | null;
+  companySsm: string | null;
+  companyAddress: string | null;
   loading: boolean;
 }
 
-type BrandingData = { logoUrl: string | null; faviconUrl: string | null };
+type BrandingData = {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  companyName: string | null;
+  companySsm: string | null;
+  companyAddress: string | null;
+};
 
 const BRANDING_UPDATED_EVENT = "branding:updated";
 
@@ -40,6 +49,9 @@ async function fetchBranding(): Promise<BrandingData> {
   return {
     logoUrl: map["logo_url"]?.trim() || null,
     faviconUrl: map["favicon_url"]?.trim() || null,
+    companyName: map["company_name"]?.trim() || null,
+    companySsm: map["company_ssm"]?.trim() || null,
+    companyAddress: map["company_address"]?.trim() || null,
   };
 }
 
@@ -52,6 +64,9 @@ export function useBranding(): Branding {
   const [branding, setBranding] = useState<Branding>({
     logoUrl: cachedBranding?.logoUrl ?? null,
     faviconUrl: cachedBranding?.faviconUrl ?? null,
+    companyName: cachedBranding?.companyName ?? null,
+    companySsm: cachedBranding?.companySsm ?? null,
+    companyAddress: cachedBranding?.companyAddress ?? null,
     loading: !cachedBranding,
   });
 

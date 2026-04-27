@@ -55,7 +55,7 @@ const AllInvoicesPage: React.FC = () => {
   const [loadingReceipt, setLoadingReceipt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { logoUrl } = useBranding();
+  const { logoUrl, companyName, companySsm, companyAddress } = useBranding();
 
   const isAdmin = permissions.isSystemAdmin;
   const isCentre = role === "centre";
@@ -148,13 +148,16 @@ const AllInvoicesPage: React.FC = () => {
         submittedByName: inv.submitted_by_name,
         currency: inv.currency || currency,
         logoUrl,
+        companyName,
+        companySsm,
+        companyAddress,
       });
     } catch {
       toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
     } finally {
       setLoadingReceipt(null);
     }
-  }, [currency, logoUrl]);
+  }, [currency, logoUrl, companyName, companySsm, companyAddress]);
 
   const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
