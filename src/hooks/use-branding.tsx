@@ -49,6 +49,9 @@ async function fetchBranding(): Promise<BrandingData> {
   return {
     logoUrl: map["logo_url"]?.trim() || null,
     faviconUrl: map["favicon_url"]?.trim() || null,
+    companyName: map["company_name"]?.trim() || null,
+    companySsm: map["company_ssm"]?.trim() || null,
+    companyAddress: map["company_address"]?.trim() || null,
   };
 }
 
