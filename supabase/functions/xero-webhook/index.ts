@@ -241,6 +241,9 @@ Deno.serve(async (req) => {
       "xero_refresh_token",
       "xero_tenant_id",
       "logo_url",
+      "company_name",
+      "company_ssm",
+      "company_address",
     ]);
 
     if (!config.xero_access_token || !config.xero_tenant_id) {
