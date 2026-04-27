@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap } from "lucide-react";
@@ -177,6 +178,7 @@ const CreateInvoicePage: React.FC = () => {
 
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [sendToClient, setSendToClient] = useState(false);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -445,6 +447,7 @@ const CreateInvoicePage: React.FC = () => {
         requires_approval: willNeedApproval,
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
+        send_to_client: sendToClient,
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
@@ -518,6 +521,7 @@ const CreateInvoicePage: React.FC = () => {
       setContactId("");
       setNewContactName("");
       setReference("");
+      setSendToClient(false);
       setLineItems([createLineItem(defaultId)]);
     } catch {
       toast.error("Something went wrong");
@@ -637,6 +641,21 @@ const CreateInvoicePage: React.FC = () => {
                   className="mt-2"
                 />
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="send-to-client" className="text-sm font-semibold font-display text-foreground">
+                  Send invoice to client
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, the invoice will be emailed to the client immediately after being created in Xero.
+                </p>
+              </div>
+              <Switch
+                id="send-to-client"
+                checked={sendToClient}
+                onCheckedChange={setSendToClient}
+              />
             </div>
           </div>
 

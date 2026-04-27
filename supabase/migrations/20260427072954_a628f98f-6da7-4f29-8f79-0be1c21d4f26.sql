@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS send_to_client boolean NOT NULL DEFAULT false;
