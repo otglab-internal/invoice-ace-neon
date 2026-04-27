@@ -352,6 +352,9 @@ Deno.serve(async (req) => {
               submittedByName: (invoiceRecord.submitted_by_name as string) || "—",
               currency: (invoiceRecord.currency as string | null) || "RM",
               logoUrl: config.logo_url || null,
+              companyName: config.company_name || null,
+              companySsm: config.company_ssm || null,
+              companyAddress: config.company_address || null,
             });
             receiptPdfPath = await uploadReceiptPdfToStorage(localInvoice.id as string, receiptPdfBytes, xeroInvoiceNumber);
           }
