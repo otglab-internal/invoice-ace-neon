@@ -177,6 +177,7 @@ const CreateInvoicePage: React.FC = () => {
 
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [sendToClient, setSendToClient] = useState(false);
 
   useEffect(() => {
     const fetchTemplates = async () => {
