@@ -166,7 +166,32 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   }
 
   drawText("PAYMENT RECEIPT", pageWidth - MARGIN, y - 2, { size: 22, font: bold, align: "right" });
-  y -= 46;
+  y -= 22;
+
+  // Company block (right aligned)
+  const companyLines: Array<{ text: string; bold?: boolean }> = [];
+  if (data.companyName) companyLines.push({ text: data.companyName, bold: true });
+  if (data.companySsm) companyLines.push({ text: `Reg. No: ${data.companySsm}` });
+  if (data.companyAddress) {
+    const rawLines = data.companyAddress.split(/\r?\n/);
+    for (const raw of rawLines) {
+      const wrapped = wrapText(raw, 220, regular, 9);
+      for (const w of wrapped) companyLines.push({ text: w });
+    }
+  }
+
+  for (const line of companyLines) {
+    drawText(line.text, pageWidth - MARGIN, y, {
+      size: 9,
+      font: line.bold ? bold : regular,
+      color: TEXT_GRAY,
+      align: "right",
+    });
+    y -= 12;
+  }
+
+  if (companyLines.length > 0) y -= 6;
+  else y -= 18;
 
   drawLine(MARGIN, y, pageWidth - MARGIN, y);
   y -= 22;
