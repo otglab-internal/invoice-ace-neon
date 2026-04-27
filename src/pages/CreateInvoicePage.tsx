@@ -520,6 +520,7 @@ const CreateInvoicePage: React.FC = () => {
       setContactId("");
       setNewContactName("");
       setReference("");
+      setSendToClient(false);
       setLineItems([createLineItem(defaultId)]);
     } catch {
       toast.error("Something went wrong");
