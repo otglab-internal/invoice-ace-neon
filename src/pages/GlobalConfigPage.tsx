@@ -44,6 +44,12 @@ const BRANDING_KEYS = [
   { key: "favicon_url", label: "Favicon URL", icon: Star, description: "URL for the browser tab icon (favicon)", placeholder: "https://example.com/favicon.ico" },
 ];
 
+const COMPANY_KEYS = [
+  { key: "company_name", label: "Company Name", description: "Legal company name shown on payment receipts", placeholder: "Acme Sdn Bhd" },
+  { key: "company_ssm", label: "SSM / UEN Number", description: "Company registration number (SSM for Malaysia, UEN for Singapore)", placeholder: "202301234567 (1234567-A)" },
+  { key: "company_address", label: "Company Address", description: "Registered company address shown on payment receipts", placeholder: "123 Business St, City, Postcode, Country", multiline: true },
+];
+
 const SMTP_KEYS = [
   { key: "smtp_host", label: "SMTP Host", placeholder: "smtp.gmail.com" },
   { key: "smtp_port", label: "SMTP Port", placeholder: "587" },
