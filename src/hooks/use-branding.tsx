@@ -64,6 +64,9 @@ export function useBranding(): Branding {
   const [branding, setBranding] = useState<Branding>({
     logoUrl: cachedBranding?.logoUrl ?? null,
     faviconUrl: cachedBranding?.faviconUrl ?? null,
+    companyName: cachedBranding?.companyName ?? null,
+    companySsm: cachedBranding?.companySsm ?? null,
+    companyAddress: cachedBranding?.companyAddress ?? null,
     loading: !cachedBranding,
   });
 
