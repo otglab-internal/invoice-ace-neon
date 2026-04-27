@@ -62,9 +62,35 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<void> {
   // Title - right aligned
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(40, 40, 40);
   doc.text("PAYMENT RECEIPT", pageWidth - margin, y + 8, { align: "right" });
 
-  y += 28;
+  y += 20;
+
+  // Company block (right aligned, under title)
+  const companyLines: string[] = [];
+  if (data.companyName) companyLines.push(data.companyName);
+  if (data.companySsm) companyLines.push(`Reg. No: ${data.companySsm}`);
+  if (data.companyAddress) {
+    const addrLines = data.companyAddress.split(/\r?\n/).flatMap((line) =>
+      doc.splitTextToSize(line, 80) as string[],
+    );
+    companyLines.push(...addrLines);
+  }
+
+  if (companyLines.length > 0) {
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    for (let i = 0; i < companyLines.length; i++) {
+      const isFirst = i === 0;
+      doc.setFont("helvetica", isFirst ? "bold" : "normal");
+      doc.text(companyLines[i], pageWidth - margin, y + 4 + i * 4, { align: "right" });
+    }
+    y += 4 + companyLines.length * 4 + 4;
+  } else {
+    y += 8;
+  }
 
   // Divider
   doc.setDrawColor(200, 200, 200);
