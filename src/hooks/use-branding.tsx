@@ -4,10 +4,19 @@ import { neonQuery } from "@/lib/neon-client";
 interface Branding {
   logoUrl: string | null;
   faviconUrl: string | null;
+  companyName: string | null;
+  companySsm: string | null;
+  companyAddress: string | null;
   loading: boolean;
 }
 
-type BrandingData = { logoUrl: string | null; faviconUrl: string | null };
+type BrandingData = {
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  companyName: string | null;
+  companySsm: string | null;
+  companyAddress: string | null;
+};
 
 const BRANDING_UPDATED_EVENT = "branding:updated";
 
