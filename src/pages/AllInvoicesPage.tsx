@@ -148,13 +148,16 @@ const AllInvoicesPage: React.FC = () => {
         submittedByName: inv.submitted_by_name,
         currency: inv.currency || currency,
         logoUrl,
+        companyName,
+        companySsm,
+        companyAddress,
       });
     } catch {
       toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
     } finally {
       setLoadingReceipt(null);
     }
-  }, [currency, logoUrl]);
+  }, [currency, logoUrl, companyName, companySsm, companyAddress]);
 
   const canAmendInvoice = (inv: Invoice) => {
     if (!isRequester) return false;
