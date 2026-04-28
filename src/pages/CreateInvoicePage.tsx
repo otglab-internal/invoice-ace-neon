@@ -148,6 +148,73 @@ function isLineItemValid(item: LineItem, templates: Template[], trackingCategori
   return true;
 }
 
+type ContactPerson = { firstName: string; lastName: string; email: string; includeInEmails: boolean };
+
+const ContactPersonsEditor: React.FC<{
+  persons: ContactPerson[];
+  setPersons: React.Dispatch<React.SetStateAction<ContactPerson[]>>;
+  helperText?: string;
+}> = ({ persons, setPersons, helperText }) => {
+  const update = (idx: number, patch: Partial<ContactPerson>) => {
+    setPersons((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+        Additional contact persons
+      </Label>
+      {persons.map((p, idx) => (
+        <div key={idx} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="First name"
+              value={p.firstName}
+              onChange={(e) => update(idx, { firstName: e.target.value })}
+            />
+            <Input
+              placeholder="Last name (optional)"
+              value={p.lastName}
+              onChange={(e) => update(idx, { lastName: e.target.value })}
+            />
+          </div>
+          <Input
+            type="email"
+            placeholder="name@example.com"
+            value={p.email}
+            onChange={(e) => update(idx, { email: e.target.value })}
+          />
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={p.includeInEmails}
+                onCheckedChange={(v) => update(idx, { includeInEmails: !!v })}
+              />
+              <span>Include in emails</span>
+            </label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPersons((prev) => prev.filter((_, i) => i !== idx))}
+            >
+              <Trash2 className="w-4 h-4 mr-1" /> Remove
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setPersons((prev) => [...prev, { firstName: "", lastName: "", email: "", includeInEmails: true }])}
+      >
+        <Plus className="w-4 h-4 mr-1" /> Add contact person
+      </Button>
+      {helperText && <p className="text-xs text-muted-foreground">{helperText}</p>}
+    </div>
+  );
+};
+
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId, userEmail } = useAuth();
   const requesterName = user ? `${user.firstName} ${user.lastName}`.trim() : "";
@@ -169,7 +236,10 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
-  const [newContactEmails, setNewContactEmails] = useState<string[]>([""]);
+  const [newContactEmail, setNewContactEmail] = useState<string>("");
+  const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
+  const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
+  const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
     const now = new Date();
     const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -184,6 +254,7 @@ const CreateInvoicePage: React.FC = () => {
   const [sendToClient, setSendToClient] = useState(false);
   const [dueDays, setDueDays] = useState<string>("7");
   const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -466,9 +537,30 @@ const CreateInvoicePage: React.FC = () => {
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
           ? (contactMode === "new"
-              ? newContactEmails.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
-              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))
+              ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
+                  .filter((e) => emailRegex.test(e))
+              : (() => {
+                  const selected = contacts.find((c) => c.id === contactId);
+                  const emails = selected?.emails ?? [];
+                  if (emails.length === 0) {
+                    return [existingPrimaryEmail.trim(), ...existingContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
+                      .filter((e) => emailRegex.test(e));
+                  }
+                  return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
+                })())
           : [],
+        contact_persons: contactMode === "new"
+          ? newContactPersons
+              .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
+              .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
+          : (() => {
+              const selected = contacts.find((c) => c.id === contactId);
+              const emails = selected?.emails ?? [];
+              if (emails.length > 0) return [];
+              return existingContactPersons
+                .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
+                .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }));
+            })(),
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
@@ -638,58 +730,34 @@ const CreateInvoicePage: React.FC = () => {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setContactMode("select");
-                      setNewContactName("");
-                      setNewContactEmails([""]);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    Contact email{newContactEmails.length > 1 ? "s" : ""}
-                  </Label>
-                  {newContactEmails.map((email, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        type="email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => {
-                          const next = [...newContactEmails];
-                          next[idx] = e.target.value;
-                          setNewContactEmails(next);
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        disabled={newContactEmails.length === 1}
-                        onClick={() => {
-                          setNewContactEmails((prev) => prev.filter((_, i) => i !== idx));
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNewContactEmails((prev) => [...prev, ""])}
-                  >
-                    <Plus className="w-4 h-4 mr-1" /> Add email
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    These emails will be saved to the new contact in Xero and used when "Send invoice to client" is enabled.
-                  </p>
-                </div>
+                  onClick={() => {
+                    setContactMode("select");
+                    setNewContactName("");
+                    setNewContactEmail("");
+                    setNewContactPersons([]);
+                  }}
+                >
+                  Cancel
+                </Button>
               </div>
-            )}
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                  Primary email
+                </Label>
+                <Input
+                  type="email"
+                  placeholder="name@example.com"
+                  value={newContactEmail}
+                  onChange={(e) => setNewContactEmail(e.target.value)}
+                />
+              </div>
+              <ContactPersonsEditor
+                persons={newContactPersons}
+                setPersons={setNewContactPersons}
+                helperText='These contact persons will be saved to the new Xero contact.'
+              />
+            </div>
+          )}
             {contactMode === "select" && contactId && (() => {
               const selected = contacts.find((c) => c.id === contactId);
               const emails = selected?.emails ?? [];
@@ -699,48 +767,29 @@ const CreateInvoicePage: React.FC = () => {
                     Send invoice to
                   </Label>
                   {emails.length === 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <p className="text-xs text-muted-foreground italic">
                         No email addresses found on this Xero contact.
                       </p>
-                      {(selectedRecipientEmails.length === 0 ? [""] : selectedRecipientEmails).map((email, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <Input
-                            type="email"
-                            placeholder="name@example.com"
-                            value={email}
-                            onChange={(e) => {
-                              const base = selectedRecipientEmails.length === 0 ? [""] : [...selectedRecipientEmails];
-                              base[idx] = e.target.value;
-                              setSelectedRecipientEmails(base);
-                            }}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={selectedRecipientEmails.length <= 1}
-                            onClick={() => {
-                              setSelectedRecipientEmails((prev) => prev.filter((_, i) => i !== idx));
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setSelectedRecipientEmails((prev) => (prev.length === 0 ? ["", ""] : [...prev, ""]))
-                        }
-                      >
-                        <Plus className="w-4 h-4 mr-1" /> Add email
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        These emails will be used when "Send invoice to client" is enabled.
-                      </p>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                          Primary email
+                        </Label>
+                        <Input
+                          type="email"
+                          placeholder="name@example.com"
+                          value={existingPrimaryEmail}
+                          onChange={(e) => {
+                            setExistingPrimaryEmail(e.target.value);
+                            setSelectedRecipientEmails(e.target.value.trim() ? [e.target.value.trim()] : []);
+                          }}
+                        />
+                      </div>
+                      <ContactPersonsEditor
+                        persons={existingContactPersons}
+                        setPersons={setExistingContactPersons}
+                        helperText='These contact persons will be added to the Xero contact.'
+                      />
                     </div>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
