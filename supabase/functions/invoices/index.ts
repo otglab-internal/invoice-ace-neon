@@ -248,9 +248,12 @@ Deno.serve(async (req) => {
         }
       }
 
+      const dueDaysAllowed = [7, 14, 28, 60];
+      const dueDaysVal = dueDaysAllowed.includes(Number(body.due_days)) ? Number(body.due_days) : 7;
+
       const result = await dbSql`
-        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency, send_to_client)
-        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency}, ${body.send_to_client === true})
+        INSERT INTO invoices (contact_id, contact_name, invoice_date, reference, line_items, total, submitted_by_system_id, submitted_by_name, submitted_by_email, template_id, requires_approval, status, callback_url, currency, send_to_client, due_days)
+        VALUES (${contact_id || '__new__'}, ${contact_name}, ${invoice_date}, ${reference || ''}, ${JSON.stringify(line_items)}::jsonb, ${total}, ${system_id}, ${finalSubmitterName}, ${resolvedEmail}, ${template_id || null}, ${requiresApproval}, ${initialStatus}, ${callbackUrlClean || null}, ${resolvedCurrency}, ${body.send_to_client === true}, ${dueDaysVal})
         RETURNING *
       `;
       const created = result[0];
