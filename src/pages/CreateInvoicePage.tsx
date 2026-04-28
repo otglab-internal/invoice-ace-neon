@@ -641,6 +641,44 @@ const CreateInvoicePage: React.FC = () => {
                 </Button>
               </div>
             )}
+            {contactMode === "select" && contactId && (() => {
+              const selected = contacts.find((c) => c.id === contactId);
+              const emails = selected?.emails ?? [];
+              return (
+                <div className="space-y-2 animate-fade-in">
+                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                    Send invoice to
+                  </Label>
+                  {emails.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No email addresses found on this Xero contact.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      {emails.map((email) => {
+                        const checked = selectedRecipientEmails.includes(email);
+                        return (
+                          <label
+                            key={email}
+                            className="flex items-center gap-2 text-sm cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setSelectedRecipientEmails((prev) =>
+                                  v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
+                                );
+                              }}
+                            />
+                            <span className="text-foreground break-all">{email}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
