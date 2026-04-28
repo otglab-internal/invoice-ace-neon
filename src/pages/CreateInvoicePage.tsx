@@ -626,24 +626,68 @@ const CreateInvoicePage: React.FC = () => {
               </PopoverContent>
             </Popover>
             {contactMode === "new" && (
-              <div className="flex items-center gap-2 animate-fade-in">
-                <Input
-                  placeholder="New contact name"
-                  value={newContactName}
-                  onChange={(e) => setNewContactName(e.target.value)}
-                  autoFocus
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setContactMode("select");
-                    setNewContactName("");
-                  }}
-                >
-                  Cancel
-                </Button>
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="New contact name"
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setContactMode("select");
+                      setNewContactName("");
+                      setNewContactEmails([""]);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                    Contact email{newContactEmails.length > 1 ? "s" : ""}
+                  </Label>
+                  {newContactEmails.map((email, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        type="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={(e) => {
+                          const next = [...newContactEmails];
+                          next[idx] = e.target.value;
+                          setNewContactEmails(next);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={newContactEmails.length === 1}
+                        onClick={() => {
+                          setNewContactEmails((prev) => prev.filter((_, i) => i !== idx));
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewContactEmails((prev) => [...prev, ""])}
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> Add email
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    These emails will be saved to the new contact in Xero and used when "Send invoice to client" is enabled.
+                  </p>
+                </div>
               </div>
             )}
             {contactMode === "select" && contactId && (() => {
