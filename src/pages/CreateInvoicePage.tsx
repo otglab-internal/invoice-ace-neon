@@ -164,42 +164,42 @@ const ContactPersonsEditor: React.FC<{
         Additional contact persons
       </Label>
       {persons.map((p, idx) => (
-        <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-lg border border-border bg-muted/20 p-3">
+        <div key={idx} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Input
+              placeholder="First name"
+              value={p.firstName}
+              onChange={(e) => update(idx, { firstName: e.target.value })}
+            />
+            <Input
+              placeholder="Last name (optional)"
+              value={p.lastName}
+              onChange={(e) => update(idx, { lastName: e.target.value })}
+            />
+          </div>
           <Input
-            className="md:col-span-3"
-            placeholder="First name"
-            value={p.firstName}
-            onChange={(e) => update(idx, { firstName: e.target.value })}
-          />
-          <Input
-            className="md:col-span-3"
-            placeholder="Last name (optional)"
-            value={p.lastName}
-            onChange={(e) => update(idx, { lastName: e.target.value })}
-          />
-          <Input
-            className="md:col-span-4"
             type="email"
             placeholder="name@example.com"
             value={p.email}
             onChange={(e) => update(idx, { email: e.target.value })}
           />
-          <label className="md:col-span-1 flex items-center gap-1 text-xs cursor-pointer">
-            <Checkbox
-              checked={p.includeInEmails}
-              onCheckedChange={(v) => update(idx, { includeInEmails: !!v })}
-            />
-            <span>Include</span>
-          </label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="md:col-span-1 justify-self-end"
-            onClick={() => setPersons((prev) => prev.filter((_, i) => i !== idx))}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={p.includeInEmails}
+                onCheckedChange={(v) => update(idx, { includeInEmails: !!v })}
+              />
+              <span>Include in emails</span>
+            </label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPersons((prev) => prev.filter((_, i) => i !== idx))}
+            >
+              <Trash2 className="w-4 h-4 mr-1" /> Remove
+            </Button>
+          </div>
         </div>
       ))}
       <Button
