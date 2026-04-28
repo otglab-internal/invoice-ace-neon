@@ -540,6 +540,7 @@ Deno.serve(async (req) => {
             event: "invoice_approved",
             invoice: enrichedInvoice,
             send_to_client: invoice?.send_to_client === true,
+            due_days: Number(invoice?.due_days) || 7,
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
             org_id: req.headers.get("x-org-id") || body.org_id || "",
