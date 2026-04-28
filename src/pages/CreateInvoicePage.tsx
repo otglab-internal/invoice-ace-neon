@@ -449,6 +449,7 @@ const CreateInvoicePage: React.FC = () => {
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
         send_to_client: sendToClient,
+        due_days: Number(dueDays) || 7,
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
