@@ -787,7 +787,7 @@ Deno.serve(async (req) => {
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);
