@@ -174,6 +174,7 @@ export type Database = {
           callback_url: string | null
           contact_id: string | null
           contact_name: string
+          contact_persons: Json
           created_at: string
           due_days: number
           environment: string
@@ -208,6 +209,7 @@ export type Database = {
           callback_url?: string | null
           contact_id?: string | null
           contact_name: string
+          contact_persons?: Json
           created_at?: string
           due_days?: number
           environment?: string
@@ -242,6 +244,7 @@ export type Database = {
           callback_url?: string | null
           contact_id?: string | null
           contact_name?: string
+          contact_persons?: Json
           created_at?: string
           due_days?: number
           environment?: string

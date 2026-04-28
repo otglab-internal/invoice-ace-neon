@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS contact_persons jsonb NOT NULL DEFAULT '[]'::jsonb;
