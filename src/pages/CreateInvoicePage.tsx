@@ -76,6 +76,7 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
 interface XeroContact {
   id: string;
   name: string;
+  emails?: string[];
 }
 
 interface XeroAccount {
