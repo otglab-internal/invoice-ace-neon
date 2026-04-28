@@ -181,6 +181,7 @@ const CreateInvoicePage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [sendToClient, setSendToClient] = useState(false);
   const [dueDays, setDueDays] = useState<string>("7");
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchTemplates = async () => {
