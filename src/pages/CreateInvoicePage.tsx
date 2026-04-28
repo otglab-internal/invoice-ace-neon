@@ -467,7 +467,7 @@ const CreateInvoicePage: React.FC = () => {
         recipient_emails: sendToClient
           ? (contactMode === "new"
               ? newContactEmails.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
-              : selectedRecipientEmails)
+              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))
           : [],
       });
 
