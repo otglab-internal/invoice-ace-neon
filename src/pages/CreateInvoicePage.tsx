@@ -187,6 +187,7 @@ const CreateInvoicePage: React.FC = () => {
   const [sendToClient, setSendToClient] = useState(false);
   const [dueDays, setDueDays] = useState<string>("7");
   const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   useEffect(() => {
     const fetchTemplates = async () => {
