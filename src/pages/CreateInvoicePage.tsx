@@ -699,9 +699,49 @@ const CreateInvoicePage: React.FC = () => {
                     Send invoice to
                   </Label>
                   {emails.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No email addresses found on this Xero contact.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground italic">
+                        No email addresses found on this Xero contact.
+                      </p>
+                      {(selectedRecipientEmails.length === 0 ? [""] : selectedRecipientEmails).map((email, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            type="email"
+                            placeholder="name@example.com"
+                            value={email}
+                            onChange={(e) => {
+                              const base = selectedRecipientEmails.length === 0 ? [""] : [...selectedRecipientEmails];
+                              base[idx] = e.target.value;
+                              setSelectedRecipientEmails(base);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={selectedRecipientEmails.length <= 1}
+                            onClick={() => {
+                              setSelectedRecipientEmails((prev) => prev.filter((_, i) => i !== idx));
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setSelectedRecipientEmails((prev) => (prev.length === 0 ? ["", ""] : [...prev, ""]))
+                        }
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add email
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        These emails will be used when "Send invoice to client" is enabled.
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
                       {emails.map((email) => {
