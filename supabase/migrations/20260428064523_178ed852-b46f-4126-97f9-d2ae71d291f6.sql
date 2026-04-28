@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS recipient_emails text[] NOT NULL DEFAULT '{}'::text[];

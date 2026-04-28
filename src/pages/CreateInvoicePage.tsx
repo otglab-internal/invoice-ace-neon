@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap } from "lucide-react";
@@ -76,6 +77,7 @@ const createLineItem = (defaultTemplateId: string): LineItem => ({
 interface XeroContact {
   id: string;
   name: string;
+  emails?: string[];
 }
 
 interface XeroAccount {
@@ -180,6 +182,7 @@ const CreateInvoicePage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [sendToClient, setSendToClient] = useState(false);
   const [dueDays, setDueDays] = useState<string>("7");
+  const [selectedRecipientEmails, setSelectedRecipientEmails] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -356,6 +359,16 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [loadingTemplates, lineItems.length, templates]);
 
+  // When the selected contact changes, default to selecting all of its emails.
+  useEffect(() => {
+    if (contactMode === "select" && contactId) {
+      const c = contacts.find((x) => x.id === contactId);
+      setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
+    } else {
+      setSelectedRecipientEmails([]);
+    }
+  }, [contactId, contactMode, contacts]);
+
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
@@ -450,6 +463,7 @@ const CreateInvoicePage: React.FC = () => {
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
         send_to_client: sendToClient,
         due_days: Number(dueDays) || 7,
+        recipient_emails: sendToClient ? selectedRecipientEmails : [],
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
@@ -627,6 +641,44 @@ const CreateInvoicePage: React.FC = () => {
                 </Button>
               </div>
             )}
+            {contactMode === "select" && contactId && (() => {
+              const selected = contacts.find((c) => c.id === contactId);
+              const emails = selected?.emails ?? [];
+              return (
+                <div className="space-y-2 animate-fade-in">
+                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                    Send invoice to
+                  </Label>
+                  {emails.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No email addresses found on this Xero contact.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      {emails.map((email) => {
+                        const checked = selectedRecipientEmails.includes(email);
+                        return (
+                          <label
+                            key={email}
+                            className="flex items-center gap-2 text-sm cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setSelectedRecipientEmails((prev) =>
+                                  v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
+                                );
+                              }}
+                            />
+                            <span className="text-foreground break-all">{email}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">

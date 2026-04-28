@@ -184,6 +184,7 @@ export type Database = {
           line_items: Json
           org_id: string
           receipt_pdf_url: string | null
+          recipient_emails: string[]
           reference: string | null
           requires_approval: boolean
           send_to_client: boolean
@@ -217,6 +218,7 @@ export type Database = {
           line_items?: Json
           org_id?: string
           receipt_pdf_url?: string | null
+          recipient_emails?: string[]
           reference?: string | null
           requires_approval?: boolean
           send_to_client?: boolean
@@ -250,6 +252,7 @@ export type Database = {
           line_items?: Json
           org_id?: string
           receipt_pdf_url?: string | null
+          recipient_emails?: string[]
           reference?: string | null
           requires_approval?: boolean
           send_to_client?: boolean
