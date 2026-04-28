@@ -169,6 +169,7 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   const [newContactName, setNewContactName] = useState("");
+  const [newContactEmails, setNewContactEmails] = useState<string[]>([""]);
   const [invoiceDate] = useState(() => {
     const now = new Date();
     const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
