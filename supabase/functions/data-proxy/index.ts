@@ -46,7 +46,7 @@ function safeName(name: string): string {
 }
 
 const PG_ARRAY_COLUMNS = new Set([
-  "tags", "centre_locations",
+  "tags", "centre_locations", "recipient_emails",
 ]);
 
 function toPgValue(key: string, v: unknown): unknown {

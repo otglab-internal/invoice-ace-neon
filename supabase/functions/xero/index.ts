@@ -308,10 +308,28 @@ Deno.serve(async (req) => {
       }
 
       const data = await contactsRes.json();
-      const contacts = (data.Contacts || []).map((c: any) => ({
-        id: c.ContactID,
-        name: c.Name,
-      }));
+      const contacts = (data.Contacts || []).map((c: any) => {
+        const emails: string[] = [];
+        const seen = new Set<string>();
+        const pushEmail = (e: unknown) => {
+          if (typeof e !== "string") return;
+          const trimmed = e.trim();
+          if (!trimmed) return;
+          const key = trimmed.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          emails.push(trimmed);
+        };
+        pushEmail(c.EmailAddress);
+        if (Array.isArray(c.ContactPersons)) {
+          for (const p of c.ContactPersons) pushEmail(p?.EmailAddress);
+        }
+        return {
+          id: c.ContactID,
+          name: c.Name,
+          emails,
+        };
+      });
 
       return new Response(JSON.stringify({ contacts }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
