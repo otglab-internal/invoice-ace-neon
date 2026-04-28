@@ -148,6 +148,73 @@ function isLineItemValid(item: LineItem, templates: Template[], trackingCategori
   return true;
 }
 
+type ContactPerson = { firstName: string; lastName: string; email: string; includeInEmails: boolean };
+
+const ContactPersonsEditor: React.FC<{
+  persons: ContactPerson[];
+  setPersons: React.Dispatch<React.SetStateAction<ContactPerson[]>>;
+  helperText?: string;
+}> = ({ persons, setPersons, helperText }) => {
+  const update = (idx: number, patch: Partial<ContactPerson>) => {
+    setPersons((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+        Additional contact persons
+      </Label>
+      {persons.map((p, idx) => (
+        <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center rounded-lg border border-border bg-muted/20 p-3">
+          <Input
+            className="md:col-span-3"
+            placeholder="First name"
+            value={p.firstName}
+            onChange={(e) => update(idx, { firstName: e.target.value })}
+          />
+          <Input
+            className="md:col-span-3"
+            placeholder="Last name (optional)"
+            value={p.lastName}
+            onChange={(e) => update(idx, { lastName: e.target.value })}
+          />
+          <Input
+            className="md:col-span-4"
+            type="email"
+            placeholder="name@example.com"
+            value={p.email}
+            onChange={(e) => update(idx, { email: e.target.value })}
+          />
+          <label className="md:col-span-1 flex items-center gap-1 text-xs cursor-pointer">
+            <Checkbox
+              checked={p.includeInEmails}
+              onCheckedChange={(v) => update(idx, { includeInEmails: !!v })}
+            />
+            <span>Include</span>
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="md:col-span-1 justify-self-end"
+            onClick={() => setPersons((prev) => prev.filter((_, i) => i !== idx))}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setPersons((prev) => [...prev, { firstName: "", lastName: "", email: "", includeInEmails: true }])}
+      >
+        <Plus className="w-4 h-4 mr-1" /> Add contact person
+      </Button>
+      {helperText && <p className="text-xs text-muted-foreground">{helperText}</p>}
+    </div>
+  );
+};
+
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId, userEmail } = useAuth();
   const requesterName = user ? `${user.firstName} ${user.lastName}`.trim() : "";
