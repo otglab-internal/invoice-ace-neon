@@ -296,6 +296,7 @@ Deno.serve(async (req) => {
                 send_to_client: created.send_to_client === true,
                 due_days: Number(created.due_days) || 7,
                 recipient_emails: Array.isArray(created.recipient_emails) ? created.recipient_emails : [],
+                contact_persons: Array.isArray(created.contact_persons) ? created.contact_persons : [],
                 approved_by: "api",
                 approved_at: created.created_at,
                 org_id: orgIdResolved,
