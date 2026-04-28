@@ -463,6 +463,7 @@ const CreateInvoicePage: React.FC = () => {
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
         send_to_client: sendToClient,
         due_days: Number(dueDays) || 7,
+        recipient_emails: sendToClient ? selectedRecipientEmails : [],
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
