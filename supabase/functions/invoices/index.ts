@@ -545,6 +545,7 @@ Deno.serve(async (req) => {
             send_to_client: invoice?.send_to_client === true,
             due_days: Number(invoice?.due_days) || 7,
             recipient_emails: Array.isArray(invoice?.recipient_emails) ? invoice.recipient_emails : [],
+            contact_persons: Array.isArray(invoice?.contact_persons) ? invoice.contact_persons : [],
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
             org_id: req.headers.get("x-org-id") || body.org_id || "",
