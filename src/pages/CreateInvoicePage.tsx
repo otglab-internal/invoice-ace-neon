@@ -179,6 +179,7 @@ const CreateInvoicePage: React.FC = () => {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [sendToClient, setSendToClient] = useState(false);
+  const [dueDays, setDueDays] = useState<string>("7");
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -448,6 +449,7 @@ const CreateInvoicePage: React.FC = () => {
         status: willNeedApproval ? "pending_approval" : "submitted",
         template_id: selectedTemplateIds.length === 1 ? selectedTemplateIds[0] : null,
         send_to_client: sendToClient,
+        due_days: Number(dueDays) || 7,
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
@@ -522,6 +524,7 @@ const CreateInvoicePage: React.FC = () => {
       setNewContactName("");
       setReference("");
       setSendToClient(false);
+      setDueDays("7");
       setLineItems([createLineItem(defaultId)]);
     } catch {
       toast.error("Something went wrong");
@@ -640,6 +643,18 @@ const CreateInvoicePage: React.FC = () => {
                   placeholder="e.g. PO-12345"
                   className="mt-2"
                 />
+              </div>
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Due Date</Label>
+                <Select value={dueDays} onValueChange={setDueDays}>
+                  <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="14">14 days</SelectItem>
+                    <SelectItem value="28">28 days</SelectItem>
+                    <SelectItem value="60">60 days</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">

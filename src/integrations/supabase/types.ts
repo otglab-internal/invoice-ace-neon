@@ -175,6 +175,7 @@ export type Database = {
           contact_id: string | null
           contact_name: string
           created_at: string
+          due_days: number
           environment: string
           id: string
           invoice_date: string
@@ -207,6 +208,7 @@ export type Database = {
           contact_id?: string | null
           contact_name: string
           created_at?: string
+          due_days?: number
           environment?: string
           id?: string
           invoice_date: string
@@ -239,6 +241,7 @@ export type Database = {
           contact_id?: string | null
           contact_name?: string
           created_at?: string
+          due_days?: number
           environment?: string
           id?: string
           invoice_date?: string

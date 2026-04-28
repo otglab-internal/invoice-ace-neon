@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS due_days integer NOT NULL DEFAULT 7;
