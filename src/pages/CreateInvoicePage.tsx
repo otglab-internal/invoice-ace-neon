@@ -644,6 +644,18 @@ const CreateInvoicePage: React.FC = () => {
                   className="mt-2"
                 />
               </div>
+              <div>
+                <Label className="text-sm font-semibold font-display text-foreground">Due Date</Label>
+                <Select value={dueDays} onValueChange={setDueDays}>
+                  <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="14">14 days</SelectItem>
+                    <SelectItem value="28">28 days</SelectItem>
+                    <SelectItem value="60">60 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
               <div className="space-y-0.5">
