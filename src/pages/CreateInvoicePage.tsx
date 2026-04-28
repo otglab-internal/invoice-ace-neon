@@ -359,6 +359,16 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [loadingTemplates, lineItems.length, templates]);
 
+  // When the selected contact changes, default to selecting all of its emails.
+  useEffect(() => {
+    if (contactMode === "select" && contactId) {
+      const c = contacts.find((x) => x.id === contactId);
+      setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
+    } else {
+      setSelectedRecipientEmails([]);
+    }
+  }, [contactId, contactMode, contacts]);
+
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
