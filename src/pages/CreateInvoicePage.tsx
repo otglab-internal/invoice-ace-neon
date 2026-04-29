@@ -306,7 +306,7 @@ const CreateInvoicePage: React.FC = () => {
             action: "read",
             entity: "clients",
             payload: {
-              select: ["Name"],
+              select: ["ContactName"],
               limit: 1000,
             },
           },
@@ -315,7 +315,7 @@ const CreateInvoicePage: React.FC = () => {
         if (Array.isArray(data?.data)) {
           const mapped = data.data.map((row: any) => ({
             id: String(row.id),
-            name: row.Name || "(no name)",
+            name: row.ContactName || row.Name || "(no name)",
           }));
           mapped.sort((a, b) => a.name.localeCompare(b.name));
           setClients(mapped);
