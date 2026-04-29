@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks, Building2 } from "lucide-react";
+import { Save, Loader2, Image, Star, Mail, Server, Link, Unlink, ExternalLink, Trash2, Info, Send, ListChecks, Building2, BellRing, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { nowGMT8 } from "@/lib/utils";
@@ -82,6 +82,24 @@ const GlobalConfigPage: React.FC = () => {
   const [allXeroAccounts, setAllXeroAccounts] = useState<{ code: string; name: string; type: string }[]>([]);
   const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [reminders, setReminders] = useState<{ enabled: boolean | null; loading: boolean; error: string | null }>({ enabled: null, loading: false, error: null });
+
+  const fetchInvoiceReminders = async () => {
+    setReminders({ enabled: null, loading: true, error: null });
+    try {
+      const { data, error } = await supabase.functions.invoke("xero", {
+        body: { action: "invoice-reminders" },
+        headers: getXeroHeaders(),
+      });
+      if (error || data?.error) {
+        setReminders({ enabled: null, loading: false, error: data?.error || "Failed to fetch" });
+      } else {
+        setReminders({ enabled: data?.enabled ?? null, loading: false, error: null });
+      }
+    } catch (err: any) {
+      setReminders({ enabled: null, loading: false, error: err.message || "Failed to fetch" });
+    }
+  };
 
   const handleSendTestEmail = async () => {
     if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
@@ -151,7 +169,10 @@ const GlobalConfigPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (xeroStatus.connected) fetchXeroAccounts();
+    if (xeroStatus.connected) {
+      fetchXeroAccounts();
+      fetchInvoiceReminders();
+    }
   }, [xeroStatus.connected]);
 
   const checkXeroStatus = async () => {
@@ -441,6 +462,52 @@ const GlobalConfigPage: React.FC = () => {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {xeroStatus.connected && (
+                    <Card className="mt-4">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <BellRing className="w-4 h-4 text-primary" />
+                            <CardTitle className="text-base">Invoice Reminders</CardTitle>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={fetchInvoiceReminders}
+                            disabled={reminders.loading}
+                          >
+                            {reminders.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          </Button>
+                        </div>
+                        <CardDescription className="text-xs">
+                          Whether automatic invoice reminders are enabled in Xero (org-wide setting).
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {reminders.loading ? (
+                          <div className="flex items-center gap-2 py-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">Checking Xero...</span>
+                          </div>
+                        ) : reminders.error ? (
+                          <p className="text-sm text-destructive">{reminders.error}</p>
+                        ) : reminders.enabled === null ? (
+                          <p className="text-sm text-muted-foreground">No data.</p>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Badge variant={reminders.enabled ? "default" : "outline"}>
+                              {reminders.enabled ? "Enabled" : "Disabled"}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Manage in Xero → Business → Invoices → Invoice reminders
+                            </span>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
 
                   {xeroStatus.connected && (
                     <Card className="mt-4">
