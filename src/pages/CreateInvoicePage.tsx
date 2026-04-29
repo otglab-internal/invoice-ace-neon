@@ -781,7 +781,7 @@ const CreateInvoicePage: React.FC = () => {
               <ContactPersonsEditor
                 persons={newContactPersons}
                 setPersons={setNewContactPersons}
-                helperText='These contact persons will be saved to the new Xero contact.'
+                helperText='These contact persons will be saved to the new contact.'
               />
             </div>
           )}
