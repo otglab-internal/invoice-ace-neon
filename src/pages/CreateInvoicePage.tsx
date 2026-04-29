@@ -375,7 +375,7 @@ const CreateInvoicePage: React.FC = () => {
 
     // Serialize all Xero calls to avoid token refresh race conditions
     const loadXeroData = async () => {
-      await fetchContacts();
+      await fetchClients();
       await fetchTrackingCategories();
       await fetchAccounts();
       await fetchVisibleAccounts();
