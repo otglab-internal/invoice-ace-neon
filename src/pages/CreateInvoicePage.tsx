@@ -306,7 +306,7 @@ const CreateInvoicePage: React.FC = () => {
             action: "read",
             entity: "clients",
             payload: {
-              select: ["Name"],
+              select: ["ContactName"],
               limit: 1000,
             },
           },
@@ -315,7 +315,7 @@ const CreateInvoicePage: React.FC = () => {
         if (Array.isArray(data?.data)) {
           const mapped = data.data.map((row: any) => ({
             id: String(row.id),
-            name: row.Name || "(no name)",
+            name: row.ContactName || row.Name || "(no name)",
           }));
           mapped.sort((a, b) => a.name.localeCompare(b.name));
           setClients(mapped);
@@ -458,6 +458,8 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode("select");
       return;
     }
+    const selectedClient = clients.find((c) => c.id === clientId);
+    const clientName = selectedClient?.name;
     let cancelled = false;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
@@ -471,8 +473,7 @@ const CreateInvoicePage: React.FC = () => {
             action: "read",
             entity: "contacts",
             payload: {
-              select: ["Name", "EmailAddress", "ContactPersons"],
-              filters: [{ field: "parent_id", op: "eq", value: clientId }],
+              select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
               limit: 1000,
             },
           },
@@ -490,14 +491,19 @@ const CreateInvoicePage: React.FC = () => {
               if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
             }
           }
+          const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
           return {
             id: String(row.id),
-            name: row.Name || "(no name)",
+            name: row.ContactName || row.Name || fullName || "(no name)",
             emails: Array.from(emails),
           };
         });
-        mapped.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(mapped);
+        const clientScoped = clientName && clientName !== "(no name)"
+          ? mapped.filter((contact) => contact.name === clientName)
+          : [];
+        const nextContacts = clientScoped.length > 0 ? clientScoped : mapped;
+        nextContacts.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(nextContacts);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
@@ -506,7 +512,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, clients]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
