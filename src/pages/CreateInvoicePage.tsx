@@ -796,7 +796,7 @@ const CreateInvoicePage: React.FC = () => {
                   {emails.length === 0 ? (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground italic">
-                        No email addresses found on this Xero contact.
+                        No email addresses found on this contact.
                       </p>
                       <div className="space-y-2">
                         <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
