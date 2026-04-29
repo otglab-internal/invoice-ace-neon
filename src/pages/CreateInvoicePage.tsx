@@ -742,20 +742,70 @@ const CreateInvoicePage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h2 className="text-sm font-semibold font-display text-foreground">Bill To</h2>
-            <Popover open={contactOpen} onOpenChange={setContactOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={contactOpen}
-                  className="w-full justify-between font-normal"
-                >
-                  {contactId
-                    ? contacts.find((c) => c.id === contactId)?.name
-                    : loadingContacts ? "Loading contacts..." : "Search contacts..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                Client
+              </Label>
+              <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={clientOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {clientId
+                      ? clients.find((c) => c.id === clientId)?.name
+                      : loadingClients ? "Loading clients..." : "Search clients..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search clients..." value={clientSearch} onValueChange={setClientSearch} />
+                    <CommandList>
+                      <CommandEmpty>No clients found.</CommandEmpty>
+                      <CommandGroup>
+                        {clients.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setClientId(c.id);
+                              setClientOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {clientId && (
+              <div className="space-y-2 animate-fade-in">
+                <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                  Contact
+                </Label>
+                <Popover open={contactOpen} onOpenChange={setContactOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={contactOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {contactId
+                        ? contacts.find((c) => c.id === contactId)?.name
+                        : loadingContacts ? "Loading contacts..." : "Search contacts..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                 <Command>
                   <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
