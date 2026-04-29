@@ -296,13 +296,40 @@ const CreateInvoicePage: React.FC = () => {
     const fetchContacts = async () => {
       setLoadingContacts(true);
       try {
-        const { data } = await supabase.functions.invoke("xero", {
-          body: { action: "contacts" },
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "contacts",
+            payload: {
+              select: ["Name", "EmailAddress", "ContactPersons"],
+              limit: 1000,
+            },
+          },
           headers: xeroHeaders,
         });
-        if (data?.contacts) setContacts(data.contacts);
+        if (Array.isArray(data?.data)) {
+          const mapped: XeroContact[] = data.data.map((row: any) => {
+            const emails = new Set<string>();
+            if (row.EmailAddress && typeof row.EmailAddress === "string") {
+              emails.add(row.EmailAddress);
+            }
+            if (Array.isArray(row.ContactPersons)) {
+              for (const p of row.ContactPersons) {
+                if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
+              }
+            }
+            return {
+              id: String(row.id),
+              name: row.Name || "(no name)",
+              emails: Array.from(emails),
+            };
+          });
+          // Sort alphabetically by name
+          mapped.sort((a, b) => a.name.localeCompare(b.name));
+          setContacts(mapped);
+        }
       } catch (err) {
-        console.warn("Failed to fetch Xero contacts:", err);
+        console.warn("Failed to fetch contacts:", err);
       }
       setLoadingContacts(false);
     };
