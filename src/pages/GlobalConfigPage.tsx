@@ -82,6 +82,24 @@ const GlobalConfigPage: React.FC = () => {
   const [allXeroAccounts, setAllXeroAccounts] = useState<{ code: string; name: string; type: string }[]>([]);
   const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [reminders, setReminders] = useState<{ enabled: boolean | null; loading: boolean; error: string | null }>({ enabled: null, loading: false, error: null });
+
+  const fetchInvoiceReminders = async () => {
+    setReminders({ enabled: null, loading: true, error: null });
+    try {
+      const { data, error } = await supabase.functions.invoke("xero", {
+        body: { action: "invoice-reminders" },
+        headers: getXeroHeaders(),
+      });
+      if (error || data?.error) {
+        setReminders({ enabled: null, loading: false, error: data?.error || "Failed to fetch" });
+      } else {
+        setReminders({ enabled: data?.enabled ?? null, loading: false, error: null });
+      }
+    } catch (err: any) {
+      setReminders({ enabled: null, loading: false, error: err.message || "Failed to fetch" });
+    }
+  };
 
   const handleSendTestEmail = async () => {
     if (!testEmailTo.trim() || !testEmailTo.includes("@")) {
