@@ -708,6 +708,7 @@ const CreateInvoicePage: React.FC = () => {
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+      setClientId("");
       setContactId("");
       setNewContactName("");
       setReference("");
