@@ -471,7 +471,7 @@ const CreateInvoicePage: React.FC = () => {
             action: "read",
             entity: "contacts",
             payload: {
-              select: ["Name", "EmailAddress", "ContactPersons"],
+              select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
               filters: [{ field: "parent_id", op: "eq", value: clientId }],
               limit: 1000,
             },
@@ -490,9 +490,10 @@ const CreateInvoicePage: React.FC = () => {
               if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
             }
           }
+          const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
           return {
             id: String(row.id),
-            name: row.Name || "(no name)",
+            name: row.ContactName || row.Name || fullName || "(no name)",
             emails: Array.from(emails),
           };
         });
