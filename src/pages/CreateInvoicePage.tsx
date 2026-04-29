@@ -460,11 +460,6 @@ const CreateInvoicePage: React.FC = () => {
     }
     const selectedClient = clients.find((c) => c.id === clientId);
     const clientName = selectedClient?.name;
-    if (!clientName || clientName === "(no name)") {
-      setContacts([]);
-      setContactId("");
-      return;
-    }
     let cancelled = false;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
@@ -479,7 +474,6 @@ const CreateInvoicePage: React.FC = () => {
             entity: "contacts",
             payload: {
               select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
-              filters: [{ field: "ContactName", op: "eq", value: clientName }],
               limit: 1000,
             },
           },
@@ -504,8 +498,12 @@ const CreateInvoicePage: React.FC = () => {
             emails: Array.from(emails),
           };
         });
-        mapped.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(mapped);
+        const clientScoped = clientName && clientName !== "(no name)"
+          ? mapped.filter((contact) => contact.name === clientName)
+          : [];
+        const nextContacts = clientScoped.length > 0 ? clientScoped : mapped;
+        nextContacts.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(nextContacts);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
