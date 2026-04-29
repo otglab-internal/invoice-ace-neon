@@ -169,7 +169,10 @@ const GlobalConfigPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (xeroStatus.connected) fetchXeroAccounts();
+    if (xeroStatus.connected) {
+      fetchXeroAccounts();
+      fetchInvoiceReminders();
+    }
   }, [xeroStatus.connected]);
 
   const checkXeroStatus = async () => {
