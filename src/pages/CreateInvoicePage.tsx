@@ -458,6 +458,13 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode("select");
       return;
     }
+    const selectedClient = clients.find((c) => c.id === clientId);
+    const clientName = selectedClient?.name;
+    if (!clientName || clientName === "(no name)") {
+      setContacts([]);
+      setContactId("");
+      return;
+    }
     let cancelled = false;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
@@ -472,7 +479,7 @@ const CreateInvoicePage: React.FC = () => {
             entity: "contacts",
             payload: {
               select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
-              filters: [{ field: "parent_id", op: "eq", value: clientId }],
+              filters: [{ field: "ContactName", op: "eq", value: clientName }],
               limit: 1000,
             },
           },
@@ -507,7 +514,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, clients]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
