@@ -223,12 +223,17 @@ const CreateInvoicePage: React.FC = () => {
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [clientId, setClientId] = useState("");
+  const [clientOpen, setClientOpen] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
   const [contacts, setContacts] = useState<XeroContact[]>([]);
   const [xeroAccounts, setXeroAccounts] = useState<XeroAccount[]>([]);
   const [visibleAccountCodes, setVisibleAccountCodes] = useState<string[] | null>(null);
   const [trackingCategories, setTrackingCategories] = useState<TrackingCategory[]>([]);
   const [currency, setCurrency] = useState("RM");
-  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [reference, setReference] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
@@ -293,18 +298,32 @@ const CreateInvoicePage: React.FC = () => {
       "x-environment": localStorage.getItem("auth_environment") || "production",
     };
 
-    const fetchContacts = async () => {
-      setLoadingContacts(true);
+    const fetchClients = async () => {
+      setLoadingClients(true);
       try {
-        const { data } = await supabase.functions.invoke("xero", {
-          body: { action: "contacts" },
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "clients",
+            payload: {
+              select: ["Name"],
+              limit: 1000,
+            },
+          },
           headers: xeroHeaders,
         });
-        if (data?.contacts) setContacts(data.contacts);
+        if (Array.isArray(data?.data)) {
+          const mapped = data.data.map((row: any) => ({
+            id: String(row.id),
+            name: row.Name || "(no name)",
+          }));
+          mapped.sort((a, b) => a.name.localeCompare(b.name));
+          setClients(mapped);
+        }
       } catch (err) {
-        console.warn("Failed to fetch Xero contacts:", err);
+        console.warn("Failed to fetch clients:", err);
       }
-      setLoadingContacts(false);
+      setLoadingClients(false);
     };
 
     const fetchTrackingCategories = async () => {
@@ -356,7 +375,7 @@ const CreateInvoicePage: React.FC = () => {
 
     // Serialize all Xero calls to avoid token refresh race conditions
     const loadXeroData = async () => {
-      await fetchContacts();
+      await fetchClients();
       await fetchTrackingCategories();
       await fetchAccounts();
       await fetchVisibleAccounts();
@@ -430,6 +449,64 @@ const CreateInvoicePage: React.FC = () => {
       setLineItems([createLineItem(defaultId)]);
     }
   }, [loadingTemplates, lineItems.length, templates]);
+
+  // Fetch contacts whenever the selected client changes.
+  useEffect(() => {
+    if (!clientId) {
+      setContacts([]);
+      setContactId("");
+      setContactMode("select");
+      return;
+    }
+    let cancelled = false;
+    const xeroHeaders = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+    const fetchContactsForClient = async () => {
+      setLoadingContacts(true);
+      try {
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "contacts",
+            payload: {
+              select: ["Name", "EmailAddress", "ContactPersons"],
+              filters: [{ field: "parent_id", op: "eq", value: clientId }],
+              limit: 1000,
+            },
+          },
+          headers: xeroHeaders,
+        });
+        if (cancelled) return;
+        const rows = Array.isArray(data?.data) ? data.data : [];
+        const mapped: XeroContact[] = rows.map((row: any) => {
+          const emails = new Set<string>();
+          if (row.EmailAddress && typeof row.EmailAddress === "string") {
+            emails.add(row.EmailAddress);
+          }
+          if (Array.isArray(row.ContactPersons)) {
+            for (const p of row.ContactPersons) {
+              if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
+            }
+          }
+          return {
+            id: String(row.id),
+            name: row.Name || "(no name)",
+            emails: Array.from(emails),
+          };
+        });
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(mapped);
+        setContactId("");
+      } catch (err) {
+        console.warn("Failed to fetch contacts:", err);
+      }
+      if (!cancelled) setLoadingContacts(false);
+    };
+    fetchContactsForClient();
+    return () => { cancelled = true; };
+  }, [clientId]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
@@ -631,6 +708,7 @@ const CreateInvoicePage: React.FC = () => {
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+      setClientId("");
       setContactId("");
       setNewContactName("");
       setReference("");
@@ -665,20 +743,70 @@ const CreateInvoicePage: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
             <h2 className="text-sm font-semibold font-display text-foreground">Bill To</h2>
-            <Popover open={contactOpen} onOpenChange={setContactOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={contactOpen}
-                  className="w-full justify-between font-normal"
-                >
-                  {contactId
-                    ? contacts.find((c) => c.id === contactId)?.name
-                    : loadingContacts ? "Loading contacts..." : "Search contacts..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                Client
+              </Label>
+              <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={clientOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {clientId
+                      ? clients.find((c) => c.id === clientId)?.name
+                      : loadingClients ? "Loading clients..." : "Search clients..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search clients..." value={clientSearch} onValueChange={setClientSearch} />
+                    <CommandList>
+                      <CommandEmpty>No clients found.</CommandEmpty>
+                      <CommandGroup>
+                        {clients.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => {
+                              setClientId(c.id);
+                              setClientOpen(false);
+                            }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {clientId && (
+              <div className="space-y-2 animate-fade-in">
+                <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                  Contact
+                </Label>
+                <Popover open={contactOpen} onOpenChange={setContactOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={contactOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {contactId
+                        ? contacts.find((c) => c.id === contactId)?.name
+                        : loadingContacts ? "Loading contacts..." : "Search contacts..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
               <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                 <Command>
                   <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
@@ -754,7 +882,7 @@ const CreateInvoicePage: React.FC = () => {
               <ContactPersonsEditor
                 persons={newContactPersons}
                 setPersons={setNewContactPersons}
-                helperText='These contact persons will be saved to the new Xero contact.'
+                helperText='These contact persons will be saved to the new contact.'
               />
             </div>
           )}
@@ -769,7 +897,7 @@ const CreateInvoicePage: React.FC = () => {
                   {emails.length === 0 ? (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground italic">
-                        No email addresses found on this Xero contact.
+                        No email addresses found on this contact.
                       </p>
                       <div className="space-y-2">
                         <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
@@ -788,7 +916,7 @@ const CreateInvoicePage: React.FC = () => {
                       <ContactPersonsEditor
                         persons={existingContactPersons}
                         setPersons={setExistingContactPersons}
-                        helperText='These contact persons will be added to the Xero contact.'
+                        helperText='These contact persons will be added to the contact.'
                       />
                     </div>
                   ) : (
@@ -817,6 +945,8 @@ const CreateInvoicePage: React.FC = () => {
                 </div>
               );
             })()}
+              </div>
+            )}
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
