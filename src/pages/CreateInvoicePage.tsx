@@ -514,7 +514,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId]);
+  }, [clientId, clients]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
