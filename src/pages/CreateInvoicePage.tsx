@@ -458,6 +458,13 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode("select");
       return;
     }
+    const selectedClient = clients.find((c) => c.id === clientId);
+    const clientName = selectedClient?.name;
+    if (!clientName || clientName === "(no name)") {
+      setContacts([]);
+      setContactId("");
+      return;
+    }
     let cancelled = false;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
