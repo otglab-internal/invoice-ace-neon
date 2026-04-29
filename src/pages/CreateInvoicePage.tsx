@@ -298,45 +298,32 @@ const CreateInvoicePage: React.FC = () => {
       "x-environment": localStorage.getItem("auth_environment") || "production",
     };
 
-    const fetchContacts = async () => {
-      setLoadingContacts(true);
+    const fetchClients = async () => {
+      setLoadingClients(true);
       try {
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
-            entity: "contacts",
+            entity: "clients",
             payload: {
-              select: ["Name", "EmailAddress", "ContactPersons"],
+              select: ["Name"],
               limit: 1000,
             },
           },
           headers: xeroHeaders,
         });
         if (Array.isArray(data?.data)) {
-          const mapped: XeroContact[] = data.data.map((row: any) => {
-            const emails = new Set<string>();
-            if (row.EmailAddress && typeof row.EmailAddress === "string") {
-              emails.add(row.EmailAddress);
-            }
-            if (Array.isArray(row.ContactPersons)) {
-              for (const p of row.ContactPersons) {
-                if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
-              }
-            }
-            return {
-              id: String(row.id),
-              name: row.Name || "(no name)",
-              emails: Array.from(emails),
-            };
-          });
-          // Sort alphabetically by name
+          const mapped = data.data.map((row: any) => ({
+            id: String(row.id),
+            name: row.Name || "(no name)",
+          }));
           mapped.sort((a, b) => a.name.localeCompare(b.name));
-          setContacts(mapped);
+          setClients(mapped);
         }
       } catch (err) {
-        console.warn("Failed to fetch contacts:", err);
+        console.warn("Failed to fetch clients:", err);
       }
-      setLoadingContacts(false);
+      setLoadingClients(false);
     };
 
     const fetchTrackingCategories = async () => {
