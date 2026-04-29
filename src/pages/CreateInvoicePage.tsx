@@ -479,7 +479,7 @@ const CreateInvoicePage: React.FC = () => {
             entity: "contacts",
             payload: {
               select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
-              filters: [{ field: "parent_id", op: "eq", value: clientId }],
+              filters: [{ field: "ContactName", op: "eq", value: clientName }],
               limit: 1000,
             },
           },
