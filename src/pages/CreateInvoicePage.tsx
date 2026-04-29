@@ -450,6 +450,64 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [loadingTemplates, lineItems.length, templates]);
 
+  // Fetch contacts whenever the selected client changes.
+  useEffect(() => {
+    if (!clientId) {
+      setContacts([]);
+      setContactId("");
+      setContactMode("select");
+      return;
+    }
+    let cancelled = false;
+    const xeroHeaders = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+    const fetchContactsForClient = async () => {
+      setLoadingContacts(true);
+      try {
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "contacts",
+            payload: {
+              select: ["Name", "EmailAddress", "ContactPersons"],
+              filters: [{ field: "parent_id", op: "eq", value: clientId }],
+              limit: 1000,
+            },
+          },
+          headers: xeroHeaders,
+        });
+        if (cancelled) return;
+        const rows = Array.isArray(data?.data) ? data.data : [];
+        const mapped: XeroContact[] = rows.map((row: any) => {
+          const emails = new Set<string>();
+          if (row.EmailAddress && typeof row.EmailAddress === "string") {
+            emails.add(row.EmailAddress);
+          }
+          if (Array.isArray(row.ContactPersons)) {
+            for (const p of row.ContactPersons) {
+              if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
+            }
+          }
+          return {
+            id: String(row.id),
+            name: row.Name || "(no name)",
+            emails: Array.from(emails),
+          };
+        });
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(mapped);
+        setContactId("");
+      } catch (err) {
+        console.warn("Failed to fetch contacts:", err);
+      }
+      if (!cancelled) setLoadingContacts(false);
+    };
+    fetchContactsForClient();
+    return () => { cancelled = true; };
+  }, [clientId]);
+
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
     if (contactMode === "select" && contactId) {
