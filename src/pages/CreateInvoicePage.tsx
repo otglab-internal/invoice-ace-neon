@@ -296,13 +296,40 @@ const CreateInvoicePage: React.FC = () => {
     const fetchContacts = async () => {
       setLoadingContacts(true);
       try {
-        const { data } = await supabase.functions.invoke("xero", {
-          body: { action: "contacts" },
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "contacts",
+            payload: {
+              select: ["Name", "EmailAddress", "ContactPersons"],
+              limit: 1000,
+            },
+          },
           headers: xeroHeaders,
         });
-        if (data?.contacts) setContacts(data.contacts);
+        if (Array.isArray(data?.data)) {
+          const mapped: XeroContact[] = data.data.map((row: any) => {
+            const emails = new Set<string>();
+            if (row.EmailAddress && typeof row.EmailAddress === "string") {
+              emails.add(row.EmailAddress);
+            }
+            if (Array.isArray(row.ContactPersons)) {
+              for (const p of row.ContactPersons) {
+                if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
+              }
+            }
+            return {
+              id: String(row.id),
+              name: row.Name || "(no name)",
+              emails: Array.from(emails),
+            };
+          });
+          // Sort alphabetically by name
+          mapped.sort((a, b) => a.name.localeCompare(b.name));
+          setContacts(mapped);
+        }
       } catch (err) {
-        console.warn("Failed to fetch Xero contacts:", err);
+        console.warn("Failed to fetch contacts:", err);
       }
       setLoadingContacts(false);
     };
@@ -754,7 +781,7 @@ const CreateInvoicePage: React.FC = () => {
               <ContactPersonsEditor
                 persons={newContactPersons}
                 setPersons={setNewContactPersons}
-                helperText='These contact persons will be saved to the new Xero contact.'
+                helperText='These contact persons will be saved to the new contact.'
               />
             </div>
           )}
@@ -769,7 +796,7 @@ const CreateInvoicePage: React.FC = () => {
                   {emails.length === 0 ? (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground italic">
-                        No email addresses found on this Xero contact.
+                        No email addresses found on this contact.
                       </p>
                       <div className="space-y-2">
                         <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
@@ -788,7 +815,7 @@ const CreateInvoicePage: React.FC = () => {
                       <ContactPersonsEditor
                         persons={existingContactPersons}
                         setPersons={setExistingContactPersons}
-                        helperText='These contact persons will be added to the Xero contact.'
+                        helperText='These contact persons will be added to the contact.'
                       />
                     </div>
                   ) : (
