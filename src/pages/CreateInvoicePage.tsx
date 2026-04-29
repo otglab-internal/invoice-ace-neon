@@ -944,6 +944,8 @@ const CreateInvoicePage: React.FC = () => {
                 </div>
               );
             })()}
+              </div>
+            )}
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
