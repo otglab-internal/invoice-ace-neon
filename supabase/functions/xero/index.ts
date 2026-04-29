@@ -336,6 +336,60 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ACTION: invoice-reminders (GET /InvoiceReminders/Settings)
+    if (action === "invoice-reminders") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+      );
+
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected", enabled: null }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      const doFetch = (token: string) => fetch(`${XERO_API_URL}/InvoiceReminders/Settings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Xero-Tenant-Id": config.xero_tenant_id,
+          Accept: "application/json",
+        },
+      });
+
+      let res = await doFetch(accessToken);
+      if (res.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect.", enabled: null }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        res = await doFetch(accessToken);
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Xero invoice reminders fetch failed:", errText);
+        return new Response(JSON.stringify({ error: "Failed to fetch invoice reminders settings", enabled: null }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await res.json();
+      const settings = Array.isArray(data?.InvoiceReminders) ? data.InvoiceReminders[0] : null;
+      const enabled = settings ? !!settings.Enabled : null;
+
+      return new Response(JSON.stringify({ enabled, settings }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ACTION: tracking-categories
     if (action === "tracking-categories") {
       const config = await getConfigMap(
