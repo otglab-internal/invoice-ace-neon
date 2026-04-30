@@ -563,18 +563,56 @@ const CreateInvoicePage: React.FC = () => {
     setLineItems((prev) => [...prev, createLineItem(defaultId)]);
   }, [templates]);
 
-  const newContactFullName = [newContactFirstName.trim(), newContactLastName.trim()].filter(Boolean).join(" ").trim();
+  // Map dynamic schema field-values into the canonical name + email used by invoice payload.
+  const getDynamicName = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): string => {
+    if (!schema) return "";
+    return (values[schema.display_field] || "").trim();
+  };
+  const getDynamicEmail = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): string => {
+    const f = pickEmailField(schema);
+    return f ? (values[f] || "").trim() : "";
+  };
+
+  const newClientName = getDynamicName(clientSchema, newClientFields);
+  const newClientEmail = getDynamicEmail(clientSchema, newClientFields);
+  const newContactFullName = getDynamicName(contactSchema, newContactFields);
+  const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
+
   const contactName = contactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactFullName;
 
-  const clientValid = clientMode === "select"
-    ? !!clientId
-    : !!newClientName.trim() && (newClientEmail.trim() === "" || emailRegex.test(newClientEmail.trim()));
+  // Validate dynamic schema: every required (visible) field must have a value, and any email-named field
+  // that has been filled in must be a valid email address.
+  const validateSchemaValues = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): { valid: boolean; missing: string[] } => {
+    if (!schema) return { valid: false, missing: ["Loading schema..."] };
+    const missing: string[] = [];
+    for (const f of schema.fields) {
+      if (HIDDEN_SCHEMA_FIELDS.has(f.name)) continue;
+      const v = (values[f.name] || "").trim();
+      if (f.required && !v) missing.push(formatLabel(f.name));
+      if (v && /email/i.test(f.name) && !emailRegex.test(v)) {
+        missing.push(`Valid ${formatLabel(f.name)}`);
+      }
+    }
+    return { valid: missing.length === 0, missing };
+  };
+
+  const clientNewCheck = validateSchemaValues(clientSchema, newClientFields);
+  const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
+
+  const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
   const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
-  const contactValid = effectiveContactMode === "select"
-    ? !!contactId
-    : !!newContactFirstName.trim() && (newContactEmail.trim() === "" || emailRegex.test(newContactEmail.trim()));
+  const contactValid = effectiveContactMode === "select" ? !!contactId : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
 
@@ -583,16 +621,14 @@ const CreateInvoicePage: React.FC = () => {
     if (clientMode === "select") {
       missingFields.push("Select a client");
     } else {
-      if (!newClientName.trim()) missingFields.push("New client name");
-      if (newClientEmail.trim() !== "" && !emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
+      clientNewCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
     }
   }
   if (!contactValid) {
     if (effectiveContactMode === "select") {
       missingFields.push("Select a contact");
     } else {
-      if (!newContactFirstName.trim()) missingFields.push("Contact first name");
-      if (newContactEmail.trim() !== "" && !emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
+      contactNewCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
     }
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
