@@ -173,6 +173,7 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
+  const [existingContactNewEmail, setExistingContactNewEmail] = useState("");
   // Schema-driven new client / new contact forms
   type SchemaField = { name: string; required: boolean; type: string };
   type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
@@ -501,8 +502,8 @@ const CreateInvoicePage: React.FC = () => {
     return () => { cancelled = true; };
   }, [clientId, clients, clientMode]);
 
-  // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
+    setExistingContactNewEmail("");
     if (contactMode === "select" && contactId) {
       const c = contacts.find((x) => x.id === contactId);
       setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
@@ -723,6 +724,42 @@ const CreateInvoicePage: React.FC = () => {
         toast.error(emailErr?.message || "Could not determine your account email.");
         setSubmitting(false);
         return;
+      }
+
+      // If user supplied a new email for an existing contact that had none, upsert it back to the contact.
+      if (
+        sendToClient &&
+        effectiveContactMode === "select" &&
+        effectiveContactId &&
+        existingContactNewEmail.trim() &&
+        emailRegex.test(existingContactNewEmail.trim())
+      ) {
+        const newEmail = existingContactNewEmail.trim();
+        const selectedExisting = contacts.find((c) => c.id === effectiveContactId);
+        const hadNoEmails = !selectedExisting?.emails || selectedExisting.emails.length === 0;
+        if (hadNoEmails) {
+          try {
+            const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
+              body: {
+                action: "update",
+                entity: "contacts",
+                payload: { id: effectiveContactId, data: { EmailAddress: newEmail } },
+              },
+              headers: xeroHeaders,
+            });
+            if (updErr || updRes?.error) {
+              throw new Error(updRes?.error || updErr?.message || "Failed to update contact email");
+            }
+            // Reflect locally so the UI shows the email next time.
+            setContacts((prev) => prev.map((c) =>
+              c.id === effectiveContactId ? { ...c, emails: [newEmail] } : c,
+            ));
+          } catch (upsertErr: any) {
+            toast.error(upsertErr?.message || "Failed to save email to contact");
+            setSubmitting(false);
+            return;
+          }
+        }
       }
 
       const invoicePayload = sanitizeObject({
@@ -1102,9 +1139,21 @@ const CreateInvoicePage: React.FC = () => {
                     Send invoice to
                   </Label>
                   {emails.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No email addresses found on this contact. Update the contact to add an email address.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground italic">
+                        No email addresses found on this contact. Add one below — it will be saved to the contact on submit.
+                      </p>
+                      <Input
+                        type="email"
+                        placeholder="name@example.com"
+                        value={existingContactNewEmail}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setExistingContactNewEmail(v);
+                          setSelectedRecipientEmails(v.trim() ? [v.trim()] : []);
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
                       {emails.map((email) => {
