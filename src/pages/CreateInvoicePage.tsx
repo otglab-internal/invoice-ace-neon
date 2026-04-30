@@ -1060,7 +1060,7 @@ const CreateInvoicePage: React.FC = () => {
                       onClick={() => {
                         setContactMode("select");
                         setNewContactFields({});
-                        setNewContactPersons([]);
+                        
                       }}
                     >
                       Cancel
