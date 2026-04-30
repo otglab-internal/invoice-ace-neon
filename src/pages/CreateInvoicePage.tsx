@@ -762,6 +762,7 @@ const CreateInvoicePage: React.FC = () => {
         }
       }
 
+      const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
         contact_name: effectiveContactName,
         invoice_date: invoiceDate,
