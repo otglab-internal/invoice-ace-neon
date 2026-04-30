@@ -893,6 +893,20 @@ const CreateInvoicePage: React.FC = () => {
             const v = (newContactFields[f.name] || "").trim();
             if (v) contactData[f.name] = v;
           }
+          // Populate the schema-declared FK column with the parent's business key
+          // so the new contact is properly linked to its client.
+          const linkField = contactSchema?.link_field;
+          const parentBusinessKey =
+            contactSchema?.parent_business_key || clientSchema?.business_key || null;
+          const selectedClientRow = clients.find((c) => c.id === effectiveClientId);
+          const parentBusinessValue =
+            (parentBusinessKey && selectedClientRow?.fields?.[parentBusinessKey]) ||
+            selectedClientRow?.fields?.ClientGUID ||
+            selectedClientRow?.fields?.ClientGuid ||
+            "";
+          if (linkField && parentBusinessValue && !contactData[linkField]) {
+            contactData[linkField] = parentBusinessValue;
+          }
           const contactPayload = {
             data: contactData,
             parent_id: effectiveClientId,
