@@ -684,7 +684,7 @@ const CreateInvoicePage: React.FC = () => {
 
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
-        contact_name: contactName,
+        contact_name: effectiveContactName,
         invoice_date: invoiceDate,
         reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
@@ -761,7 +761,7 @@ const CreateInvoicePage: React.FC = () => {
           const notificationInvoice = {
             ...inv,
             contact_id: finalContactId,
-            contact_name: contactName,
+            contact_name: effectiveContactName,
           };
 
           const [emailResult, webhookResult] = await Promise.allSettled([
