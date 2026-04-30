@@ -9,7 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap } from "lucide-react";
+import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap, ChevronDown, CheckCircle2, AlertCircle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,6 +93,45 @@ interface XeroAccount {
   name: string;
   type: string;
 }
+
+const CollapsibleFormCard: React.FC<{
+  title: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  valid: boolean;
+  loading?: boolean;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, open, onOpenChange, valid, loading, rightSlot, children }) => {
+  const statusColor = loading
+    ? "border-border bg-muted/20"
+    : valid
+      ? "border-emerald-500/40 bg-emerald-500/5"
+      : "border-amber-500/40 bg-amber-500/5";
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} className={cn("animate-fade-in rounded-lg border p-3", statusColor)}>
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left">
+          {loading ? (
+            <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+          ) : valid ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+          )}
+          <span className="text-xs font-semibold font-display text-foreground uppercase tracking-wide flex-1">
+            {title}
+          </span>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </CollapsibleTrigger>
+        {rightSlot}
+      </div>
+      <CollapsibleContent className="space-y-2 pt-3">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
 
 
@@ -192,6 +232,9 @@ const CreateInvoicePage: React.FC = () => {
   const [existingClientOriginal, setExistingClientOriginal] = useState<Record<string, string>>({});
   const [existingContactFields, setExistingContactFields] = useState<Record<string, string>>({});
   const [existingContactOriginal, setExistingContactOriginal] = useState<Record<string, string>>({});
+  // Collapse state for each schema-driven form section.
+  const [clientFormOpen, setClientFormOpen] = useState(true);
+  const [contactFormOpen, setContactFormOpen] = useState(true);
   
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
@@ -651,6 +694,22 @@ const CreateInvoicePage: React.FC = () => {
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
 
+  // Auto-collapse client form when valid; auto-open when invalid (or freshly shown).
+  useEffect(() => {
+    const showing = clientMode === "new" || (clientMode === "select" && !!clientId && !!clientSchema);
+    if (!showing) return;
+    const valid = clientMode === "new" ? clientNewCheck.valid : clientExistingCheck.valid;
+    setClientFormOpen(!valid);
+  }, [clientMode, clientId, clientSchema, clientNewCheck.valid, clientExistingCheck.valid]);
+
+  useEffect(() => {
+    const showing = effectiveContactMode === "new" || (contactMode === "select" && !!contactId && !!contactSchema);
+    if (!showing) return;
+    const valid = effectiveContactMode === "new" ? contactNewCheck.valid : contactExistingCheck.valid;
+    setContactFormOpen(!valid);
+  }, [effectiveContactMode, contactMode, contactId, contactSchema, contactNewCheck.valid, contactExistingCheck.valid]);
+
+
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
     const c = Number(item.cost) || 0;
@@ -1071,11 +1130,13 @@ const CreateInvoicePage: React.FC = () => {
               </Popover>
 
               {clientMode === "new" && (
-                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                      New client details
-                    </p>
+                <CollapsibleFormCard
+                  title="New client details"
+                  open={clientFormOpen}
+                  onOpenChange={setClientFormOpen}
+                  valid={clientNewCheck.valid}
+                  loading={!clientSchema}
+                  rightSlot={
                     <Button
                       type="button"
                       variant="ghost"
@@ -1089,7 +1150,8 @@ const CreateInvoicePage: React.FC = () => {
                     >
                       Cancel
                     </Button>
-                  </div>
+                  }
+                >
                   {!clientSchema ? (
                     <p className="text-xs text-muted-foreground">Loading client fields…</p>
                   ) : (
@@ -1117,14 +1179,16 @@ const CreateInvoicePage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">
                     Add the contact person below — both will be created on submit.
                   </p>
-                </div>
+                </CollapsibleFormCard>
               )}
 
               {clientMode === "select" && clientId && clientSchema && (
-                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    Client details
-                  </p>
+                <CollapsibleFormCard
+                  title="Client details"
+                  open={clientFormOpen}
+                  onOpenChange={setClientFormOpen}
+                  valid={clientExistingCheck.valid}
+                >
                   {clientSchema.fields
                     .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
                     .map((f) => {
@@ -1145,7 +1209,7 @@ const CreateInvoicePage: React.FC = () => {
                       );
                     })}
                   <p className="text-xs text-muted-foreground">Changes will be saved to the client on submit.</p>
-                </div>
+                </CollapsibleFormCard>
               )}
             </div>
 
@@ -1220,26 +1284,26 @@ const CreateInvoicePage: React.FC = () => {
                 )}
 
             {effectiveContactMode === "new" && (
-              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    New contact details
-                  </p>
-                  {clientMode !== "new" && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setContactMode("select");
-                        setNewContactFields({});
-                        
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
+              <CollapsibleFormCard
+                title="New contact details"
+                open={contactFormOpen}
+                onOpenChange={setContactFormOpen}
+                valid={contactNewCheck.valid}
+                loading={!contactSchema}
+                rightSlot={clientMode !== "new" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setContactMode("select");
+                      setNewContactFields({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              >
                 {!contactSchema ? (
                   <p className="text-xs text-muted-foreground">Loading contact fields…</p>
                 ) : (
@@ -1264,13 +1328,15 @@ const CreateInvoicePage: React.FC = () => {
                       );
                     })
                 )}
-              </div>
+              </CollapsibleFormCard>
             )}
             {contactMode === "select" && contactId && contactSchema && (
-              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                  Contact details
-                </p>
+              <CollapsibleFormCard
+                title="Contact details"
+                open={contactFormOpen}
+                onOpenChange={setContactFormOpen}
+                valid={contactExistingCheck.valid}
+              >
                 {contactSchema.fields
                   .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
                   .map((f) => {
@@ -1291,7 +1357,7 @@ const CreateInvoicePage: React.FC = () => {
                     );
                   })}
                 <p className="text-xs text-muted-foreground">Changes will be saved to the contact on submit.</p>
-              </div>
+              </CollapsibleFormCard>
             )}
             {contactMode === "select" && contactId && (() => {
               const selected = contacts.find((c) => c.id === contactId);
