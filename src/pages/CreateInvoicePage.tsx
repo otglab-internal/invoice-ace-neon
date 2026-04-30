@@ -511,7 +511,7 @@ const CreateInvoicePage: React.FC = () => {
     if (!clientId) {
       setContacts([]);
       setContactId("");
-      setContactMode("select");
+      setContactMode(clientMode === "new" ? "new" : "select");
       return;
     }
     const selectedClient = clients.find((c) => c.id === clientId);
@@ -568,7 +568,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId, clients]);
+  }, [clientId, clients, clientMode]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
@@ -616,7 +616,9 @@ const CreateInvoicePage: React.FC = () => {
   const newContactFullName = getDynamicName(contactSchema, newContactFields);
   const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
 
-  const contactName = contactMode === "select"
+  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
+
+  const contactName = effectiveContactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactFullName;
 
@@ -643,7 +645,6 @@ const CreateInvoicePage: React.FC = () => {
   const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
 
   const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
-  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
   const contactValid = effectiveContactMode === "select" ? !!contactId : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
@@ -747,7 +748,7 @@ const CreateInvoicePage: React.FC = () => {
       let effectiveContactId = contactId;
       let effectiveContactName = contactName;
 
-      if (contactMode === "new") {
+      if (effectiveContactMode === "new") {
         if (!effectiveClientId) {
           toast.error("Cannot create contact: client is missing");
           setSubmitting(false);
@@ -812,7 +813,7 @@ const CreateInvoicePage: React.FC = () => {
         send_to_client: sendToClient,
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
-          ? (contactMode === "new"
+          ? (effectiveContactMode === "new"
               ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
                   .filter((e) => emailRegex.test(e))
               : (() => {
@@ -825,7 +826,7 @@ const CreateInvoicePage: React.FC = () => {
                   return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
                 })())
           : [],
-        contact_persons: contactMode === "new"
+        contact_persons: effectiveContactMode === "new"
           ? newContactPersons
               .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
               .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
@@ -1135,7 +1136,7 @@ const CreateInvoicePage: React.FC = () => {
                   </Popover>
                 )}
 
-            {contactMode === "new" && (
+            {effectiveContactMode === "new" && (
               <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
