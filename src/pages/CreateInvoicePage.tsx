@@ -571,7 +571,7 @@ const CreateInvoicePage: React.FC = () => {
     }
   }
   if (!contactValid) {
-    if (contactMode === "select") {
+    if (effectiveContactMode === "select") {
       missingFields.push("Select a contact");
     } else {
       if (!newContactFirstName.trim()) missingFields.push("Contact first name");
