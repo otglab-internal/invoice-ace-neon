@@ -1258,8 +1258,8 @@ const CreateInvoicePage: React.FC = () => {
             </div>
           )}
 
-          <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">
+          <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center gap-4">
+            <div className="text-sm text-muted-foreground flex-1 min-w-0">
               {total > 0 ? (
                 <span>
                   Total: <strong className="text-foreground">{currency} {total.toFixed(2)}</strong>
@@ -1267,6 +1267,11 @@ const CreateInvoicePage: React.FC = () => {
                 </span>
               ) : (
                 "Fill in quantity and cost to see total"
+              )}
+              {!allValid && !checkingApprovalState && missingFields.length > 0 && (
+                <div className="text-xs text-destructive mt-1">
+                  Missing: {missingFields.join(", ")}
+                </div>
               )}
             </div>
             <Button type="submit" disabled={!allValid || submitting || checkingApprovalState} className="gap-2">
