@@ -844,14 +844,19 @@ const CreateInvoicePage: React.FC = () => {
       if (clientMode === "new") {
         try {
           // Build payload from whatever fields the schema declares — only send non-empty values,
-          // plus an auto-generated ClientGUID for the system-managed identity field if present.
+          // plus an auto-generated business-key value (e.g. ClientGuid) if the schema defines one.
           const clientData: Record<string, string> = {};
           for (const f of clientSchema?.fields ?? []) {
             const v = (newClientFields[f.name] || "").trim();
             if (v) clientData[f.name] = v;
           }
-          if (clientSchema?.fields.some((f) => f.name === "ClientGUID")) {
-            clientData.ClientGUID = crypto.randomUUID();
+          // Schema-driven business key (falls back to legacy "ClientGUID" name).
+          const clientBusinessKey =
+            clientSchema?.business_key ||
+            (clientSchema?.fields.some((f) => f.name === "ClientGUID") ? "ClientGUID" : null) ||
+            (clientSchema?.fields.some((f) => f.name === "ClientGuid") ? "ClientGuid" : null);
+          if (clientBusinessKey && !clientData[clientBusinessKey]) {
+            clientData[clientBusinessKey] = crypto.randomUUID();
           }
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
             body: { action: "create", entity: "clients", payload: { data: clientData } },
@@ -862,8 +867,10 @@ const CreateInvoicePage: React.FC = () => {
           }
           effectiveClientId = String(createRes.data.id);
           effectiveClientName = newClientName;
-          // Reflect in local list so subsequent UI is consistent.
-          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
+          // Reflect in local list so subsequent UI is consistent — keep the new business-key
+          // value on the row so contact-fetch can resolve children immediately.
+          const newRowFields: Record<string, string> = { ...clientData };
+          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName, fields: newRowFields }].sort((a, b) => a.name.localeCompare(b.name)));
         } catch (clientErr: any) {
           toast.error(clientErr?.message || "Failed to create client in auth app");
           setSubmitting(false);
