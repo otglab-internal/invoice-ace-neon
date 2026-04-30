@@ -694,6 +694,22 @@ const CreateInvoicePage: React.FC = () => {
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
 
+  // Auto-collapse client form when valid; auto-open when invalid (or freshly shown).
+  useEffect(() => {
+    const showing = clientMode === "new" || (clientMode === "select" && !!clientId && !!clientSchema);
+    if (!showing) return;
+    const valid = clientMode === "new" ? clientNewCheck.valid : clientExistingCheck.valid;
+    setClientFormOpen(!valid);
+  }, [clientMode, clientId, clientSchema, clientNewCheck.valid, clientExistingCheck.valid]);
+
+  useEffect(() => {
+    const showing = effectiveContactMode === "new" || (contactMode === "select" && !!contactId && !!contactSchema);
+    if (!showing) return;
+    const valid = effectiveContactMode === "new" ? contactNewCheck.valid : contactExistingCheck.valid;
+    setContactFormOpen(!valid);
+  }, [effectiveContactMode, contactMode, contactId, contactSchema, contactNewCheck.valid, contactExistingCheck.valid]);
+
+
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
     const c = Number(item.cost) || 0;
