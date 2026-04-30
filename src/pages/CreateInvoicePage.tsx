@@ -523,10 +523,18 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
         const select = Array.from(new Set([
-          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons", "parent_id",
+          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons", "parent_id", "ClientGUID",
           ...schemaFields,
         ]));
-        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+        // Contacts may link to their client via either `parent_id` (internal UUID) or
+        // `ClientGUID` (Xero GUID), depending on org. Try both — fetch unfiltered if needed
+        // and apply a permissive client-side filter that matches either field.
+        const selectedClient = clients.find((c) => c.id === clientId);
+        const clientGuid = selectedClient?.fields?.ClientGUID || clientId;
+
+        let rows: any[] = [];
+        // Attempt 1: server-side filter by parent_id
+        const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
             entity: "contacts",
@@ -535,7 +543,39 @@ const CreateInvoicePage: React.FC = () => {
           headers: xeroHeaders,
         });
         if (cancelled) return;
-        const rows = Array.isArray(data?.data) ? data.data : [];
+        rows = Array.isArray(byParent?.data) ? byParent.data : [];
+
+        // Attempt 2: server-side filter by ClientGUID
+        if (rows.length === 0 && clientGuid) {
+          const { data: byGuid } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 1000, where: { ClientGUID: clientGuid } },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          rows = Array.isArray(byGuid?.data) ? byGuid.data : [];
+        }
+
+        // Attempt 3: fetch all and filter client-side (covers orgs whose proxy ignores `where`)
+        if (rows.length === 0) {
+          const { data: all } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 2000 },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          const allRows = Array.isArray(all?.data) ? all.data : [];
+          rows = allRows.filter((r: any) =>
+            (r?.parent_id && String(r.parent_id) === clientId) ||
+            (r?.ClientGUID && String(r.ClientGUID) === clientGuid)
+          );
+        }
         const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
@@ -567,10 +607,9 @@ const CreateInvoicePage: React.FC = () => {
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
           };
         });
-        // Strict client-side filter: only contacts whose parent_id matches the selected client.
-        const scoped = mapped.filter((c) => c.parent_id === clientId);
-        scoped.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(scoped);
+        // Rows are already scoped to the selected client (by parent_id or ClientGUID).
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(mapped);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
