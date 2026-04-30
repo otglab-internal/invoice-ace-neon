@@ -1305,7 +1305,7 @@ const CreateInvoicePage: React.FC = () => {
                   valid={clientExistingCheck.valid}
                 >
                   {clientSchema.fields
-                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .filter((f) => !isHiddenField(clientSchema, f.name))
                     .map((f) => {
                       const isEmail = /email/i.test(f.name);
                       return (
