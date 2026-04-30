@@ -809,20 +809,17 @@ const CreateInvoicePage: React.FC = () => {
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
 
-  // Auto-collapse client form when valid; auto-open when invalid (or freshly shown).
+  // Auto-collapse the "new client" form when it becomes valid. Existing/selected clients have
+  // no editable form anymore so there's nothing to auto-collapse for them.
   useEffect(() => {
-    const showing = clientMode === "new" || (clientMode === "select" && !!clientId && !!clientSchema);
-    if (!showing) return;
-    const valid = clientMode === "new" ? clientNewCheck.valid : clientExistingCheck.valid;
-    setClientFormOpen(!valid);
-  }, [clientMode, clientId, clientSchema, clientNewCheck.valid, clientExistingCheck.valid]);
+    if (clientMode !== "new") return;
+    setClientFormOpen(!clientNewCheck.valid);
+  }, [clientMode, clientNewCheck.valid]);
 
   useEffect(() => {
-    const showing = effectiveContactMode === "new" || (contactMode === "select" && !!contactId && !!contactSchema);
-    if (!showing) return;
-    const valid = effectiveContactMode === "new" ? contactNewCheck.valid : contactExistingCheck.valid;
-    setContactFormOpen(!valid);
-  }, [effectiveContactMode, contactMode, contactId, contactSchema, contactNewCheck.valid, contactExistingCheck.valid]);
+    if (effectiveContactMode !== "new") return;
+    setContactFormOpen(!contactNewCheck.valid);
+  }, [effectiveContactMode, contactNewCheck.valid]);
 
 
   const total = lineItems.reduce((sum, item) => {
