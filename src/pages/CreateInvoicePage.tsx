@@ -427,9 +427,22 @@ const CreateInvoicePage: React.FC = () => {
           headers,
         });
         if (cancelled || !data?.fields) return null;
+        // New describe payload exposes:
+        //   link_field        — child's FK column pointing to parent business key
+        //   foreign_key       — { field, references: { entity, field } }
+        //   primary_key       — { row_id: { field }, business_key: { field } }
+        // Older payloads only have display_field + fields; tolerate both.
+        const business_key: string | null =
+          data?.primary_key?.business_key?.field ?? null;
+        const link_field: string | null = data?.link_field ?? null;
+        const parent_business_key: string | null =
+          data?.foreign_key?.references?.field ?? null;
         return {
           display_field: data.display_field,
-          fields: data.fields as Array<{ name: string; required: boolean; type: string }>,
+          fields: data.fields as SchemaField[],
+          link_field,
+          business_key,
+          parent_business_key,
         };
       } catch (err) {
         console.warn(`Failed to describe ${entity}:`, err);
