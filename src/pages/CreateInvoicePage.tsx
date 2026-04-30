@@ -244,10 +244,14 @@ const CreateInvoicePage: React.FC = () => {
   const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
 
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
+  // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
+  const EMAIL_FIELD_ALIASES = ["EmailAddress", "Email", "ContactNumber"];
   const pickEmailField = (schema: EntitySchema): string | null => {
     if (!schema) return null;
-    const f = schema.fields.find((x) => /email/i.test(x.name));
-    return f?.name ?? null;
+    const byName = schema.fields.find((x) => /email/i.test(x.name));
+    if (byName) return byName.name;
+    const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
+    return byAlias?.name ?? null;
   };
   const formatLabel = (name: string): string =>
     name
