@@ -542,41 +542,53 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(true);
       try {
         const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
+        // Schema-driven relationship resolution.
+        // describe payload tells us:
+        //   contactSchema.link_field           — FK column on contacts (e.g. "ClientGuid")
+        //   contactSchema.parent_business_key  — the column on clients it references (e.g. "ClientGuid")
+        // Fall back to legacy hardcoded names when the proxy hasn't been updated yet.
+        const linkField = contactSchema?.link_field || "ClientGUID";
+        const parentBusinessKey = contactSchema?.parent_business_key || clientSchema?.business_key || "ClientGUID";
+        const selectedClient = clients.find((c) => c.id === clientId);
+        const parentBusinessValue =
+          selectedClient?.fields?.[parentBusinessKey] ||
+          selectedClient?.fields?.ClientGUID ||
+          selectedClient?.fields?.ClientGuid ||
+          clientId;
+
         const select = Array.from(new Set([
-          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons", "parent_id", "ClientGUID",
+          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons",
+          "parent_id", linkField, "ClientGUID", "ClientGuid",
           ...schemaFields,
         ]));
-        // Contacts may link to their client via either `parent_id` (internal UUID) or
-        // `ClientGUID` (Xero GUID), depending on org. Try both — fetch unfiltered if needed
-        // and apply a permissive client-side filter that matches either field.
-        const selectedClient = clients.find((c) => c.id === clientId);
-        const clientGuid = selectedClient?.fields?.ClientGUID || clientId;
 
         let rows: any[] = [];
-        // Attempt 1: server-side filter by parent_id
-        const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
-          body: {
-            action: "read",
-            entity: "contacts",
-            payload: { select, limit: 1000, where: { parent_id: clientId } },
-          },
-          headers: xeroHeaders,
-        });
-        if (cancelled) return;
-        rows = Array.isArray(byParent?.data) ? byParent.data : [];
-
-        // Attempt 2: server-side filter by ClientGUID
-        if (rows.length === 0 && clientGuid) {
-          const { data: byGuid } = await supabase.functions.invoke("clients-api-proxy", {
+        // Attempt 1: server-side filter by the schema-declared link field
+        if (parentBusinessValue) {
+          const { data: byLink } = await supabase.functions.invoke("clients-api-proxy", {
             body: {
               action: "read",
               entity: "contacts",
-              payload: { select, limit: 1000, where: { ClientGUID: clientGuid } },
+              payload: { select, limit: 1000, where: { [linkField]: parentBusinessValue } },
             },
             headers: xeroHeaders,
           });
           if (cancelled) return;
-          rows = Array.isArray(byGuid?.data) ? byGuid.data : [];
+          rows = Array.isArray(byLink?.data) ? byLink.data : [];
+        }
+
+        // Attempt 2: legacy parent_id fallback (older orgs)
+        if (rows.length === 0) {
+          const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 1000, where: { parent_id: clientId } },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          rows = Array.isArray(byParent?.data) ? byParent.data : [];
         }
 
         // Attempt 3: fetch all and filter client-side (covers orgs whose proxy ignores `where`)
@@ -592,8 +604,10 @@ const CreateInvoicePage: React.FC = () => {
           if (cancelled) return;
           const allRows = Array.isArray(all?.data) ? all.data : [];
           rows = allRows.filter((r: any) =>
+            (r?.[linkField] && String(r[linkField]) === String(parentBusinessValue)) ||
             (r?.parent_id && String(r.parent_id) === clientId) ||
-            (r?.ClientGUID && String(r.ClientGUID) === clientGuid)
+            (r?.ClientGUID && String(r.ClientGUID) === String(parentBusinessValue)) ||
+            (r?.ClientGuid && String(r.ClientGuid) === String(parentBusinessValue))
           );
         }
         const emailField = pickEmailField(contactSchema);
