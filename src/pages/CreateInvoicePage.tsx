@@ -600,21 +600,6 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [contactId, contactMode, contacts]);
 
-  // Auto-open client form when there's a freshly opened section or it becomes invalid; auto-collapse when valid.
-  useEffect(() => {
-    const showing = clientMode === "new" || (clientMode === "select" && !!clientId && !!clientSchema);
-    if (!showing) return;
-    const valid = clientMode === "new" ? clientNewCheck.valid : clientExistingCheck.valid;
-    setClientFormOpen(!valid);
-  }, [clientMode, clientId, clientSchema, clientNewCheck.valid, clientExistingCheck.valid]);
-
-  useEffect(() => {
-    const showing = effectiveContactMode === "new" || (contactMode === "select" && !!contactId && !!contactSchema);
-    if (!showing) return;
-    const valid = effectiveContactMode === "new" ? contactNewCheck.valid : contactExistingCheck.valid;
-    setContactFormOpen(!valid);
-  }, [effectiveContactMode, contactMode, contactId, contactSchema, contactNewCheck.valid, contactExistingCheck.valid]);
-
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
