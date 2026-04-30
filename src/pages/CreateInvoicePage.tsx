@@ -148,73 +148,6 @@ function isLineItemValid(item: LineItem, templates: Template[], trackingCategori
   return true;
 }
 
-type ContactPerson = { firstName: string; lastName: string; email: string; includeInEmails: boolean };
-
-const ContactPersonsEditor: React.FC<{
-  persons: ContactPerson[];
-  setPersons: React.Dispatch<React.SetStateAction<ContactPerson[]>>;
-  helperText?: string;
-}> = ({ persons, setPersons, helperText }) => {
-  const update = (idx: number, patch: Partial<ContactPerson>) => {
-    setPersons((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
-  };
-  return (
-    <div className="space-y-2">
-      <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-        Additional contact persons
-      </Label>
-      {persons.map((p, idx) => (
-        <div key={idx} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Input
-              placeholder="First name"
-              value={p.firstName}
-              onChange={(e) => update(idx, { firstName: e.target.value })}
-            />
-            <Input
-              placeholder="Last name (optional)"
-              value={p.lastName}
-              onChange={(e) => update(idx, { lastName: e.target.value })}
-            />
-          </div>
-          <Input
-            type="email"
-            placeholder="name@example.com"
-            value={p.email}
-            onChange={(e) => update(idx, { email: e.target.value })}
-          />
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox
-                checked={p.includeInEmails}
-                onCheckedChange={(v) => update(idx, { includeInEmails: !!v })}
-              />
-              <span>Include in emails</span>
-            </label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPersons((prev) => prev.filter((_, i) => i !== idx))}
-            >
-              <Trash2 className="w-4 h-4 mr-1" /> Remove
-            </Button>
-          </div>
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setPersons((prev) => [...prev, { firstName: "", lastName: "", email: "", includeInEmails: true }])}
-      >
-        <Plus className="w-4 h-4 mr-1" /> Add contact person
-      </Button>
-      {helperText && <p className="text-xs text-muted-foreground">{helperText}</p>}
-    </div>
-  );
-};
-
 const CreateInvoicePage: React.FC = () => {
   const { user, systemId, userEmail } = useAuth();
   const requesterName = user ? `${user.firstName} ${user.lastName}`.trim() : "";
@@ -247,7 +180,7 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
   const [newContactFields, setNewContactFields] = useState<Record<string, string>>({});
-  const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
+  
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
 
@@ -267,8 +200,6 @@ const CreateInvoicePage: React.FC = () => {
       .replace(/\s+/g, " ")
       .trim()
       .replace(/^./, (c) => c.toUpperCase());
-  const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
-  const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
     const now = new Date();
     const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -814,30 +745,10 @@ const CreateInvoicePage: React.FC = () => {
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
           ? (effectiveContactMode === "new"
-              ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
-                  .filter((e) => emailRegex.test(e))
-              : (() => {
-                  const selected = contacts.find((c) => c.id === contactId);
-                  const emails = selected?.emails ?? [];
-                  if (emails.length === 0) {
-                    return [existingPrimaryEmail.trim(), ...existingContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
-                      .filter((e) => emailRegex.test(e));
-                  }
-                  return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
-                })())
+              ? [newContactEmail.trim()].filter((e) => emailRegex.test(e))
+              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e)))
           : [],
-        contact_persons: effectiveContactMode === "new"
-          ? newContactPersons
-              .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
-              .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
-          : (() => {
-              const selected = contacts.find((c) => c.id === contactId);
-              const emails = selected?.emails ?? [];
-              if (emails.length > 0) return [];
-              return existingContactPersons
-                .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
-                .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }));
-            })(),
+        contact_persons: [],
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
@@ -914,7 +825,6 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode("select");
       setContactId("");
       setNewContactFields({});
-      setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
       setDueDays("7");
@@ -1150,7 +1060,7 @@ const CreateInvoicePage: React.FC = () => {
                       onClick={() => {
                         setContactMode("select");
                         setNewContactFields({});
-                        setNewContactPersons([]);
+                        
                       }}
                     >
                       Cancel
@@ -1192,30 +1102,9 @@ const CreateInvoicePage: React.FC = () => {
                     Send invoice to
                   </Label>
                   {emails.length === 0 ? (
-                    <div className="space-y-3">
-                      <p className="text-xs text-muted-foreground italic">
-                        No email addresses found on this contact.
-                      </p>
-                      <div className="space-y-2">
-                        <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                          Primary email
-                        </Label>
-                        <Input
-                          type="email"
-                          placeholder="name@example.com"
-                          value={existingPrimaryEmail}
-                          onChange={(e) => {
-                            setExistingPrimaryEmail(e.target.value);
-                            setSelectedRecipientEmails(e.target.value.trim() ? [e.target.value.trim()] : []);
-                          }}
-                        />
-                      </div>
-                      <ContactPersonsEditor
-                        persons={existingContactPersons}
-                        setPersons={setExistingContactPersons}
-                        helperText='These contact persons will be added to the contact.'
-                      />
-                    </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      No email addresses found on this contact. Update the contact to add an email address.
+                    </p>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
                       {emails.map((email) => {
