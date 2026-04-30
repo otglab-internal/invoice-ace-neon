@@ -1089,7 +1089,7 @@ const CreateInvoicePage: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Email *</Label>
+                  <Label className="text-xs text-muted-foreground">Email (optional)</Label>
                   <Input
                     type="email"
                     placeholder="jane@example.com"
