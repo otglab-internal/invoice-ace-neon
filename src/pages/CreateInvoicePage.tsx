@@ -1069,9 +1069,11 @@ const CreateInvoicePage: React.FC = () => {
                               value="__create_new__"
                               onSelect={() => {
                                 setContactMode("new");
-                                setNewContactFirstName(contactSearch);
-                                setNewContactLastName("");
-                                setNewContactEmail("");
+                                setNewContactFields(
+                                  contactSchema?.display_field
+                                    ? { [contactSchema.display_field]: contactSearch }
+                                    : {}
+                                );
                                 setContactId("");
                                 setContactOpen(false);
                               }}
@@ -1086,8 +1088,7 @@ const CreateInvoicePage: React.FC = () => {
                                 onSelect={() => {
                                   setContactId(c.id);
                                   setContactMode("select");
-                                  setNewContactFirstName("");
-                                  setNewContactLastName("");
+                                  setNewContactFields({});
                                   setContactOpen(false);
                                 }}
                               >
