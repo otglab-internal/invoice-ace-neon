@@ -222,8 +222,15 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   // Schema-driven new client / new contact forms
-  type SchemaField = { name: string; required: boolean; type: string };
-  type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
+  type SchemaField = { name: string; required: boolean; type: string; is_primary_key?: boolean; is_foreign_key?: boolean };
+  type EntitySchema = {
+    display_field: string;
+    fields: SchemaField[];
+    // New describe metadata (optional for backward compatibility):
+    link_field?: string | null;          // FK column on child pointing to parent business key
+    business_key?: string | null;        // child's natural/business identity column (e.g. ContactGuid)
+    parent_business_key?: string | null; // parent's business key referenced by link_field (e.g. ClientGuid)
+  } | null;
   const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
