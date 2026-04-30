@@ -163,7 +163,7 @@ const CreateInvoicePage: React.FC = () => {
   const [userFlagged, setUserFlagged] = useState(false);
   const [freeTextFlagged, setFreeTextFlagged] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
+  const [clients, setClients] = useState<XeroClient[]>([]);
   const [loadingClients, setLoadingClients] = useState(true);
   const [clientId, setClientId] = useState("");
   const [clientOpen, setClientOpen] = useState(false);
