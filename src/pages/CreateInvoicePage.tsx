@@ -546,12 +546,18 @@ const CreateInvoicePage: React.FC = () => {
     setLineItems((prev) => [...prev, createLineItem(defaultId)]);
   }, [templates]);
 
+  const newContactFullName = [newContactFirstName.trim(), newContactLastName.trim()].filter(Boolean).join(" ").trim();
   const contactName = contactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
-    : newContactName.trim();
+    : newContactFullName;
 
-  const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
-  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const clientValid = clientMode === "select"
+    ? !!clientId
+    : !!newClientName.trim() && emailRegex.test(newClientEmail.trim());
+  const contactValid = contactMode === "select"
+    ? !!contactId
+    : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
+  const allValid = clientValid && contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
