@@ -607,10 +607,9 @@ const CreateInvoicePage: React.FC = () => {
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
           };
         });
-        // Strict client-side filter: only contacts whose parent_id matches the selected client.
-        const scoped = mapped.filter((c) => c.parent_id === clientId);
-        scoped.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(scoped);
+        // Rows are already scoped to the selected client (by parent_id or ClientGUID).
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(mapped);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
