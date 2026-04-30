@@ -1116,9 +1116,7 @@ const CreateInvoicePage: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         setContactMode("select");
-                        setNewContactFirstName("");
-                        setNewContactLastName("");
-                        setNewContactEmail("");
+                        setNewContactFields({});
                         setNewContactPersons([]);
                       }}
                     >
@@ -1126,34 +1124,30 @@ const CreateInvoicePage: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">First name *</Label>
-                    <Input
-                      placeholder="Jane"
-                      value={newContactFirstName}
-                      onChange={(e) => setNewContactFirstName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Last name</Label>
-                    <Input
-                      placeholder="Doe"
-                      value={newContactLastName}
-                      onChange={(e) => setNewContactLastName(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Email (optional)</Label>
-                  <Input
-                    type="email"
-                    placeholder="jane@example.com"
-                    value={newContactEmail}
-                    onChange={(e) => setNewContactEmail(e.target.value)}
-                  />
-                </div>
+                {!contactSchema ? (
+                  <p className="text-xs text-muted-foreground">Loading contact fields…</p>
+                ) : (
+                  contactSchema.fields
+                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .map((f, idx) => {
+                      const isEmail = /email/i.test(f.name);
+                      return (
+                        <div key={f.name} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">
+                            {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                          </Label>
+                          <Input
+                            type={isEmail ? "email" : "text"}
+                            value={newContactFields[f.name] || ""}
+                            onChange={(e) =>
+                              setNewContactFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                            autoFocus={idx === 0}
+                          />
+                        </div>
+                      );
+                    })
+                )}
               </div>
             )}
             {contactMode === "select" && contactId && (() => {
