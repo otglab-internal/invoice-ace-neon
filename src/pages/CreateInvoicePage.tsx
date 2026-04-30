@@ -200,8 +200,6 @@ const CreateInvoicePage: React.FC = () => {
       .replace(/\s+/g, " ")
       .trim()
       .replace(/^./, (c) => c.toUpperCase());
-  const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
-  const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
     const now = new Date();
     const gmt8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
