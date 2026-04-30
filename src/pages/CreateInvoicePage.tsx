@@ -502,8 +502,8 @@ const CreateInvoicePage: React.FC = () => {
     return () => { cancelled = true; };
   }, [clientId, clients, clientMode]);
 
-  // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
+    setExistingContactNewEmail("");
     if (contactMode === "select" && contactId) {
       const c = contacts.find((x) => x.id === contactId);
       setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
