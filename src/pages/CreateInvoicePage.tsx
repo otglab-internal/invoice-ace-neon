@@ -557,7 +557,27 @@ const CreateInvoicePage: React.FC = () => {
   const contactValid = contactMode === "select"
     ? !!contactId
     : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
-  const allValid = clientValid && contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const allValid = clientValid && contactValid && lineItemsValid;
+
+  const missingFields: string[] = [];
+  if (!clientValid) {
+    if (clientMode === "select") {
+      missingFields.push("Select a client");
+    } else {
+      if (!newClientName.trim()) missingFields.push("New client name");
+      if (!emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
+    }
+  }
+  if (!contactValid) {
+    if (contactMode === "select") {
+      missingFields.push("Select a contact");
+    } else {
+      if (!newContactFirstName.trim()) missingFields.push("Contact first name");
+      if (!emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
+    }
+  }
+  if (!lineItemsValid) missingFields.push("Complete all line items");
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
