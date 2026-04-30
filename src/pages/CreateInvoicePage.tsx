@@ -994,41 +994,38 @@ const CreateInvoicePage: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         setClientMode("select");
-                        setNewClientName("");
-                        setNewClientEmail("");
-                        setNewClientAccountNumber("");
+                        setNewClientFields({});
                         setContactMode("select");
+                        setNewContactFields({});
                       }}
                     >
                       Cancel
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Client name *</Label>
-                    <Input
-                      placeholder="Acme Pte Ltd"
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Email address (optional)</Label>
-                    <Input
-                      type="email"
-                      placeholder="billing@acme.com"
-                      value={newClientEmail}
-                      onChange={(e) => setNewClientEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Account number (optional)</Label>
-                    <Input
-                      placeholder="ACC-001"
-                      value={newClientAccountNumber}
-                      onChange={(e) => setNewClientAccountNumber(e.target.value)}
-                    />
-                  </div>
+                  {!clientSchema ? (
+                    <p className="text-xs text-muted-foreground">Loading client fields…</p>
+                  ) : (
+                    clientSchema.fields
+                      .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                      .map((f, idx) => {
+                        const isEmail = /email/i.test(f.name);
+                        return (
+                          <div key={f.name} className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">
+                              {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                            </Label>
+                            <Input
+                              type={isEmail ? "email" : "text"}
+                              value={newClientFields[f.name] || ""}
+                              onChange={(e) =>
+                                setNewClientFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                              }
+                              autoFocus={idx === 0}
+                            />
+                          </div>
+                        );
+                      })
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Add the contact person below — both will be created on submit.
                   </p>
