@@ -240,16 +240,33 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
-  // New contact (person) form fields
-  const [newContactFirstName, setNewContactFirstName] = useState("");
-  const [newContactLastName, setNewContactLastName] = useState("");
-  const [newContactEmail, setNewContactEmail] = useState<string>("");
+  // Schema-driven new client / new contact forms
+  type SchemaField = { name: string; required: boolean; type: string };
+  type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
+  const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
+  const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
+  const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
+  const [newContactFields, setNewContactFields] = useState<Record<string, string>>({});
   const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
-  // New client form
+  // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
-  const [newClientName, setNewClientName] = useState("");
-  const [newClientEmail, setNewClientEmail] = useState("");
-  const [newClientAccountNumber, setNewClientAccountNumber] = useState("");
+
+  // Fields hidden from the user — system-managed (e.g. ClientGUID auto-generated on submit).
+  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
+
+  // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
+  const pickEmailField = (schema: EntitySchema): string | null => {
+    if (!schema) return null;
+    const f = schema.fields.find((x) => /email/i.test(x.name));
+    return f?.name ?? null;
+  };
+  const formatLabel = (name: string): string =>
+    name
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^./, (c) => c.toUpperCase());
   const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
   const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
