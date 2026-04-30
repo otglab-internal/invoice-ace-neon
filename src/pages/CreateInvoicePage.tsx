@@ -825,7 +825,6 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode("select");
       setContactId("");
       setNewContactFields({});
-      setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
       setDueDays("7");
