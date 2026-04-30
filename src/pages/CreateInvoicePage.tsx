@@ -554,7 +554,8 @@ const CreateInvoicePage: React.FC = () => {
   const clientValid = clientMode === "select"
     ? !!clientId
     : !!newClientName.trim() && emailRegex.test(newClientEmail.trim());
-  const contactValid = contactMode === "select"
+  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
+  const contactValid = effectiveContactMode === "select"
     ? !!contactId
     : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
