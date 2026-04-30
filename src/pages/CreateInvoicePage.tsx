@@ -1292,7 +1292,7 @@ const CreateInvoicePage: React.FC = () => {
                     clientSchema.fields
                       .filter((f) => !isHiddenField(clientSchema, f.name))
                       .map((f, idx) => {
-                        const isEmail = /email/i.test(f.name);
+                        const isEmail = isEmailFieldName(f.name);
                         return (
                           <div key={f.name} className="space-y-2">
                             <Label className="text-xs text-muted-foreground">
