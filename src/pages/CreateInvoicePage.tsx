@@ -727,6 +727,12 @@ const CreateInvoicePage: React.FC = () => {
     setExistingContactOriginal({});
   }, [contacts, clientMode, contactMode]);
 
+  // Keep the single "primary" contactId pointer in sync with the multi-select.
+  useEffect(() => {
+    if (clientMode !== "select" || contactMode !== "select") return;
+    setContactId(selectedContactIds[0] ?? "");
+  }, [selectedContactIds, clientMode, contactMode]);
+
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
