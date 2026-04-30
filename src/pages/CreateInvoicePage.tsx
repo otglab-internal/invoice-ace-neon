@@ -1111,6 +1111,34 @@ const CreateInvoicePage: React.FC = () => {
                   </p>
                 </div>
               )}
+
+              {clientMode === "select" && clientId && clientSchema && (
+                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
+                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                    Client details
+                  </p>
+                  {clientSchema.fields
+                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .map((f) => {
+                      const isEmail = /email/i.test(f.name);
+                      return (
+                        <div key={f.name} className="space-y-2">
+                          <Label className="text-xs text-muted-foreground">
+                            {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                          </Label>
+                          <Input
+                            type={isEmail ? "email" : "text"}
+                            value={existingClientFields[f.name] || ""}
+                            onChange={(e) =>
+                              setExistingClientFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  <p className="text-xs text-muted-foreground">Changes will be saved to the client on submit.</p>
+                </div>
+              )}
             </div>
 
             {(clientId || clientMode === "new") && (
