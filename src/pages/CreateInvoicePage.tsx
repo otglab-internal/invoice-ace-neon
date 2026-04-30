@@ -407,6 +407,38 @@ const CreateInvoicePage: React.FC = () => {
     loadXeroData();
   }, []);
 
+  // Fetch dynamic schemas for clients & contacts so "create new" forms render whatever fields each org has configured.
+  useEffect(() => {
+    let cancelled = false;
+    const headers = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+    const fetchSchema = async (entity: "clients" | "contacts") => {
+      try {
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: { action: "describe", entity },
+          headers,
+        });
+        if (cancelled || !data?.fields) return null;
+        return {
+          display_field: data.display_field,
+          fields: data.fields as Array<{ name: string; required: boolean; type: string }>,
+        };
+      } catch (err) {
+        console.warn(`Failed to describe ${entity}:`, err);
+        return null;
+      }
+    };
+    (async () => {
+      const [c, p] = await Promise.all([fetchSchema("clients"), fetchSchema("contacts")]);
+      if (cancelled) return;
+      if (c) setClientSchema(c);
+      if (p) setContactSchema(p);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     let active = true;
     const identityFilters: Array<Record<string, string>> = [];
