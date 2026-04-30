@@ -1352,66 +1352,79 @@ const CreateInvoicePage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">
                     A contact person will be created for this new client.
                   </p>
-                ) : (
-                  <Popover open={contactOpen} onOpenChange={setContactOpen}>
-                    <PopoverTrigger asChild>
+                ) : contactMode === "select" ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {loadingContacts
+                          ? "Loading contacts..."
+                          : contacts.length === 0
+                          ? "No contacts found for this client."
+                          : "Tick the contacts to invoice. Billing-flagged contacts are pre-checked."}
+                      </span>
                       <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={contactOpen}
-                        className="w-full justify-between font-normal"
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-primary"
+                        onClick={() => {
+                          setContactMode("new");
+                          setNewContactFields({});
+                          setSelectedContactIds([]);
+                          setContactId("");
+                          setSelectedRecipientEmails([]);
+                        }}
                       >
-                        {contactMode === "new"
-                          ? (newContactFullName || "New contact (fill details below)")
-                          : contactId
-                          ? contacts.find((c) => c.id === contactId)?.name
-                          : loadingContacts ? "Loading contacts..." : "Search contacts..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Create New Contact
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
-                        <CommandList>
-                          <CommandEmpty>No contacts found.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="__create_new__"
-                              onSelect={() => {
-                                setContactMode("new");
-                                setNewContactFields(
-                                  contactSchema?.display_field
-                                    ? { [contactSchema.display_field]: contactSearch }
-                                    : {}
-                                );
-                                setContactId("");
-                                setContactOpen(false);
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4 text-primary" />
-                              <span className="text-primary font-medium">Create New Contact</span>
-                            </CommandItem>
-                            {contacts.map((c) => (
-                              <CommandItem
-                                key={c.id}
-                                value={c.name}
-                                onSelect={() => {
-                                  setContactId(c.id);
-                                  setContactMode("select");
-                                  setNewContactFields({});
-                                  setContactOpen(false);
-                                }}
+                    </div>
+                    {contacts.length > 0 && (
+                      <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                        {contacts.flatMap((c) => {
+                          const emails = c.emails ?? [];
+                          const rows = emails.length > 0
+                            ? emails.map((e) => ({ key: `${c.id}::${e}`, email: e }))
+                            : [{ key: `${c.id}::__noemail__`, email: "" }];
+                          return rows.map(({ key, email }) => {
+                            const checked = selectedContactIds.includes(c.id)
+                              && (email === "" || selectedRecipientEmails.includes(email));
+                            return (
+                              <label
+                                key={key}
+                                className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 hover:bg-background/60"
                               >
-                                <Check className={cn("mr-2 h-4 w-4", contactId === c.id ? "opacity-100" : "opacity-0")} />
-                                {c.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                )}
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => {
+                                    const turnOn = !!v;
+                                    setSelectedContactIds((prev) => {
+                                      const set = new Set(prev);
+                                      if (turnOn) set.add(c.id);
+                                      else set.delete(c.id);
+                                      return Array.from(set);
+                                    });
+                                    if (email) {
+                                      setSelectedRecipientEmails((prev) =>
+                                        turnOn
+                                          ? Array.from(new Set([...prev, email]))
+                                          : prev.filter((e) => e !== email),
+                                      );
+                                    }
+                                  }}
+                                />
+                                <span className="text-foreground break-all">
+                                  {c.name}
+                                  {email ? <span className="text-muted-foreground"> — {email}</span> : null}
+                                </span>
+                              </label>
+                            );
+                          });
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
             {effectiveContactMode === "new" && (
               <CollapsibleFormCard
@@ -1440,7 +1453,7 @@ const CreateInvoicePage: React.FC = () => {
                   contactSchema.fields
                     .filter((f) => !isHiddenField(contactSchema, f.name))
                     .map((f, idx) => {
-                      const isEmail = /email/i.test(f.name);
+                      const isEmail = isEmailFieldName(f.name);
                       return (
                         <div key={f.name} className="space-y-1">
                           <Label className="text-xs text-muted-foreground">
@@ -1460,68 +1473,6 @@ const CreateInvoicePage: React.FC = () => {
                 )}
               </CollapsibleFormCard>
             )}
-            {contactMode === "select" && contactId && contactSchema && (
-              <CollapsibleFormCard
-                title="Contact details"
-                open={contactFormOpen}
-                onOpenChange={setContactFormOpen}
-                valid={contactExistingCheck.valid}
-              >
-                {contactSchema.fields
-                  .filter((f) => !isHiddenField(contactSchema, f.name))
-                  .map((f) => {
-                    const isEmail = /email/i.test(f.name);
-                    return (
-                      <div key={f.name} className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">
-                          {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
-                        </Label>
-                        <Input
-                          type={isEmail ? "email" : "text"}
-                          value={existingContactFields[f.name] || ""}
-                          onChange={(e) =>
-                            setExistingContactFields((prev) => ({ ...prev, [f.name]: e.target.value }))
-                          }
-                        />
-                      </div>
-                    );
-                  })}
-                <p className="text-xs text-muted-foreground">Changes will be saved to the contact on submit.</p>
-              </CollapsibleFormCard>
-            )}
-            {contactMode === "select" && contactId && (() => {
-              const selected = contacts.find((c) => c.id === contactId);
-              const emails = selected?.emails ?? [];
-              if (emails.length === 0) return null;
-              return (
-                <div className="space-y-2 animate-fade-in">
-                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    Send invoice to
-                  </Label>
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    {emails.map((email) => {
-                      const checked = selectedRecipientEmails.includes(email);
-                      return (
-                        <label
-                          key={email}
-                          className="flex items-center gap-2 text-sm cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) => {
-                              setSelectedRecipientEmails((prev) =>
-                                v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
-                              );
-                            }}
-                          />
-                          <span className="text-foreground break-all">{email}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
               </div>
             )}
           </div>
