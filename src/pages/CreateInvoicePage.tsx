@@ -1268,26 +1268,26 @@ const CreateInvoicePage: React.FC = () => {
                 )}
 
             {effectiveContactMode === "new" && (
-              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    New contact details
-                  </p>
-                  {clientMode !== "new" && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setContactMode("select");
-                        setNewContactFields({});
-                        
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
+              <CollapsibleFormCard
+                title="New contact details"
+                open={contactFormOpen}
+                onOpenChange={setContactFormOpen}
+                valid={contactNewCheck.valid}
+                loading={!contactSchema}
+                rightSlot={clientMode !== "new" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setContactMode("select");
+                      setNewContactFields({});
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              >
                 {!contactSchema ? (
                   <p className="text-xs text-muted-foreground">Loading contact fields…</p>
                 ) : (
@@ -1312,13 +1312,15 @@ const CreateInvoicePage: React.FC = () => {
                       );
                     })
                 )}
-              </div>
+              </CollapsibleFormCard>
             )}
             {contactMode === "select" && contactId && contactSchema && (
-              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                  Contact details
-                </p>
+              <CollapsibleFormCard
+                title="Contact details"
+                open={contactFormOpen}
+                onOpenChange={setContactFormOpen}
+                valid={contactExistingCheck.valid}
+              >
                 {contactSchema.fields
                   .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
                   .map((f) => {
@@ -1339,7 +1341,7 @@ const CreateInvoicePage: React.FC = () => {
                     );
                   })}
                 <p className="text-xs text-muted-foreground">Changes will be saved to the contact on submit.</p>
-              </div>
+              </CollapsibleFormCard>
             )}
             {contactMode === "select" && contactId && (() => {
               const selected = contacts.find((c) => c.id === contactId);
