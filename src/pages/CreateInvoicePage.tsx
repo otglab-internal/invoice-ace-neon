@@ -247,8 +247,19 @@ const CreateInvoicePage: React.FC = () => {
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
 
-  // Fields hidden from the user — system-managed (e.g. ClientGUID auto-generated on submit).
-  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
+  // Fields hidden from the user — system-managed (auto-generated business keys, FK links).
+  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID", "ClientGuid"]);
+  const isHiddenField = (schema: EntitySchema, fieldName: string): boolean => {
+    if (HIDDEN_SCHEMA_FIELDS.has(fieldName)) return true;
+    if (!schema) return false;
+    // Auto-hide schema-declared business key (e.g. ContactGuid) and FK link field
+    // — both are system-managed and should not be user-editable.
+    if (schema.business_key && schema.business_key === fieldName) return true;
+    if (schema.link_field && schema.link_field === fieldName) return true;
+    const f = schema.fields.find((x) => x.name === fieldName);
+    if (f?.is_primary_key || f?.is_foreign_key) return true;
+    return false;
+  };
 
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
   // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
