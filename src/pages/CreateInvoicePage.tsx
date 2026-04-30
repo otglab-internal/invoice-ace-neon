@@ -180,7 +180,6 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
-  const [existingContactNewEmail, setExistingContactNewEmail] = useState("");
   // Schema-driven new client / new contact forms
   type SchemaField = { name: string; required: boolean; type: string };
   type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
@@ -188,6 +187,11 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
   const [newContactFields, setNewContactFields] = useState<Record<string, string>>({});
+  // Editable fields for an EXISTING selected client/contact (prefilled from the row).
+  const [existingClientFields, setExistingClientFields] = useState<Record<string, string>>({});
+  const [existingClientOriginal, setExistingClientOriginal] = useState<Record<string, string>>({});
+  const [existingContactFields, setExistingContactFields] = useState<Record<string, string>>({});
+  const [existingContactOriginal, setExistingContactOriginal] = useState<Record<string, string>>({});
   
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
