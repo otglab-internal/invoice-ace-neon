@@ -80,6 +80,7 @@ interface XeroContact {
   name: string;
   emails?: string[];
   fields?: Record<string, string>;
+  parent_id?: string;
 }
 
 interface XeroClient {
@@ -508,8 +509,6 @@ const CreateInvoicePage: React.FC = () => {
       setContactMode(clientMode === "new" ? "new" : "select");
       return;
     }
-    const selectedClient = clients.find((c) => c.id === clientId);
-    const clientName = selectedClient?.name;
     let cancelled = false;
     const xeroHeaders = {
       "x-org-id": getOrgId(),
@@ -520,14 +519,14 @@ const CreateInvoicePage: React.FC = () => {
       try {
         const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
         const select = Array.from(new Set([
-          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons",
+          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons", "parent_id",
           ...schemaFields,
         ]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
             entity: "contacts",
-            payload: { select, limit: 1000 },
+            payload: { select, limit: 1000, where: { parent_id: clientId } },
           },
           headers: xeroHeaders,
         });
@@ -554,14 +553,13 @@ const CreateInvoicePage: React.FC = () => {
             name: row.ContactName || row.Name || fullName || "(no name)",
             emails: Array.from(emails),
             fields,
+            parent_id: row.parent_id ? String(row.parent_id) : undefined,
           };
         });
-        const clientScoped = clientName && clientName !== "(no name)"
-          ? mapped.filter((contact) => contact.name === clientName)
-          : [];
-        const nextContacts = clientScoped.length > 0 ? clientScoped : mapped;
-        nextContacts.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(nextContacts);
+        // Client-side safety filter in case the API ignores the where clause.
+        const scoped = mapped.filter((c) => !c.parent_id || c.parent_id === clientId);
+        scoped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(scoped);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
