@@ -745,30 +745,10 @@ const CreateInvoicePage: React.FC = () => {
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
           ? (effectiveContactMode === "new"
-              ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
-                  .filter((e) => emailRegex.test(e))
-              : (() => {
-                  const selected = contacts.find((c) => c.id === contactId);
-                  const emails = selected?.emails ?? [];
-                  if (emails.length === 0) {
-                    return [existingPrimaryEmail.trim(), ...existingContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
-                      .filter((e) => emailRegex.test(e));
-                  }
-                  return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
-                })())
+              ? [newContactEmail.trim()].filter((e) => emailRegex.test(e))
+              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e)))
           : [],
-        contact_persons: effectiveContactMode === "new"
-          ? newContactPersons
-              .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
-              .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
-          : (() => {
-              const selected = contacts.find((c) => c.id === contactId);
-              const emails = selected?.emails ?? [];
-              if (emails.length > 0) return [];
-              return existingContactPersons
-                .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
-                .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }));
-            })(),
+        contact_persons: [],
       });
 
       const { data: inserted, error } = await neonInsert("invoices", invoicePayload);
