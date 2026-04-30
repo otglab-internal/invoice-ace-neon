@@ -94,6 +94,45 @@ interface XeroAccount {
   type: string;
 }
 
+const CollapsibleFormCard: React.FC<{
+  title: string;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  valid: boolean;
+  loading?: boolean;
+  rightSlot?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, open, onOpenChange, valid, loading, rightSlot, children }) => {
+  const statusColor = loading
+    ? "border-border bg-muted/20"
+    : valid
+      ? "border-emerald-500/40 bg-emerald-500/5"
+      : "border-amber-500/40 bg-amber-500/5";
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} className={cn("animate-fade-in rounded-lg border p-3", statusColor)}>
+      <div className="flex items-center justify-between gap-2">
+        <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left">
+          {loading ? (
+            <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+          ) : valid ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+          )}
+          <span className="text-xs font-semibold font-display text-foreground uppercase tracking-wide flex-1">
+            {title}
+          </span>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+        </CollapsibleTrigger>
+        {rightSlot}
+      </div>
+      <CollapsibleContent className="space-y-2 pt-3">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
+
 
 
 function computeProgrammaticValue(field: TemplateField, fieldValues: Record<string, string>): string {
