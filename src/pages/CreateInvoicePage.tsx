@@ -244,10 +244,14 @@ const CreateInvoicePage: React.FC = () => {
   const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
 
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
+  // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
+  const EMAIL_FIELD_ALIASES = ["EmailAddress", "Email", "ContactNumber"];
   const pickEmailField = (schema: EntitySchema): string | null => {
     if (!schema) return null;
-    const f = schema.fields.find((x) => /email/i.test(x.name));
-    return f?.name ?? null;
+    const byName = schema.fields.find((x) => /email/i.test(x.name));
+    if (byName) return byName.name;
+    const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
+    return byAlias?.name ?? null;
   };
   const formatLabel = (name: string): string =>
     name
@@ -532,15 +536,22 @@ const CreateInvoicePage: React.FC = () => {
         });
         if (cancelled) return;
         const rows = Array.isArray(data?.data) ? data.data : [];
+        const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
-          if (row.EmailAddress && typeof row.EmailAddress === "string") {
+          if (row.EmailAddress && typeof row.EmailAddress === "string" && emailRegex.test(row.EmailAddress)) {
             emails.add(row.EmailAddress);
           }
           if (Array.isArray(row.ContactPersons)) {
             for (const p of row.ContactPersons) {
               if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
             }
+          }
+          // Also seed from the schema's designated email field (covers orgs that store the
+          // billing email under non-obvious names like "ContactNumber").
+          if (emailField) {
+            const v = row?.[emailField];
+            if (typeof v === "string" && emailRegex.test(v)) emails.add(v);
           }
           const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
           const fields: Record<string, string> = {};
@@ -946,7 +957,8 @@ const CreateInvoicePage: React.FC = () => {
               : (() => {
                   const checkbox = selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
                   if (checkbox.length > 0) return checkbox;
-                  const edited = (existingContactFields.EmailAddress || "").trim();
+                  const emailFieldName = pickEmailField(contactSchema);
+                  const edited = (emailFieldName ? existingContactFields[emailFieldName] || "" : "").trim();
                   return edited && emailRegex.test(edited) ? [edited] : [];
                 })())
           : [],
