@@ -221,6 +221,8 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
+  // Multi-select: ids of existing contacts the user has checked (select mode only).
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   // Schema-driven new client / new contact forms
   type SchemaField = { name: string; required: boolean; type: string; is_primary_key?: boolean; is_foreign_key?: boolean };
   type EntitySchema = {
