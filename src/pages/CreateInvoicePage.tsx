@@ -760,7 +760,10 @@ const CreateInvoicePage: React.FC = () => {
       if (isHiddenField(schema, f.name)) continue;
       const v = (values[f.name] || "").trim();
       if (f.required && !v) missing.push(formatLabel(f.name));
-      if (v && /email/i.test(f.name) && !emailRegex.test(v)) {
+      // Only validate email format on true email fields — skip flag/boolean-ish fields like "HasBillingEmailFlag"
+      const isEmailField = /email/i.test(f.name)
+        && !/flag|has[_-]?|is[_-]?|enabled|opt[_-]?in|subscribe/i.test(f.name);
+      if (v && isEmailField && !emailRegex.test(v)) {
         missing.push(`Valid ${formatLabel(f.name)}`);
       }
     }
