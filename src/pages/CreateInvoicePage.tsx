@@ -705,20 +705,27 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [clientId, clientMode, clients]);
 
-  // Prefill the editable schema-form for the selected existing contact, and seed recipient emails.
+  // When the contact list reloads (e.g. after picking a different client), seed the multi-select:
+  // every contact whose HasBillingEmailFlag is truthy is pre-checked, with all of its emails added
+  // to the recipient list. The user can toggle individual rows from there.
   useEffect(() => {
-    if (contactMode === "select" && contactId) {
-      const c = contacts.find((x) => x.id === contactId);
-      const f = c?.fields ? { ...c.fields } : {};
-      setExistingContactFields(f);
-      setExistingContactOriginal(f);
-      setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
-    } else {
-      setExistingContactFields({});
-      setExistingContactOriginal({});
-      setSelectedRecipientEmails([]);
+    if (clientMode !== "select" || contactMode !== "select") return;
+    const preselectedIds: string[] = [];
+    const preselectedEmails: string[] = [];
+    for (const c of contacts) {
+      const flag = c.fields?.HasBillingEmailFlag;
+      if (isTruthyFlag(flag)) {
+        preselectedIds.push(c.id);
+        for (const e of c.emails ?? []) preselectedEmails.push(e);
+      }
     }
-  }, [contactId, contactMode, contacts]);
+    setSelectedContactIds(preselectedIds);
+    setSelectedRecipientEmails(Array.from(new Set(preselectedEmails)));
+    // Keep legacy single-id pointer in sync (used by submit payload as the "primary" contact).
+    setContactId(preselectedIds[0] ?? "");
+    setExistingContactFields({});
+    setExistingContactOriginal({});
+  }, [contacts, clientMode, contactMode]);
 
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
