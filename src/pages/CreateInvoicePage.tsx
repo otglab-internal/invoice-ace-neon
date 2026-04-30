@@ -1321,28 +1321,24 @@ const CreateInvoicePage: React.FC = () => {
                   title="Client details"
                   open={clientFormOpen}
                   onOpenChange={setClientFormOpen}
-                  valid={clientExistingCheck.valid}
+                  valid={true}
                 >
                   {clientSchema.fields
                     .filter((f) => !isHiddenField(clientSchema, f.name))
-                    .map((f) => {
-                      const isEmail = /email/i.test(f.name);
-                      return (
-                        <div key={f.name} className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">
-                            {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
-                          </Label>
-                          <Input
-                            type={isEmail ? "email" : "text"}
-                            value={existingClientFields[f.name] || ""}
-                            onChange={(e) =>
-                              setExistingClientFields((prev) => ({ ...prev, [f.name]: e.target.value }))
-                            }
-                          />
-                        </div>
-                      );
-                    })}
-                  <p className="text-xs text-muted-foreground">Changes will be saved to the client on submit.</p>
+                    .map((f) => (
+                      <div key={f.name} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{formatLabel(f.name)}</Label>
+                        <Input
+                          value={existingClientFields[f.name] || ""}
+                          readOnly
+                          disabled
+                          className="bg-muted cursor-not-allowed"
+                        />
+                      </div>
+                    ))}
+                  <p className="text-xs text-muted-foreground">
+                    Selected from saved records — not editable here.
+                  </p>
                 </CollapsibleFormCard>
               )}
             </div>
