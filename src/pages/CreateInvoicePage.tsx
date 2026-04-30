@@ -527,14 +527,32 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId, clients, clientMode]);
+  }, [clientId, clients, clientMode, contactSchema]);
 
+  // Prefill the editable schema-form for the selected existing client.
   useEffect(() => {
-    setExistingContactNewEmail("");
+    if (clientMode === "select" && clientId) {
+      const c = clients.find((x) => x.id === clientId);
+      const f = c?.fields ? { ...c.fields } : {};
+      setExistingClientFields(f);
+      setExistingClientOriginal(f);
+    } else {
+      setExistingClientFields({});
+      setExistingClientOriginal({});
+    }
+  }, [clientId, clientMode, clients]);
+
+  // Prefill the editable schema-form for the selected existing contact, and seed recipient emails.
+  useEffect(() => {
     if (contactMode === "select" && contactId) {
       const c = contacts.find((x) => x.id === contactId);
+      const f = c?.fields ? { ...c.fields } : {};
+      setExistingContactFields(f);
+      setExistingContactOriginal(f);
       setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
     } else {
+      setExistingContactFields({});
+      setExistingContactOriginal({});
       setSelectedRecipientEmails([]);
     }
   }, [contactId, contactMode, contacts]);
