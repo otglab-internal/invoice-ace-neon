@@ -684,13 +684,16 @@ const CreateInvoicePage: React.FC = () => {
 
       if (clientMode === "new") {
         try {
-          const clientGuid = crypto.randomUUID();
-          const clientData: Record<string, string> = {
-            ContactName: newClientName.trim(),
-            EmailAddress: newClientEmail.trim(),
-            ClientGUID: clientGuid,
-          };
-          if (newClientAccountNumber.trim()) clientData.AccountNumber = newClientAccountNumber.trim();
+          // Build payload from whatever fields the schema declares — only send non-empty values,
+          // plus an auto-generated ClientGUID for the system-managed identity field if present.
+          const clientData: Record<string, string> = {};
+          for (const f of clientSchema?.fields ?? []) {
+            const v = (newClientFields[f.name] || "").trim();
+            if (v) clientData[f.name] = v;
+          }
+          if (clientSchema?.fields.some((f) => f.name === "ClientGUID")) {
+            clientData.ClientGUID = crypto.randomUUID();
+          }
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
             body: { action: "create", entity: "clients", payload: { data: clientData } },
             headers: xeroHeaders,
@@ -699,7 +702,7 @@ const CreateInvoicePage: React.FC = () => {
             throw new Error(createRes?.error || createErr?.message || "Failed to create client");
           }
           effectiveClientId = String(createRes.data.id);
-          effectiveClientName = newClientName.trim();
+          effectiveClientName = newClientName;
           // Reflect in local list so subsequent UI is consistent.
           setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
         } catch (clientErr: any) {
@@ -719,11 +722,13 @@ const CreateInvoicePage: React.FC = () => {
           return;
         }
         try {
+          const contactData: Record<string, string> = {};
+          for (const f of contactSchema?.fields ?? []) {
+            const v = (newContactFields[f.name] || "").trim();
+            if (v) contactData[f.name] = v;
+          }
           const contactPayload = {
-            data: {
-              Name: newContactFullName,
-              ContactNumber: newContactEmail.trim(),
-            },
+            data: contactData,
             parent_id: effectiveClientId,
           };
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
