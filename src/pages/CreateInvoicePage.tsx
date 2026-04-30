@@ -620,23 +620,31 @@ const CreateInvoicePage: React.FC = () => {
 
   const clientNewCheck = validateSchemaValues(clientSchema, newClientFields);
   const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
+  const clientExistingCheck = validateSchemaValues(clientSchema, existingClientFields);
+  const contactExistingCheck = validateSchemaValues(contactSchema, existingContactFields);
 
-  const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
-  const contactValid = effectiveContactMode === "select" ? !!contactId : contactNewCheck.valid;
+  const clientValid = clientMode === "select"
+    ? (!!clientId && (clientSchema ? clientExistingCheck.valid : true))
+    : clientNewCheck.valid;
+  const contactValid = effectiveContactMode === "select"
+    ? (!!contactId && (contactSchema ? contactExistingCheck.valid : true))
+    : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
 
   const missingFields: string[] = [];
   if (!clientValid) {
     if (clientMode === "select") {
-      missingFields.push("Select a client");
+      if (!clientId) missingFields.push("Select a client");
+      else clientExistingCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
     } else {
       clientNewCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
     }
   }
   if (!contactValid) {
     if (effectiveContactMode === "select") {
-      missingFields.push("Select a contact");
+      if (!contactId) missingFields.push("Select a contact");
+      else contactExistingCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
     } else {
       contactNewCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
     }
