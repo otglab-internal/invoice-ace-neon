@@ -1258,53 +1258,63 @@ const CreateInvoicePage: React.FC = () => {
                 )}
               </div>
             )}
+            {contactMode === "select" && contactId && contactSchema && (
+              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
+                <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                  Contact details
+                </p>
+                {contactSchema.fields
+                  .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                  .map((f) => {
+                    const isEmail = /email/i.test(f.name);
+                    return (
+                      <div key={f.name} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                        </Label>
+                        <Input
+                          type={isEmail ? "email" : "text"}
+                          value={existingContactFields[f.name] || ""}
+                          onChange={(e) =>
+                            setExistingContactFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                <p className="text-xs text-muted-foreground">Changes will be saved to the contact on submit.</p>
+              </div>
+            )}
             {contactMode === "select" && contactId && (() => {
               const selected = contacts.find((c) => c.id === contactId);
               const emails = selected?.emails ?? [];
+              if (emails.length === 0) return null;
               return (
                 <div className="space-y-2 animate-fade-in">
                   <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
                     Send invoice to
                   </Label>
-                  {emails.length === 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground italic">
-                        No email addresses found on this contact. Add one below — it will be saved to the contact on submit.
-                      </p>
-                      <Input
-                        type="email"
-                        placeholder="name@example.com"
-                        value={existingContactNewEmail}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setExistingContactNewEmail(v);
-                          setSelectedRecipientEmails(v.trim() ? [v.trim()] : []);
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                      {emails.map((email) => {
-                        const checked = selectedRecipientEmails.includes(email);
-                        return (
-                          <label
-                            key={email}
-                            className="flex items-center gap-2 text-sm cursor-pointer"
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(v) => {
-                                setSelectedRecipientEmails((prev) =>
-                                  v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
-                                );
-                              }}
-                            />
-                            <span className="text-foreground break-all">{email}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    {emails.map((email) => {
+                      const checked = selectedRecipientEmails.includes(email);
+                      return (
+                        <label
+                          key={email}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => {
+                              setSelectedRecipientEmails((prev) =>
+                                v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
+                              );
+                            }}
+                          />
+                          <span className="text-foreground break-all">{email}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })()}
