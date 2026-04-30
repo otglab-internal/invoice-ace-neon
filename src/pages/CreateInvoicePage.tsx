@@ -599,7 +599,76 @@ const CreateInvoicePage: React.FC = () => {
         return base;
       });
 
-      const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
+      // Step 1: If creating a new client and/or contact, push them to the auth app first.
+      const xeroHeaders = {
+        "x-org-id": getOrgId(),
+        "x-environment": localStorage.getItem("auth_environment") || "production",
+      };
+
+      let effectiveClientId = clientId;
+      let effectiveClientName = clients.find((c) => c.id === clientId)?.name || "";
+
+      if (clientMode === "new") {
+        try {
+          const clientGuid = crypto.randomUUID();
+          const clientData: Record<string, string> = {
+            ContactName: newClientName.trim(),
+            EmailAddress: newClientEmail.trim(),
+            ClientGUID: clientGuid,
+          };
+          if (newClientAccountNumber.trim()) clientData.AccountNumber = newClientAccountNumber.trim();
+          const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
+            body: { action: "create", entity: "clients", payload: { data: clientData } },
+            headers: xeroHeaders,
+          });
+          if (createErr || !createRes?.data?.id) {
+            throw new Error(createRes?.error || createErr?.message || "Failed to create client");
+          }
+          effectiveClientId = String(createRes.data.id);
+          effectiveClientName = newClientName.trim();
+          // Reflect in local list so subsequent UI is consistent.
+          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
+        } catch (clientErr: any) {
+          toast.error(clientErr?.message || "Failed to create client in auth app");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      let effectiveContactId = contactId;
+      let effectiveContactName = contactName;
+
+      if (contactMode === "new") {
+        if (!effectiveClientId) {
+          toast.error("Cannot create contact: client is missing");
+          setSubmitting(false);
+          return;
+        }
+        try {
+          const contactPayload = {
+            data: {
+              Name: newContactFullName,
+              ContactNumber: newContactEmail.trim(),
+            },
+            parent_id: effectiveClientId,
+          };
+          const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
+            body: { action: "create", entity: "contacts", payload: contactPayload },
+            headers: xeroHeaders,
+          });
+          if (createErr || !createRes?.data?.id) {
+            throw new Error(createRes?.error || createErr?.message || "Failed to create contact");
+          }
+          effectiveContactId = String(createRes.data.id);
+          effectiveContactName = newContactFullName;
+        } catch (contactErr: any) {
+          toast.error(contactErr?.message || "Failed to create contact in auth app");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      const finalContactId = effectiveContactId || "__new__";
       const submitterSystemId = resolvedSystemId || systemId || "";
 
       // Guarantee submitted_by_email is never empty — older sessions may not
