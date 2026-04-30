@@ -221,6 +221,8 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
+  // Multi-select: ids of existing contacts the user has checked (select mode only).
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
   // Schema-driven new client / new contact forms
   type SchemaField = { name: string; required: boolean; type: string; is_primary_key?: boolean; is_foreign_key?: boolean };
   type EntitySchema = {
@@ -264,12 +266,24 @@ const CreateInvoicePage: React.FC = () => {
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
   // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
   const EMAIL_FIELD_ALIASES = ["EmailAddress", "Email", "ContactNumber"];
+  // True only for *real* email fields. Excludes flag/boolean-ish names that happen to contain "email"
+  // (e.g. "HasBillingEmailFlag"). Used by both validation and UI input-type to keep them in sync.
+  const isEmailFieldName = (name: string): boolean =>
+    /email/i.test(name) && !/flag|has[_-]?|is[_-]?|enabled|opt[_-]?in|subscribe/i.test(name);
   const pickEmailField = (schema: EntitySchema): string | null => {
     if (!schema) return null;
-    const byName = schema.fields.find((x) => /email/i.test(x.name));
+    const byName = schema.fields.find((x) => isEmailFieldName(x.name));
     if (byName) return byName.name;
     const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
     return byAlias?.name ?? null;
+  };
+  const isTruthyFlag = (v: unknown): boolean => {
+    if (v === true || v === 1) return true;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      return s === "true" || s === "1" || s === "yes" || s === "y";
+    }
+    return false;
   };
   const formatLabel = (name: string): string =>
     name
@@ -691,20 +705,33 @@ const CreateInvoicePage: React.FC = () => {
     }
   }, [clientId, clientMode, clients]);
 
-  // Prefill the editable schema-form for the selected existing contact, and seed recipient emails.
+  // When the contact list reloads (e.g. after picking a different client), seed the multi-select:
+  // every contact whose HasBillingEmailFlag is truthy is pre-checked, with all of its emails added
+  // to the recipient list. The user can toggle individual rows from there.
   useEffect(() => {
-    if (contactMode === "select" && contactId) {
-      const c = contacts.find((x) => x.id === contactId);
-      const f = c?.fields ? { ...c.fields } : {};
-      setExistingContactFields(f);
-      setExistingContactOriginal(f);
-      setSelectedRecipientEmails(c?.emails ? [...c.emails] : []);
-    } else {
-      setExistingContactFields({});
-      setExistingContactOriginal({});
-      setSelectedRecipientEmails([]);
+    if (clientMode !== "select" || contactMode !== "select") return;
+    const preselectedIds: string[] = [];
+    const preselectedEmails: string[] = [];
+    for (const c of contacts) {
+      const flag = c.fields?.HasBillingEmailFlag;
+      if (isTruthyFlag(flag)) {
+        preselectedIds.push(c.id);
+        for (const e of c.emails ?? []) preselectedEmails.push(e);
+      }
     }
-  }, [contactId, contactMode, contacts]);
+    setSelectedContactIds(preselectedIds);
+    setSelectedRecipientEmails(Array.from(new Set(preselectedEmails)));
+    // Keep legacy single-id pointer in sync (used by submit payload as the "primary" contact).
+    setContactId(preselectedIds[0] ?? "");
+    setExistingContactFields({});
+    setExistingContactOriginal({});
+  }, [contacts, clientMode, contactMode]);
+
+  // Keep the single "primary" contactId pointer in sync with the multi-select.
+  useEffect(() => {
+    if (clientMode !== "select" || contactMode !== "select") return;
+    setContactId(selectedContactIds[0] ?? "");
+  }, [selectedContactIds, clientMode, contactMode]);
 
   const updateLineItem = useCallback((id: string, updates: Partial<LineItem>) => {
     setLineItems((prev) =>
@@ -749,7 +776,8 @@ const CreateInvoicePage: React.FC = () => {
     : newContactFullName;
 
   // Validate dynamic schema: every required (visible) field must have a value, and any email-named field
-  // that has been filled in must be a valid email address.
+  // that has been filled in must be a valid email address. Used ONLY for the "create new" flows —
+  // existing/selected records are never validated or edited from this page.
   const validateSchemaValues = (
     schema: EntitySchema,
     values: Record<string, string>,
@@ -760,10 +788,7 @@ const CreateInvoicePage: React.FC = () => {
       if (isHiddenField(schema, f.name)) continue;
       const v = (values[f.name] || "").trim();
       if (f.required && !v) missing.push(formatLabel(f.name));
-      // Only validate email format on true email fields — skip flag/boolean-ish fields like "HasBillingEmailFlag"
-      const isEmailField = /email/i.test(f.name)
-        && !/flag|has[_-]?|is[_-]?|enabled|opt[_-]?in|subscribe/i.test(f.name);
-      if (v && isEmailField && !emailRegex.test(v)) {
+      if (v && isEmailFieldName(f.name) && !emailRegex.test(v)) {
         missing.push(`Valid ${formatLabel(f.name)}`);
       }
     }
@@ -772,14 +797,10 @@ const CreateInvoicePage: React.FC = () => {
 
   const clientNewCheck = validateSchemaValues(clientSchema, newClientFields);
   const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
-  const clientExistingCheck = validateSchemaValues(clientSchema, existingClientFields);
-  const contactExistingCheck = validateSchemaValues(contactSchema, existingContactFields);
 
-  const clientValid = clientMode === "select"
-    ? (!!clientId && (clientSchema ? clientExistingCheck.valid : true))
-    : clientNewCheck.valid;
+  const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
   const contactValid = effectiveContactMode === "select"
-    ? (!!contactId && (contactSchema ? contactExistingCheck.valid : true))
+    ? selectedContactIds.length > 0
     : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
@@ -787,36 +808,31 @@ const CreateInvoicePage: React.FC = () => {
   const missingFields: string[] = [];
   if (!clientValid) {
     if (clientMode === "select") {
-      if (!clientId) missingFields.push("Select a client");
-      else clientExistingCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
+      missingFields.push("Select a client");
     } else {
       clientNewCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
     }
   }
   if (!contactValid) {
     if (effectiveContactMode === "select") {
-      if (!contactId) missingFields.push("Select a contact");
-      else contactExistingCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
+      missingFields.push(clientId ? "Select at least one contact" : "Select a contact");
     } else {
       contactNewCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
     }
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
 
-  // Auto-collapse client form when valid; auto-open when invalid (or freshly shown).
+  // Auto-collapse the "new client" form when it becomes valid. Existing/selected clients have
+  // no editable form anymore so there's nothing to auto-collapse for them.
   useEffect(() => {
-    const showing = clientMode === "new" || (clientMode === "select" && !!clientId && !!clientSchema);
-    if (!showing) return;
-    const valid = clientMode === "new" ? clientNewCheck.valid : clientExistingCheck.valid;
-    setClientFormOpen(!valid);
-  }, [clientMode, clientId, clientSchema, clientNewCheck.valid, clientExistingCheck.valid]);
+    if (clientMode !== "new") return;
+    setClientFormOpen(!clientNewCheck.valid);
+  }, [clientMode, clientNewCheck.valid]);
 
   useEffect(() => {
-    const showing = effectiveContactMode === "new" || (contactMode === "select" && !!contactId && !!contactSchema);
-    if (!showing) return;
-    const valid = effectiveContactMode === "new" ? contactNewCheck.valid : contactExistingCheck.valid;
-    setContactFormOpen(!valid);
-  }, [effectiveContactMode, contactMode, contactId, contactSchema, contactNewCheck.valid, contactExistingCheck.valid]);
+    if (effectiveContactMode !== "new") return;
+    setContactFormOpen(!contactNewCheck.valid);
+  }, [effectiveContactMode, contactNewCheck.valid]);
 
 
   const total = lineItems.reduce((sum, item) => {
@@ -968,91 +984,8 @@ const CreateInvoicePage: React.FC = () => {
         return;
       }
 
-      // Diff edited fields against originals for selected (existing) client/contact and upsert via update.
-      const diffChanged = (current: Record<string, string>, original: Record<string, string>): Record<string, string> => {
-        const changes: Record<string, string> = {};
-        for (const k of Object.keys(current)) {
-          const cur = (current[k] ?? "").trim();
-          const orig = (original[k] ?? "").trim();
-          if (cur !== orig) changes[k] = cur;
-        }
-        return changes;
-      };
-
-      // Update existing client if changed.
-      if (clientMode === "select" && effectiveClientId) {
-        const changes = diffChanged(existingClientFields, existingClientOriginal);
-        if (Object.keys(changes).length > 0) {
-          try {
-            const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
-              body: {
-                action: "update",
-                entity: "clients",
-                payload: { id: effectiveClientId, data: changes },
-              },
-              headers: xeroHeaders,
-            });
-            if (updErr || updRes?.error) {
-              throw new Error(updRes?.error || updErr?.message || "Failed to update client");
-            }
-            const merged = { ...existingClientOriginal, ...changes };
-            setClients((prev) => prev.map((c) =>
-              c.id === effectiveClientId ? { ...c, fields: merged, name: merged.ContactName || merged.Name || c.name } : c,
-            ));
-            setExistingClientOriginal(merged);
-            if (clientSchema?.display_field) {
-              effectiveClientName = merged[clientSchema.display_field] || effectiveClientName;
-            }
-          } catch (clientUpdErr: any) {
-            toast.error(clientUpdErr?.message || "Failed to update client");
-            setSubmitting(false);
-            return;
-          }
-        }
-      }
-
-      // Update existing contact if changed, then refresh recipient emails.
-      if (effectiveContactMode === "select" && effectiveContactId) {
-        const changes = diffChanged(existingContactFields, existingContactOriginal);
-        if (Object.keys(changes).length > 0) {
-          try {
-            const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
-              body: {
-                action: "update",
-                entity: "contacts",
-                payload: { id: effectiveContactId, data: changes },
-              },
-              headers: xeroHeaders,
-            });
-            if (updErr || updRes?.error) {
-              throw new Error(updRes?.error || updErr?.message || "Failed to update contact");
-            }
-            const merged = { ...existingContactOriginal, ...changes };
-            const newEmail = merged.EmailAddress?.trim();
-            setContacts((prev) => prev.map((c) => {
-              if (c.id !== effectiveContactId) return c;
-              const nextEmails = newEmail
-                ? Array.from(new Set([newEmail, ...(c.emails ?? []).filter((e) => e !== existingContactOriginal.EmailAddress)]))
-                : (c.emails ?? []);
-              const fullName = [merged.FirstName, merged.LastName].filter(Boolean).join(" ").trim();
-              return {
-                ...c,
-                fields: merged,
-                emails: nextEmails,
-                name: merged.ContactName || merged.Name || fullName || c.name,
-              };
-            }));
-            setExistingContactOriginal(merged);
-            if (contactSchema?.display_field) {
-              effectiveContactName = merged[contactSchema.display_field] || effectiveContactName;
-            }
-          } catch (contactUpdErr: any) {
-            toast.error(contactUpdErr?.message || "Failed to update contact");
-            setSubmitting(false);
-            return;
-          }
-        }
-      }
+      // Existing/selected client and contact records are intentionally NOT mutated from this page.
+      // Edits are only persisted as part of the "create new" flow above.
 
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
@@ -1075,13 +1008,7 @@ const CreateInvoicePage: React.FC = () => {
         recipient_emails: sendToClient
           ? (effectiveContactMode === "new"
               ? [newContactEmail.trim()].filter((e) => emailRegex.test(e))
-              : (() => {
-                  const checkbox = selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
-                  if (checkbox.length > 0) return checkbox;
-                  const emailFieldName = pickEmailField(contactSchema);
-                  const edited = (emailFieldName ? existingContactFields[emailFieldName] || "" : "").trim();
-                  return edited && emailRegex.test(edited) ? [edited] : [];
-                })())
+              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e)))
           : [],
         contact_persons: [],
       });
@@ -1159,6 +1086,8 @@ const CreateInvoicePage: React.FC = () => {
       setNewClientFields({});
       setContactMode("select");
       setContactId("");
+      setSelectedContactIds([]);
+      setSelectedRecipientEmails([]);
       setNewContactFields({});
       setReference("");
       setSendToClient(false);
@@ -1289,7 +1218,7 @@ const CreateInvoicePage: React.FC = () => {
                     clientSchema.fields
                       .filter((f) => !isHiddenField(clientSchema, f.name))
                       .map((f, idx) => {
-                        const isEmail = /email/i.test(f.name);
+                        const isEmail = isEmailFieldName(f.name);
                         return (
                           <div key={f.name} className="space-y-2">
                             <Label className="text-xs text-muted-foreground">
@@ -1318,28 +1247,24 @@ const CreateInvoicePage: React.FC = () => {
                   title="Client details"
                   open={clientFormOpen}
                   onOpenChange={setClientFormOpen}
-                  valid={clientExistingCheck.valid}
+                  valid={true}
                 >
                   {clientSchema.fields
                     .filter((f) => !isHiddenField(clientSchema, f.name))
-                    .map((f) => {
-                      const isEmail = /email/i.test(f.name);
-                      return (
-                        <div key={f.name} className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">
-                            {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
-                          </Label>
-                          <Input
-                            type={isEmail ? "email" : "text"}
-                            value={existingClientFields[f.name] || ""}
-                            onChange={(e) =>
-                              setExistingClientFields((prev) => ({ ...prev, [f.name]: e.target.value }))
-                            }
-                          />
-                        </div>
-                      );
-                    })}
-                  <p className="text-xs text-muted-foreground">Changes will be saved to the client on submit.</p>
+                    .map((f) => (
+                      <div key={f.name} className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">{formatLabel(f.name)}</Label>
+                        <Input
+                          value={existingClientFields[f.name] || ""}
+                          readOnly
+                          disabled
+                          className="bg-muted cursor-not-allowed"
+                        />
+                      </div>
+                    ))}
+                  <p className="text-xs text-muted-foreground">
+                    Selected from saved records — not editable here.
+                  </p>
                 </CollapsibleFormCard>
               )}
             </div>
@@ -1353,66 +1278,79 @@ const CreateInvoicePage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">
                     A contact person will be created for this new client.
                   </p>
-                ) : (
-                  <Popover open={contactOpen} onOpenChange={setContactOpen}>
-                    <PopoverTrigger asChild>
+                ) : contactMode === "select" ? (
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {loadingContacts
+                          ? "Loading contacts..."
+                          : contacts.length === 0
+                          ? "No contacts found for this client."
+                          : "Tick the contacts to invoice. Billing-flagged contacts are pre-checked."}
+                      </span>
                       <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={contactOpen}
-                        className="w-full justify-between font-normal"
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-primary"
+                        onClick={() => {
+                          setContactMode("new");
+                          setNewContactFields({});
+                          setSelectedContactIds([]);
+                          setContactId("");
+                          setSelectedRecipientEmails([]);
+                        }}
                       >
-                        {contactMode === "new"
-                          ? (newContactFullName || "New contact (fill details below)")
-                          : contactId
-                          ? contacts.find((c) => c.id === contactId)?.name
-                          : loadingContacts ? "Loading contacts..." : "Search contacts..."}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Create New Contact
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
-                        <CommandList>
-                          <CommandEmpty>No contacts found.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="__create_new__"
-                              onSelect={() => {
-                                setContactMode("new");
-                                setNewContactFields(
-                                  contactSchema?.display_field
-                                    ? { [contactSchema.display_field]: contactSearch }
-                                    : {}
-                                );
-                                setContactId("");
-                                setContactOpen(false);
-                              }}
-                            >
-                              <Plus className="mr-2 h-4 w-4 text-primary" />
-                              <span className="text-primary font-medium">Create New Contact</span>
-                            </CommandItem>
-                            {contacts.map((c) => (
-                              <CommandItem
-                                key={c.id}
-                                value={c.name}
-                                onSelect={() => {
-                                  setContactId(c.id);
-                                  setContactMode("select");
-                                  setNewContactFields({});
-                                  setContactOpen(false);
-                                }}
+                    </div>
+                    {contacts.length > 0 && (
+                      <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                        {contacts.flatMap((c) => {
+                          const emails = c.emails ?? [];
+                          const rows = emails.length > 0
+                            ? emails.map((e) => ({ key: `${c.id}::${e}`, email: e }))
+                            : [{ key: `${c.id}::__noemail__`, email: "" }];
+                          return rows.map(({ key, email }) => {
+                            const checked = selectedContactIds.includes(c.id)
+                              && (email === "" || selectedRecipientEmails.includes(email));
+                            return (
+                              <label
+                                key={key}
+                                className="flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 hover:bg-background/60"
                               >
-                                <Check className={cn("mr-2 h-4 w-4", contactId === c.id ? "opacity-100" : "opacity-0")} />
-                                {c.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                )}
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(v) => {
+                                    const turnOn = !!v;
+                                    setSelectedContactIds((prev) => {
+                                      const set = new Set(prev);
+                                      if (turnOn) set.add(c.id);
+                                      else set.delete(c.id);
+                                      return Array.from(set);
+                                    });
+                                    if (email) {
+                                      setSelectedRecipientEmails((prev) =>
+                                        turnOn
+                                          ? Array.from(new Set([...prev, email]))
+                                          : prev.filter((e) => e !== email),
+                                      );
+                                    }
+                                  }}
+                                />
+                                <span className="text-foreground break-all">
+                                  {c.name}
+                                  {email ? <span className="text-muted-foreground"> — {email}</span> : null}
+                                </span>
+                              </label>
+                            );
+                          });
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
             {effectiveContactMode === "new" && (
               <CollapsibleFormCard
@@ -1441,7 +1379,7 @@ const CreateInvoicePage: React.FC = () => {
                   contactSchema.fields
                     .filter((f) => !isHiddenField(contactSchema, f.name))
                     .map((f, idx) => {
-                      const isEmail = /email/i.test(f.name);
+                      const isEmail = isEmailFieldName(f.name);
                       return (
                         <div key={f.name} className="space-y-1">
                           <Label className="text-xs text-muted-foreground">
@@ -1461,68 +1399,6 @@ const CreateInvoicePage: React.FC = () => {
                 )}
               </CollapsibleFormCard>
             )}
-            {contactMode === "select" && contactId && contactSchema && (
-              <CollapsibleFormCard
-                title="Contact details"
-                open={contactFormOpen}
-                onOpenChange={setContactFormOpen}
-                valid={contactExistingCheck.valid}
-              >
-                {contactSchema.fields
-                  .filter((f) => !isHiddenField(contactSchema, f.name))
-                  .map((f) => {
-                    const isEmail = /email/i.test(f.name);
-                    return (
-                      <div key={f.name} className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">
-                          {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
-                        </Label>
-                        <Input
-                          type={isEmail ? "email" : "text"}
-                          value={existingContactFields[f.name] || ""}
-                          onChange={(e) =>
-                            setExistingContactFields((prev) => ({ ...prev, [f.name]: e.target.value }))
-                          }
-                        />
-                      </div>
-                    );
-                  })}
-                <p className="text-xs text-muted-foreground">Changes will be saved to the contact on submit.</p>
-              </CollapsibleFormCard>
-            )}
-            {contactMode === "select" && contactId && (() => {
-              const selected = contacts.find((c) => c.id === contactId);
-              const emails = selected?.emails ?? [];
-              if (emails.length === 0) return null;
-              return (
-                <div className="space-y-2 animate-fade-in">
-                  <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    Send invoice to
-                  </Label>
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                    {emails.map((email) => {
-                      const checked = selectedRecipientEmails.includes(email);
-                      return (
-                        <label
-                          key={email}
-                          className="flex items-center gap-2 text-sm cursor-pointer"
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) => {
-                              setSelectedRecipientEmails((prev) =>
-                                v ? [...new Set([...prev, email])] : prev.filter((e) => e !== email),
-                              );
-                            }}
-                          />
-                          <span className="text-foreground break-all">{email}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
               </div>
             )}
           </div>
