@@ -771,36 +771,86 @@ const CreateInvoicePage: React.FC = () => {
         return;
       }
 
-      // If user supplied a new email for an existing contact that had none, upsert it back to the contact.
-      if (
-        sendToClient &&
-        effectiveContactMode === "select" &&
-        effectiveContactId &&
-        existingContactNewEmail.trim() &&
-        emailRegex.test(existingContactNewEmail.trim())
-      ) {
-        const newEmail = existingContactNewEmail.trim();
-        const selectedExisting = contacts.find((c) => c.id === effectiveContactId);
-        const hadNoEmails = !selectedExisting?.emails || selectedExisting.emails.length === 0;
-        if (hadNoEmails) {
+      // Diff edited fields against originals for selected (existing) client/contact and upsert via update.
+      const diffChanged = (current: Record<string, string>, original: Record<string, string>): Record<string, string> => {
+        const changes: Record<string, string> = {};
+        for (const k of Object.keys(current)) {
+          const cur = (current[k] ?? "").trim();
+          const orig = (original[k] ?? "").trim();
+          if (cur !== orig) changes[k] = cur;
+        }
+        return changes;
+      };
+
+      // Update existing client if changed.
+      if (clientMode === "select" && effectiveClientId) {
+        const changes = diffChanged(existingClientFields, existingClientOriginal);
+        if (Object.keys(changes).length > 0) {
+          try {
+            const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
+              body: {
+                action: "update",
+                entity: "clients",
+                payload: { id: effectiveClientId, data: changes },
+              },
+              headers: xeroHeaders,
+            });
+            if (updErr || updRes?.error) {
+              throw new Error(updRes?.error || updErr?.message || "Failed to update client");
+            }
+            const merged = { ...existingClientOriginal, ...changes };
+            setClients((prev) => prev.map((c) =>
+              c.id === effectiveClientId ? { ...c, fields: merged, name: merged.ContactName || merged.Name || c.name } : c,
+            ));
+            setExistingClientOriginal(merged);
+            if (clientSchema?.display_field) {
+              effectiveClientName = merged[clientSchema.display_field] || effectiveClientName;
+            }
+          } catch (clientUpdErr: any) {
+            toast.error(clientUpdErr?.message || "Failed to update client");
+            setSubmitting(false);
+            return;
+          }
+        }
+      }
+
+      // Update existing contact if changed, then refresh recipient emails.
+      if (effectiveContactMode === "select" && effectiveContactId) {
+        const changes = diffChanged(existingContactFields, existingContactOriginal);
+        if (Object.keys(changes).length > 0) {
           try {
             const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
               body: {
                 action: "update",
                 entity: "contacts",
-                payload: { id: effectiveContactId, data: { EmailAddress: newEmail } },
+                payload: { id: effectiveContactId, data: changes },
               },
               headers: xeroHeaders,
             });
             if (updErr || updRes?.error) {
-              throw new Error(updRes?.error || updErr?.message || "Failed to update contact email");
+              throw new Error(updRes?.error || updErr?.message || "Failed to update contact");
             }
-            // Reflect locally so the UI shows the email next time.
-            setContacts((prev) => prev.map((c) =>
-              c.id === effectiveContactId ? { ...c, emails: [newEmail] } : c,
-            ));
-          } catch (upsertErr: any) {
-            toast.error(upsertErr?.message || "Failed to save email to contact");
+            const merged = { ...existingContactOriginal, ...changes };
+            const newEmail = merged.EmailAddress?.trim();
+            setContacts((prev) => prev.map((c) => {
+              if (c.id !== effectiveContactId) return c;
+              const nextEmails = newEmail
+                ? Array.from(new Set([newEmail, ...(c.emails ?? []).filter((e) => e !== existingContactOriginal.EmailAddress)]))
+                : (c.emails ?? []);
+              const fullName = [merged.FirstName, merged.LastName].filter(Boolean).join(" ").trim();
+              return {
+                ...c,
+                fields: merged,
+                emails: nextEmails,
+                name: merged.ContactName || merged.Name || fullName || c.name,
+              };
+            }));
+            setExistingContactOriginal(merged);
+            if (contactSchema?.display_field) {
+              effectiveContactName = merged[contactSchema.display_field] || effectiveContactName;
+            }
+          } catch (contactUpdErr: any) {
+            toast.error(contactUpdErr?.message || "Failed to update contact");
             setSubmitting(false);
             return;
           }
