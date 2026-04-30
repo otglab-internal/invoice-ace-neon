@@ -796,9 +796,17 @@ const CreateInvoicePage: React.FC = () => {
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+      setClientMode("select");
       setClientId("");
+      setNewClientName("");
+      setNewClientEmail("");
+      setNewClientAccountNumber("");
+      setContactMode("select");
       setContactId("");
-      setNewContactName("");
+      setNewContactFirstName("");
+      setNewContactLastName("");
+      setNewContactEmail("");
+      setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
       setDueDays("7");
@@ -844,7 +852,9 @@ const CreateInvoicePage: React.FC = () => {
                     aria-expanded={clientOpen}
                     className="w-full justify-between font-normal"
                   >
-                    {clientId
+                    {clientMode === "new"
+                      ? (newClientName.trim() || "New client (fill details below)")
+                      : clientId
                       ? clients.find((c) => c.id === clientId)?.name
                       : loadingClients ? "Loading clients..." : "Search clients..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -856,16 +866,33 @@ const CreateInvoicePage: React.FC = () => {
                     <CommandList>
                       <CommandEmpty>No clients found.</CommandEmpty>
                       <CommandGroup>
+                        <CommandItem
+                          value="__create_new_client__"
+                          onSelect={() => {
+                            setClientMode("new");
+                            setNewClientName(clientSearch);
+                            setClientId("");
+                            // Reset contact when switching to a brand-new client
+                            setContactMode("new");
+                            setContactId("");
+                            setContacts([]);
+                            setClientOpen(false);
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4 text-primary" />
+                          <span className="text-primary font-medium">Create New Client</span>
+                        </CommandItem>
                         {clients.map((c) => (
                           <CommandItem
                             key={c.id}
                             value={c.name}
                             onSelect={() => {
+                              setClientMode("select");
                               setClientId(c.id);
                               setClientOpen(false);
                             }}
                           >
-                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
+                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id && clientMode === "select" ? "opacity-100" : "opacity-0")} />
                             {c.name}
                           </CommandItem>
                         ))}
@@ -874,6 +901,59 @@ const CreateInvoicePage: React.FC = () => {
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              {clientMode === "new" && (
+                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                      New client details
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setClientMode("select");
+                        setNewClientName("");
+                        setNewClientEmail("");
+                        setNewClientAccountNumber("");
+                        setContactMode("select");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Client name *</Label>
+                    <Input
+                      placeholder="Acme Pte Ltd"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Email address *</Label>
+                    <Input
+                      type="email"
+                      placeholder="billing@acme.com"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Account number (optional)</Label>
+                    <Input
+                      placeholder="ACC-001"
+                      value={newClientAccountNumber}
+                      onChange={(e) => setNewClientAccountNumber(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add the contact person below — both will be created on submit.
+                  </p>
+                </div>
+              )}
             </div>
 
             {clientId && (
