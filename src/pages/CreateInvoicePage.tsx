@@ -80,6 +80,7 @@ interface XeroContact {
   name: string;
   emails?: string[];
   fields?: Record<string, string>;
+  parent_id?: string;
 }
 
 interface XeroClient {
