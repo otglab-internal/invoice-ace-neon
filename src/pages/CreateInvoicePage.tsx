@@ -1136,7 +1136,7 @@ const CreateInvoicePage: React.FC = () => {
                   </Popover>
                 )}
 
-            {contactMode === "new" && (
+            {effectiveContactMode === "new" && (
               <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
