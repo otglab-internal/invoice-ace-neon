@@ -1423,7 +1423,7 @@ const CreateInvoicePage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">Loading contact fields…</p>
                 ) : (
                   contactSchema.fields
-                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .filter((f) => !isHiddenField(contactSchema, f.name))
                     .map((f, idx) => {
                       const isEmail = /email/i.test(f.name);
                       return (
