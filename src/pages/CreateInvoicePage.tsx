@@ -355,7 +355,8 @@ const CreateInvoicePage: React.FC = () => {
       await fetchVisibleAccounts();
     };
     loadXeroData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientSchema]);
 
   // Fetch dynamic schemas for clients & contacts so "create new" forms render whatever fields each org has configured.
   useEffect(() => {
