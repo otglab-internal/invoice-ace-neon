@@ -878,7 +878,12 @@ const CreateInvoicePage: React.FC = () => {
         recipient_emails: sendToClient
           ? (effectiveContactMode === "new"
               ? [newContactEmail.trim()].filter((e) => emailRegex.test(e))
-              : selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e)))
+              : (() => {
+                  const checkbox = selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
+                  if (checkbox.length > 0) return checkbox;
+                  const edited = (existingContactFields.EmailAddress || "").trim();
+                  return edited && emailRegex.test(edited) ? [edited] : [];
+                })())
           : [],
         contact_persons: [],
       });
