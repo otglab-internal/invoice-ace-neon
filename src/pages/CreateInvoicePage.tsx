@@ -240,9 +240,16 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
-  const [newContactName, setNewContactName] = useState("");
+  // New contact (person) form fields
+  const [newContactFirstName, setNewContactFirstName] = useState("");
+  const [newContactLastName, setNewContactLastName] = useState("");
   const [newContactEmail, setNewContactEmail] = useState<string>("");
   const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
+  // New client form
+  const [clientMode, setClientMode] = useState<"select" | "new">("select");
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientAccountNumber, setNewClientAccountNumber] = useState("");
   const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
   const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
@@ -539,12 +546,18 @@ const CreateInvoicePage: React.FC = () => {
     setLineItems((prev) => [...prev, createLineItem(defaultId)]);
   }, [templates]);
 
+  const newContactFullName = [newContactFirstName.trim(), newContactLastName.trim()].filter(Boolean).join(" ").trim();
   const contactName = contactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
-    : newContactName.trim();
+    : newContactFullName;
 
-  const contactValid = contactMode === "select" ? !!contactId : !!newContactName.trim();
-  const allValid = contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const clientValid = clientMode === "select"
+    ? !!clientId
+    : !!newClientName.trim() && emailRegex.test(newClientEmail.trim());
+  const contactValid = contactMode === "select"
+    ? !!contactId
+    : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
+  const allValid = clientValid && contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -586,7 +599,76 @@ const CreateInvoicePage: React.FC = () => {
         return base;
       });
 
-      const finalContactId = contactMode === "select" && contactId ? contactId : "__new__";
+      // Step 1: If creating a new client and/or contact, push them to the auth app first.
+      const xeroHeaders = {
+        "x-org-id": getOrgId(),
+        "x-environment": localStorage.getItem("auth_environment") || "production",
+      };
+
+      let effectiveClientId = clientId;
+      let effectiveClientName = clients.find((c) => c.id === clientId)?.name || "";
+
+      if (clientMode === "new") {
+        try {
+          const clientGuid = crypto.randomUUID();
+          const clientData: Record<string, string> = {
+            ContactName: newClientName.trim(),
+            EmailAddress: newClientEmail.trim(),
+            ClientGUID: clientGuid,
+          };
+          if (newClientAccountNumber.trim()) clientData.AccountNumber = newClientAccountNumber.trim();
+          const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
+            body: { action: "create", entity: "clients", payload: { data: clientData } },
+            headers: xeroHeaders,
+          });
+          if (createErr || !createRes?.data?.id) {
+            throw new Error(createRes?.error || createErr?.message || "Failed to create client");
+          }
+          effectiveClientId = String(createRes.data.id);
+          effectiveClientName = newClientName.trim();
+          // Reflect in local list so subsequent UI is consistent.
+          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
+        } catch (clientErr: any) {
+          toast.error(clientErr?.message || "Failed to create client in auth app");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      let effectiveContactId = contactId;
+      let effectiveContactName = contactName;
+
+      if (contactMode === "new") {
+        if (!effectiveClientId) {
+          toast.error("Cannot create contact: client is missing");
+          setSubmitting(false);
+          return;
+        }
+        try {
+          const contactPayload = {
+            data: {
+              Name: newContactFullName,
+              ContactNumber: newContactEmail.trim(),
+            },
+            parent_id: effectiveClientId,
+          };
+          const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
+            body: { action: "create", entity: "contacts", payload: contactPayload },
+            headers: xeroHeaders,
+          });
+          if (createErr || !createRes?.data?.id) {
+            throw new Error(createRes?.error || createErr?.message || "Failed to create contact");
+          }
+          effectiveContactId = String(createRes.data.id);
+          effectiveContactName = newContactFullName;
+        } catch (contactErr: any) {
+          toast.error(contactErr?.message || "Failed to create contact in auth app");
+          setSubmitting(false);
+          return;
+        }
+      }
+
+      const finalContactId = effectiveContactId || "__new__";
       const submitterSystemId = resolvedSystemId || systemId || "";
 
       // Guarantee submitted_by_email is never empty — older sessions may not
@@ -602,7 +684,7 @@ const CreateInvoicePage: React.FC = () => {
 
       const invoicePayload = sanitizeObject({
         contact_id: finalContactId,
-        contact_name: contactName,
+        contact_name: effectiveContactName,
         invoice_date: invoiceDate,
         reference: reference.trim(),
         line_items: JSON.parse(JSON.stringify(lineItemsPayload)),
@@ -679,7 +761,7 @@ const CreateInvoicePage: React.FC = () => {
           const notificationInvoice = {
             ...inv,
             contact_id: finalContactId,
-            contact_name: contactName,
+            contact_name: effectiveContactName,
           };
 
           const [emailResult, webhookResult] = await Promise.allSettled([
@@ -714,9 +796,17 @@ const CreateInvoicePage: React.FC = () => {
       }
 
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
+      setClientMode("select");
       setClientId("");
+      setNewClientName("");
+      setNewClientEmail("");
+      setNewClientAccountNumber("");
+      setContactMode("select");
       setContactId("");
-      setNewContactName("");
+      setNewContactFirstName("");
+      setNewContactLastName("");
+      setNewContactEmail("");
+      setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
       setDueDays("7");
@@ -762,7 +852,9 @@ const CreateInvoicePage: React.FC = () => {
                     aria-expanded={clientOpen}
                     className="w-full justify-between font-normal"
                   >
-                    {clientId
+                    {clientMode === "new"
+                      ? (newClientName.trim() || "New client (fill details below)")
+                      : clientId
                       ? clients.find((c) => c.id === clientId)?.name
                       : loadingClients ? "Loading clients..." : "Search clients..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -774,16 +866,33 @@ const CreateInvoicePage: React.FC = () => {
                     <CommandList>
                       <CommandEmpty>No clients found.</CommandEmpty>
                       <CommandGroup>
+                        <CommandItem
+                          value="__create_new_client__"
+                          onSelect={() => {
+                            setClientMode("new");
+                            setNewClientName(clientSearch);
+                            setClientId("");
+                            // Reset contact when switching to a brand-new client
+                            setContactMode("new");
+                            setContactId("");
+                            setContacts([]);
+                            setClientOpen(false);
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4 text-primary" />
+                          <span className="text-primary font-medium">Create New Client</span>
+                        </CommandItem>
                         {clients.map((c) => (
                           <CommandItem
                             key={c.id}
                             value={c.name}
                             onSelect={() => {
+                              setClientMode("select");
                               setClientId(c.id);
                               setClientOpen(false);
                             }}
                           >
-                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id ? "opacity-100" : "opacity-0")} />
+                            <Check className={cn("mr-2 h-4 w-4", clientId === c.id && clientMode === "select" ? "opacity-100" : "opacity-0")} />
                             {c.name}
                           </CommandItem>
                         ))}
@@ -792,106 +901,183 @@ const CreateInvoicePage: React.FC = () => {
                   </Command>
                 </PopoverContent>
               </Popover>
+
+              {clientMode === "new" && (
+                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                      New client details
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setClientMode("select");
+                        setNewClientName("");
+                        setNewClientEmail("");
+                        setNewClientAccountNumber("");
+                        setContactMode("select");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Client name *</Label>
+                    <Input
+                      placeholder="Acme Pte Ltd"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Email address *</Label>
+                    <Input
+                      type="email"
+                      placeholder="billing@acme.com"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Account number (optional)</Label>
+                    <Input
+                      placeholder="ACC-001"
+                      value={newClientAccountNumber}
+                      onChange={(e) => setNewClientAccountNumber(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add the contact person below — both will be created on submit.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {clientId && (
+            {(clientId || clientMode === "new") && (
               <div className="space-y-2 animate-fade-in">
                 <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
                   Contact
                 </Label>
-                <Popover open={contactOpen} onOpenChange={setContactOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={contactOpen}
-                      className="w-full justify-between font-normal"
-                    >
-                      {contactId
-                        ? contacts.find((c) => c.id === contactId)?.name
-                        : loadingContacts ? "Loading contacts..." : "Search contacts..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
-                  <CommandList>
-                    <CommandEmpty>No contacts found.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="__create_new__"
-                        onSelect={() => {
-                          setContactMode("new");
-                          setNewContactName(contactSearch);
-                          setContactId("");
-                          setContactOpen(false);
-                        }}
+                {clientMode === "new" ? (
+                  <p className="text-xs text-muted-foreground">
+                    A contact person will be created for this new client.
+                  </p>
+                ) : (
+                  <Popover open={contactOpen} onOpenChange={setContactOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={contactOpen}
+                        className="w-full justify-between font-normal"
                       >
-                        <Plus className="mr-2 h-4 w-4 text-primary" />
-                        <span className="text-primary font-medium">Create New Contact</span>
-                      </CommandItem>
-                      {contacts.map((c) => (
-                        <CommandItem
-                          key={c.id}
-                          value={c.name}
-                          onSelect={() => {
-                            setContactId(c.id);
-                            setContactMode("select");
-                            setNewContactName("");
-                            setContactOpen(false);
-                          }}
-                        >
-                          <Check className={cn("mr-2 h-4 w-4", contactId === c.id ? "opacity-100" : "opacity-0")} />
-                          {c.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                        {contactMode === "new"
+                          ? (newContactFullName || "New contact (fill details below)")
+                          : contactId
+                          ? contacts.find((c) => c.id === contactId)?.name
+                          : loadingContacts ? "Loading contacts..." : "Search contacts..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search contacts..." value={contactSearch} onValueChange={setContactSearch} />
+                        <CommandList>
+                          <CommandEmpty>No contacts found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__create_new__"
+                              onSelect={() => {
+                                setContactMode("new");
+                                setNewContactFirstName(contactSearch);
+                                setNewContactLastName("");
+                                setNewContactEmail("");
+                                setContactId("");
+                                setContactOpen(false);
+                              }}
+                            >
+                              <Plus className="mr-2 h-4 w-4 text-primary" />
+                              <span className="text-primary font-medium">Create New Contact</span>
+                            </CommandItem>
+                            {contacts.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.name}
+                                onSelect={() => {
+                                  setContactId(c.id);
+                                  setContactMode("select");
+                                  setNewContactFirstName("");
+                                  setNewContactLastName("");
+                                  setContactOpen(false);
+                                }}
+                              >
+                                <Check className={cn("mr-2 h-4 w-4", contactId === c.id ? "opacity-100" : "opacity-0")} />
+                                {c.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+
             {contactMode === "new" && (
-              <div className="space-y-3 animate-fade-in">
-                <div className="flex items-center gap-2">
+              <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
+                    New contact details
+                  </p>
+                  {clientMode !== "new" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setContactMode("select");
+                        setNewContactFirstName("");
+                        setNewContactLastName("");
+                        setNewContactEmail("");
+                        setNewContactPersons([]);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">First name *</Label>
+                    <Input
+                      placeholder="Jane"
+                      value={newContactFirstName}
+                      onChange={(e) => setNewContactFirstName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Last name</Label>
+                    <Input
+                      placeholder="Doe"
+                      value={newContactLastName}
+                      onChange={(e) => setNewContactLastName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Email *</Label>
                   <Input
-                    placeholder="New contact name"
-                    value={newContactName}
-                    onChange={(e) => setNewContactName(e.target.value)}
-                    autoFocus
+                    type="email"
+                    placeholder="jane@example.com"
+                    value={newContactEmail}
+                    onChange={(e) => setNewContactEmail(e.target.value)}
                   />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                  onClick={() => {
-                    setContactMode("select");
-                    setNewContactName("");
-                    setNewContactEmail("");
-                    setNewContactPersons([]);
-                  }}
-                >
-                  Cancel
-                </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                  Primary email
-                </Label>
-                <Input
-                  type="email"
-                  placeholder="name@example.com"
-                  value={newContactEmail}
-                  onChange={(e) => setNewContactEmail(e.target.value)}
-                />
-              </div>
-              <ContactPersonsEditor
-                persons={newContactPersons}
-                setPersons={setNewContactPersons}
-                helperText='These contact persons will be saved to the new contact.'
-              />
-            </div>
-          )}
+            )}
             {contactMode === "select" && contactId && (() => {
               const selected = contacts.find((c) => c.id === contactId);
               const emails = selected?.emails ?? [];
