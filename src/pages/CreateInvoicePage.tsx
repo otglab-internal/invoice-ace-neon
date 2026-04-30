@@ -748,7 +748,7 @@ const CreateInvoicePage: React.FC = () => {
       let effectiveContactId = contactId;
       let effectiveContactName = contactName;
 
-      if (contactMode === "new") {
+      if (effectiveContactMode === "new") {
         if (!effectiveClientId) {
           toast.error("Cannot create contact: client is missing");
           setSubmitting(false);
@@ -813,7 +813,7 @@ const CreateInvoicePage: React.FC = () => {
         send_to_client: sendToClient,
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
-          ? (contactMode === "new"
+          ? (effectiveContactMode === "new"
               ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
                   .filter((e) => emailRegex.test(e))
               : (() => {
@@ -826,7 +826,7 @@ const CreateInvoicePage: React.FC = () => {
                   return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
                 })())
           : [],
-        contact_persons: contactMode === "new"
+        contact_persons: effectiveContactMode === "new"
           ? newContactPersons
               .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
               .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
