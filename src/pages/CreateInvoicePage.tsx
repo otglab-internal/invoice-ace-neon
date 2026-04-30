@@ -567,11 +567,26 @@ const CreateInvoicePage: React.FC = () => {
           selectedClient?.fields?.ClientGuid ||
           clientId;
 
+        // Build select from ONLY fields that actually exist on this entity's schema,
+        // plus `id` (always present). Including unknown columns causes some proxy
+        // versions to silently drop the `where` clause and return every row.
+        const knownFields = new Set<string>(schemaFields);
+        const candidateExtras = [
+          "ContactName", "Name", "FirstName", "LastName",
+          "EmailAddress", "ContactPersons", "parent_id",
+          linkField, "ClientGUID", "ClientGuid",
+        ];
         const select = Array.from(new Set([
-          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons",
-          "parent_id", linkField, "ClientGUID", "ClientGuid",
+          "id",
           ...schemaFields,
+          ...candidateExtras.filter((f) => knownFields.has(f)),
         ]));
+
+        const matchesSelectedClient = (r: any): boolean =>
+          (r?.[linkField] != null && String(r[linkField]) === String(parentBusinessValue)) ||
+          (r?.parent_id != null && String(r.parent_id) === clientId) ||
+          (r?.ClientGUID != null && String(r.ClientGUID) === String(parentBusinessValue)) ||
+          (r?.ClientGuid != null && String(r.ClientGuid) === String(parentBusinessValue));
 
         let rows: any[] = [];
         // Attempt 1: server-side filter by the schema-declared link field
@@ -602,7 +617,7 @@ const CreateInvoicePage: React.FC = () => {
           rows = Array.isArray(byParent?.data) ? byParent.data : [];
         }
 
-        // Attempt 3: fetch all and filter client-side (covers orgs whose proxy ignores `where`)
+        // Attempt 3: fetch all if still empty
         if (rows.length === 0) {
           const { data: all } = await supabase.functions.invoke("clients-api-proxy", {
             body: {
@@ -613,14 +628,12 @@ const CreateInvoicePage: React.FC = () => {
             headers: xeroHeaders,
           });
           if (cancelled) return;
-          const allRows = Array.isArray(all?.data) ? all.data : [];
-          rows = allRows.filter((r: any) =>
-            (r?.[linkField] && String(r[linkField]) === String(parentBusinessValue)) ||
-            (r?.parent_id && String(r.parent_id) === clientId) ||
-            (r?.ClientGUID && String(r.ClientGUID) === String(parentBusinessValue)) ||
-            (r?.ClientGuid && String(r.ClientGuid) === String(parentBusinessValue))
-          );
+          rows = Array.isArray(all?.data) ? all.data : [];
         }
+
+        // Defensive client-side filter — some proxy versions silently ignore `where`
+        // and return every row, so we always re-filter against the selected client.
+        rows = rows.filter(matchesSelectedClient);
         const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
