@@ -877,14 +877,10 @@ const CreateInvoicePage: React.FC = () => {
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setClientMode("select");
       setClientId("");
-      setNewClientName("");
-      setNewClientEmail("");
-      setNewClientAccountNumber("");
+      setNewClientFields({});
       setContactMode("select");
       setContactId("");
-      setNewContactFirstName("");
-      setNewContactLastName("");
-      setNewContactEmail("");
+      setNewContactFields({});
       setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
