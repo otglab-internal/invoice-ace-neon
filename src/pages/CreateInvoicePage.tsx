@@ -1453,7 +1453,7 @@ const CreateInvoicePage: React.FC = () => {
                 valid={contactExistingCheck.valid}
               >
                 {contactSchema.fields
-                  .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                  .filter((f) => !isHiddenField(contactSchema, f.name))
                   .map((f) => {
                     const isEmail = /email/i.test(f.name);
                     return (
