@@ -511,7 +511,7 @@ const CreateInvoicePage: React.FC = () => {
     if (!clientId) {
       setContacts([]);
       setContactId("");
-      setContactMode("select");
+      setContactMode(clientMode === "new" ? "new" : "select");
       return;
     }
     const selectedClient = clients.find((c) => c.id === clientId);
@@ -568,7 +568,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId, clients]);
+  }, [clientId, clients, clientMode]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
@@ -616,7 +616,9 @@ const CreateInvoicePage: React.FC = () => {
   const newContactFullName = getDynamicName(contactSchema, newContactFields);
   const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
 
-  const contactName = contactMode === "select"
+  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
+
+  const contactName = effectiveContactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactFullName;
 
@@ -643,7 +645,6 @@ const CreateInvoicePage: React.FC = () => {
   const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
 
   const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
-  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
   const contactValid = effectiveContactMode === "select" ? !!contactId : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
