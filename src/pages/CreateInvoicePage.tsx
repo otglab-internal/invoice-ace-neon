@@ -180,7 +180,7 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
   const [newContactFields, setNewContactFields] = useState<Record<string, string>>({});
-  const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
+  
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
 
