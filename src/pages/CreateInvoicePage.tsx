@@ -78,6 +78,13 @@ interface XeroContact {
   id: string;
   name: string;
   emails?: string[];
+  fields?: Record<string, string>;
+}
+
+interface XeroClient {
+  id: string;
+  name: string;
+  fields?: Record<string, string>;
 }
 
 interface XeroAccount {
