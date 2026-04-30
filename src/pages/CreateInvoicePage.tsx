@@ -264,12 +264,24 @@ const CreateInvoicePage: React.FC = () => {
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
   // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
   const EMAIL_FIELD_ALIASES = ["EmailAddress", "Email", "ContactNumber"];
+  // True only for *real* email fields. Excludes flag/boolean-ish names that happen to contain "email"
+  // (e.g. "HasBillingEmailFlag"). Used by both validation and UI input-type to keep them in sync.
+  const isEmailFieldName = (name: string): boolean =>
+    /email/i.test(name) && !/flag|has[_-]?|is[_-]?|enabled|opt[_-]?in|subscribe/i.test(name);
   const pickEmailField = (schema: EntitySchema): string | null => {
     if (!schema) return null;
-    const byName = schema.fields.find((x) => /email/i.test(x.name));
+    const byName = schema.fields.find((x) => isEmailFieldName(x.name));
     if (byName) return byName.name;
     const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
     return byAlias?.name ?? null;
+  };
+  const isTruthyFlag = (v: unknown): boolean => {
+    if (v === true || v === 1) return true;
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      return s === "true" || s === "1" || s === "yes" || s === "y";
+    }
+    return false;
   };
   const formatLabel = (name: string): string =>
     name
