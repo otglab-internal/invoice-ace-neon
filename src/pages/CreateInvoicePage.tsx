@@ -1103,9 +1103,21 @@ const CreateInvoicePage: React.FC = () => {
                     Send invoice to
                   </Label>
                   {emails.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      No email addresses found on this contact. Update the contact to add an email address.
-                    </p>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground italic">
+                        No email addresses found on this contact. Add one below — it will be saved to the contact on submit.
+                      </p>
+                      <Input
+                        type="email"
+                        placeholder="name@example.com"
+                        value={existingContactNewEmail}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setExistingContactNewEmail(v);
+                          setSelectedRecipientEmails(v.trim() ? [v.trim()] : []);
+                        }}
+                      />
+                    </div>
                   ) : (
                     <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
                       {emails.map((email) => {
