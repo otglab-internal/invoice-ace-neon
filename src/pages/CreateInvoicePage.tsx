@@ -193,6 +193,9 @@ const CreateInvoicePage: React.FC = () => {
   const [existingClientOriginal, setExistingClientOriginal] = useState<Record<string, string>>({});
   const [existingContactFields, setExistingContactFields] = useState<Record<string, string>>({});
   const [existingContactOriginal, setExistingContactOriginal] = useState<Record<string, string>>({});
+  // Collapse state for each schema-driven form section.
+  const [clientFormOpen, setClientFormOpen] = useState(true);
+  const [contactFormOpen, setContactFormOpen] = useState(true);
   
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
