@@ -222,8 +222,15 @@ const CreateInvoicePage: React.FC = () => {
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
   // Schema-driven new client / new contact forms
-  type SchemaField = { name: string; required: boolean; type: string };
-  type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
+  type SchemaField = { name: string; required: boolean; type: string; is_primary_key?: boolean; is_foreign_key?: boolean };
+  type EntitySchema = {
+    display_field: string;
+    fields: SchemaField[];
+    // New describe metadata (optional for backward compatibility):
+    link_field?: string | null;          // FK column on child pointing to parent business key
+    business_key?: string | null;        // child's natural/business identity column (e.g. ContactGuid)
+    parent_business_key?: string | null; // parent's business key referenced by link_field (e.g. ClientGuid)
+  } | null;
   const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
@@ -240,8 +247,19 @@ const CreateInvoicePage: React.FC = () => {
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
 
-  // Fields hidden from the user — system-managed (e.g. ClientGUID auto-generated on submit).
-  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
+  // Fields hidden from the user — system-managed (auto-generated business keys, FK links).
+  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID", "ClientGuid"]);
+  const isHiddenField = (schema: EntitySchema, fieldName: string): boolean => {
+    if (HIDDEN_SCHEMA_FIELDS.has(fieldName)) return true;
+    if (!schema) return false;
+    // Auto-hide schema-declared business key (e.g. ContactGuid) and FK link field
+    // — both are system-managed and should not be user-editable.
+    if (schema.business_key && schema.business_key === fieldName) return true;
+    if (schema.link_field && schema.link_field === fieldName) return true;
+    const f = schema.fields.find((x) => x.name === fieldName);
+    if (f?.is_primary_key || f?.is_foreign_key) return true;
+    return false;
+  };
 
   // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
   // Some orgs store the billing email in a non-obvious field (e.g. "ContactNumber"); fall back to those known aliases.
@@ -420,9 +438,22 @@ const CreateInvoicePage: React.FC = () => {
           headers,
         });
         if (cancelled || !data?.fields) return null;
+        // New describe payload exposes:
+        //   link_field        — child's FK column pointing to parent business key
+        //   foreign_key       — { field, references: { entity, field } }
+        //   primary_key       — { row_id: { field }, business_key: { field } }
+        // Older payloads only have display_field + fields; tolerate both.
+        const business_key: string | null =
+          data?.primary_key?.business_key?.field ?? null;
+        const link_field: string | null = data?.link_field ?? null;
+        const parent_business_key: string | null =
+          data?.foreign_key?.references?.field ?? null;
         return {
           display_field: data.display_field,
-          fields: data.fields as Array<{ name: string; required: boolean; type: string }>,
+          fields: data.fields as SchemaField[],
+          link_field,
+          business_key,
+          parent_business_key,
         };
       } catch (err) {
         console.warn(`Failed to describe ${entity}:`, err);
@@ -522,20 +553,87 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(true);
       try {
         const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
+        // Schema-driven relationship resolution.
+        // describe payload tells us:
+        //   contactSchema.link_field           — FK column on contacts (e.g. "ClientGuid")
+        //   contactSchema.parent_business_key  — the column on clients it references (e.g. "ClientGuid")
+        // Fall back to legacy hardcoded names when the proxy hasn't been updated yet.
+        const linkField = contactSchema?.link_field || "ClientGUID";
+        const parentBusinessKey = contactSchema?.parent_business_key || clientSchema?.business_key || "ClientGUID";
+        const selectedClient = clients.find((c) => c.id === clientId);
+        const parentBusinessValue =
+          selectedClient?.fields?.[parentBusinessKey] ||
+          selectedClient?.fields?.ClientGUID ||
+          selectedClient?.fields?.ClientGuid ||
+          clientId;
+
+        // Build select from ONLY fields that actually exist on this entity's schema,
+        // plus `id` (always present). Including unknown columns causes some proxy
+        // versions to silently drop the `where` clause and return every row.
+        const knownFields = new Set<string>(schemaFields);
+        const candidateExtras = [
+          "ContactName", "Name", "FirstName", "LastName",
+          "EmailAddress", "ContactPersons", "parent_id",
+          linkField, "ClientGUID", "ClientGuid",
+        ];
         const select = Array.from(new Set([
-          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons", "parent_id",
+          "id",
           ...schemaFields,
+          ...candidateExtras.filter((f) => knownFields.has(f)),
         ]));
-        const { data } = await supabase.functions.invoke("clients-api-proxy", {
-          body: {
-            action: "read",
-            entity: "contacts",
-            payload: { select, limit: 1000, where: { parent_id: clientId } },
-          },
-          headers: xeroHeaders,
-        });
-        if (cancelled) return;
-        const rows = Array.isArray(data?.data) ? data.data : [];
+
+        const matchesSelectedClient = (r: any): boolean =>
+          (r?.[linkField] != null && String(r[linkField]) === String(parentBusinessValue)) ||
+          (r?.parent_id != null && String(r.parent_id) === clientId) ||
+          (r?.ClientGUID != null && String(r.ClientGUID) === String(parentBusinessValue)) ||
+          (r?.ClientGuid != null && String(r.ClientGuid) === String(parentBusinessValue));
+
+        let rows: any[] = [];
+        // Attempt 1: server-side filter by the schema-declared link field
+        if (parentBusinessValue) {
+          const { data: byLink } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 1000, where: { [linkField]: parentBusinessValue } },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          rows = Array.isArray(byLink?.data) ? byLink.data : [];
+        }
+
+        // Attempt 2: legacy parent_id fallback (older orgs)
+        if (rows.length === 0) {
+          const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 1000, where: { parent_id: clientId } },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          rows = Array.isArray(byParent?.data) ? byParent.data : [];
+        }
+
+        // Attempt 3: fetch all if still empty
+        if (rows.length === 0) {
+          const { data: all } = await supabase.functions.invoke("clients-api-proxy", {
+            body: {
+              action: "read",
+              entity: "contacts",
+              payload: { select, limit: 2000 },
+            },
+            headers: xeroHeaders,
+          });
+          if (cancelled) return;
+          rows = Array.isArray(all?.data) ? all.data : [];
+        }
+
+        // Defensive client-side filter — some proxy versions silently ignore `where`
+        // and return every row, so we always re-filter against the selected client.
+        rows = rows.filter(matchesSelectedClient);
         const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
@@ -567,10 +665,9 @@ const CreateInvoicePage: React.FC = () => {
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
           };
         });
-        // Strict client-side filter: only contacts whose parent_id matches the selected client.
-        const scoped = mapped.filter((c) => c.parent_id === clientId);
-        scoped.sort((a, b) => a.name.localeCompare(b.name));
-        setContacts(scoped);
+        // Rows are already scoped to the selected client (by parent_id or ClientGUID).
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
+        setContacts(mapped);
         setContactId("");
       } catch (err) {
         console.warn("Failed to fetch contacts:", err);
@@ -660,7 +757,7 @@ const CreateInvoicePage: React.FC = () => {
     if (!schema) return { valid: false, missing: ["Loading schema..."] };
     const missing: string[] = [];
     for (const f of schema.fields) {
-      if (HIDDEN_SCHEMA_FIELDS.has(f.name)) continue;
+      if (isHiddenField(schema, f.name)) continue;
       const v = (values[f.name] || "").trim();
       if (f.required && !v) missing.push(formatLabel(f.name));
       if (v && /email/i.test(f.name) && !emailRegex.test(v)) {
@@ -771,14 +868,19 @@ const CreateInvoicePage: React.FC = () => {
       if (clientMode === "new") {
         try {
           // Build payload from whatever fields the schema declares — only send non-empty values,
-          // plus an auto-generated ClientGUID for the system-managed identity field if present.
+          // plus an auto-generated business-key value (e.g. ClientGuid) if the schema defines one.
           const clientData: Record<string, string> = {};
           for (const f of clientSchema?.fields ?? []) {
             const v = (newClientFields[f.name] || "").trim();
             if (v) clientData[f.name] = v;
           }
-          if (clientSchema?.fields.some((f) => f.name === "ClientGUID")) {
-            clientData.ClientGUID = crypto.randomUUID();
+          // Schema-driven business key (falls back to legacy "ClientGUID" name).
+          const clientBusinessKey =
+            clientSchema?.business_key ||
+            (clientSchema?.fields.some((f) => f.name === "ClientGUID") ? "ClientGUID" : null) ||
+            (clientSchema?.fields.some((f) => f.name === "ClientGuid") ? "ClientGuid" : null);
+          if (clientBusinessKey && !clientData[clientBusinessKey]) {
+            clientData[clientBusinessKey] = crypto.randomUUID();
           }
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
             body: { action: "create", entity: "clients", payload: { data: clientData } },
@@ -789,8 +891,10 @@ const CreateInvoicePage: React.FC = () => {
           }
           effectiveClientId = String(createRes.data.id);
           effectiveClientName = newClientName;
-          // Reflect in local list so subsequent UI is consistent.
-          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
+          // Reflect in local list so subsequent UI is consistent — keep the new business-key
+          // value on the row so contact-fetch can resolve children immediately.
+          const newRowFields: Record<string, string> = { ...clientData };
+          setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName, fields: newRowFields }].sort((a, b) => a.name.localeCompare(b.name)));
         } catch (clientErr: any) {
           toast.error(clientErr?.message || "Failed to create client in auth app");
           setSubmitting(false);
@@ -812,6 +916,20 @@ const CreateInvoicePage: React.FC = () => {
           for (const f of contactSchema?.fields ?? []) {
             const v = (newContactFields[f.name] || "").trim();
             if (v) contactData[f.name] = v;
+          }
+          // Populate the schema-declared FK column with the parent's business key
+          // so the new contact is properly linked to its client.
+          const linkField = contactSchema?.link_field;
+          const parentBusinessKey =
+            contactSchema?.parent_business_key || clientSchema?.business_key || null;
+          const selectedClientRow = clients.find((c) => c.id === effectiveClientId);
+          const parentBusinessValue =
+            (parentBusinessKey && selectedClientRow?.fields?.[parentBusinessKey]) ||
+            selectedClientRow?.fields?.ClientGUID ||
+            selectedClientRow?.fields?.ClientGuid ||
+            "";
+          if (linkField && parentBusinessValue && !contactData[linkField]) {
+            contactData[linkField] = parentBusinessValue;
           }
           const contactPayload = {
             data: contactData,
@@ -1166,7 +1284,7 @@ const CreateInvoicePage: React.FC = () => {
                     <p className="text-xs text-muted-foreground">Loading client fields…</p>
                   ) : (
                     clientSchema.fields
-                      .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                      .filter((f) => !isHiddenField(clientSchema, f.name))
                       .map((f, idx) => {
                         const isEmail = /email/i.test(f.name);
                         return (
@@ -1200,7 +1318,7 @@ const CreateInvoicePage: React.FC = () => {
                   valid={clientExistingCheck.valid}
                 >
                   {clientSchema.fields
-                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .filter((f) => !isHiddenField(clientSchema, f.name))
                     .map((f) => {
                       const isEmail = /email/i.test(f.name);
                       return (
@@ -1318,7 +1436,7 @@ const CreateInvoicePage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">Loading contact fields…</p>
                 ) : (
                   contactSchema.fields
-                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .filter((f) => !isHiddenField(contactSchema, f.name))
                     .map((f, idx) => {
                       const isEmail = /email/i.test(f.name);
                       return (
@@ -1348,7 +1466,7 @@ const CreateInvoicePage: React.FC = () => {
                 valid={contactExistingCheck.valid}
               >
                 {contactSchema.fields
-                  .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                  .filter((f) => !isHiddenField(contactSchema, f.name))
                   .map((f) => {
                     const isEmail = /email/i.test(f.name);
                     return (
