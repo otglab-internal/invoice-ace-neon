@@ -726,7 +726,42 @@ const CreateInvoicePage: React.FC = () => {
         return;
       }
 
-      const invoicePayload = sanitizeObject({
+      // If user supplied a new email for an existing contact that had none, upsert it back to the contact.
+      if (
+        sendToClient &&
+        effectiveContactMode === "select" &&
+        effectiveContactId &&
+        existingContactNewEmail.trim() &&
+        emailRegex.test(existingContactNewEmail.trim())
+      ) {
+        const newEmail = existingContactNewEmail.trim();
+        const selectedExisting = contacts.find((c) => c.id === effectiveContactId);
+        const hadNoEmails = !selectedExisting?.emails || selectedExisting.emails.length === 0;
+        if (hadNoEmails) {
+          try {
+            const { data: updRes, error: updErr } = await supabase.functions.invoke("clients-api-proxy", {
+              body: {
+                action: "update",
+                entity: "contacts",
+                payload: { id: effectiveContactId, data: { EmailAddress: newEmail } },
+              },
+              headers: xeroHeaders,
+            });
+            if (updErr || updRes?.error) {
+              throw new Error(updRes?.error || updErr?.message || "Failed to update contact email");
+            }
+            // Reflect locally so the UI shows the email next time.
+            setContacts((prev) => prev.map((c) =>
+              c.id === effectiveContactId ? { ...c, emails: [newEmail] } : c,
+            ));
+          } catch (upsertErr: any) {
+            toast.error(upsertErr?.message || "Failed to save email to contact");
+            setSubmitting(false);
+            return;
+          }
+        }
+      }
+
         contact_id: finalContactId,
         contact_name: effectiveContactName,
         invoice_date: invoiceDate,
