@@ -557,7 +557,27 @@ const CreateInvoicePage: React.FC = () => {
   const contactValid = contactMode === "select"
     ? !!contactId
     : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
-  const allValid = clientValid && contactValid && lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
+  const allValid = clientValid && contactValid && lineItemsValid;
+
+  const missingFields: string[] = [];
+  if (!clientValid) {
+    if (clientMode === "select") {
+      missingFields.push("Select a client");
+    } else {
+      if (!newClientName.trim()) missingFields.push("New client name");
+      if (!emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
+    }
+  }
+  if (!contactValid) {
+    if (contactMode === "select") {
+      missingFields.push("Select a contact");
+    } else {
+      if (!newContactFirstName.trim()) missingFields.push("Contact first name");
+      if (!emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
+    }
+  }
+  if (!lineItemsValid) missingFields.push("Complete all line items");
 
   const total = lineItems.reduce((sum, item) => {
     const q = Number(item.quantity) || 0;
@@ -1238,8 +1258,8 @@ const CreateInvoicePage: React.FC = () => {
             </div>
           )}
 
-          <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center">
-            <div className="text-sm text-muted-foreground">
+          <div className="sticky bottom-0 bg-background border-t border-border -mx-8 px-8 py-4 flex justify-between items-center gap-4">
+            <div className="text-sm text-muted-foreground flex-1 min-w-0">
               {total > 0 ? (
                 <span>
                   Total: <strong className="text-foreground">{currency} {total.toFixed(2)}</strong>
@@ -1247,6 +1267,11 @@ const CreateInvoicePage: React.FC = () => {
                 </span>
               ) : (
                 "Fill in quantity and cost to see total"
+              )}
+              {!allValid && !checkingApprovalState && missingFields.length > 0 && (
+                <div className="text-xs text-destructive mt-1">
+                  Missing: {missingFields.join(", ")}
+                </div>
               )}
             </div>
             <Button type="submit" disabled={!allValid || submitting || checkingApprovalState} className="gap-2">
