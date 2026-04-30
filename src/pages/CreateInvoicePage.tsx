@@ -173,6 +173,7 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
+  const [existingContactNewEmail, setExistingContactNewEmail] = useState("");
   // Schema-driven new client / new contact forms
   type SchemaField = { name: string; required: boolean; type: string };
   type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
