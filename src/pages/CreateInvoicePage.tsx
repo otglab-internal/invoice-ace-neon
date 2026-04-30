@@ -268,22 +268,29 @@ const CreateInvoicePage: React.FC = () => {
     const fetchClients = async () => {
       setLoadingClients(true);
       try {
+        const schemaFields = clientSchema?.fields.map((f) => f.name) ?? [];
+        const select = Array.from(new Set(["ContactName", "Name", ...schemaFields]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
             entity: "clients",
-            payload: {
-              select: ["ContactName"],
-              limit: 1000,
-            },
+            payload: { select, limit: 1000 },
           },
           headers: xeroHeaders,
         });
         if (Array.isArray(data?.data)) {
-          const mapped = data.data.map((row: any) => ({
-            id: String(row.id),
-            name: row.ContactName || row.Name || "(no name)",
-          }));
+          const mapped: XeroClient[] = data.data.map((row: any) => {
+            const fields: Record<string, string> = {};
+            for (const k of schemaFields) {
+              const v = row?.[k];
+              if (v !== undefined && v !== null) fields[k] = String(v);
+            }
+            return {
+              id: String(row.id),
+              name: row.ContactName || row.Name || "(no name)",
+              fields,
+            };
+          });
           mapped.sort((a, b) => a.name.localeCompare(b.name));
           setClients(mapped);
         }
