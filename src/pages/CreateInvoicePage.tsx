@@ -475,14 +475,16 @@ const CreateInvoicePage: React.FC = () => {
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
       try {
+        const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
+        const select = Array.from(new Set([
+          "ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons",
+          ...schemaFields,
+        ]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
             entity: "contacts",
-            payload: {
-              select: ["ContactName", "Name", "FirstName", "LastName", "EmailAddress", "ContactPersons"],
-              limit: 1000,
-            },
+            payload: { select, limit: 1000 },
           },
           headers: xeroHeaders,
         });
@@ -499,10 +501,16 @@ const CreateInvoicePage: React.FC = () => {
             }
           }
           const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
+          const fields: Record<string, string> = {};
+          for (const k of schemaFields) {
+            const v = row?.[k];
+            if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
+          }
           return {
             id: String(row.id),
             name: row.ContactName || row.Name || fullName || "(no name)",
             emails: Array.from(emails),
+            fields,
           };
         });
         const clientScoped = clientName && clientName !== "(no name)"
