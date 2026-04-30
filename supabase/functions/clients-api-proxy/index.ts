@@ -35,6 +35,8 @@ Deno.serve(async (req) => {
       headers: {
         "apikey": EXTERNAL_API_KEY,
         "x-api-key": apiKey,
+        "x-org-id": orgId,
+        "x-environment": environment,
         "Content-Type": "application/json",
       },
       body,
