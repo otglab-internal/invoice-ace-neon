@@ -536,15 +536,22 @@ const CreateInvoicePage: React.FC = () => {
         });
         if (cancelled) return;
         const rows = Array.isArray(data?.data) ? data.data : [];
+        const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
-          if (row.EmailAddress && typeof row.EmailAddress === "string") {
+          if (row.EmailAddress && typeof row.EmailAddress === "string" && emailRegex.test(row.EmailAddress)) {
             emails.add(row.EmailAddress);
           }
           if (Array.isArray(row.ContactPersons)) {
             for (const p of row.ContactPersons) {
               if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
             }
+          }
+          // Also seed from the schema's designated email field (covers orgs that store the
+          // billing email under non-obvious names like "ContactNumber").
+          if (emailField) {
+            const v = row?.[emailField];
+            if (typeof v === "string" && emailRegex.test(v)) emails.add(v);
           }
           const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
           const fields: Record<string, string> = {};
