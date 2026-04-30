@@ -1167,10 +1167,12 @@ const CreateInvoicePage: React.FC = () => {
               )}
 
               {clientMode === "select" && clientId && clientSchema && (
-                <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
-                  <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
-                    Client details
-                  </p>
+                <CollapsibleFormCard
+                  title="Client details"
+                  open={clientFormOpen}
+                  onOpenChange={setClientFormOpen}
+                  valid={clientExistingCheck.valid}
+                >
                   {clientSchema.fields
                     .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
                     .map((f) => {
@@ -1191,7 +1193,7 @@ const CreateInvoicePage: React.FC = () => {
                       );
                     })}
                   <p className="text-xs text-muted-foreground">Changes will be saved to the client on submit.</p>
-                </div>
+                </CollapsibleFormCard>
               )}
             </div>
 
