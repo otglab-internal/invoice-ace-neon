@@ -553,11 +553,11 @@ const CreateInvoicePage: React.FC = () => {
 
   const clientValid = clientMode === "select"
     ? !!clientId
-    : !!newClientName.trim() && emailRegex.test(newClientEmail.trim());
+    : !!newClientName.trim() && (newClientEmail.trim() === "" || emailRegex.test(newClientEmail.trim()));
   const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
   const contactValid = effectiveContactMode === "select"
     ? !!contactId
-    : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
+    : !!newContactFirstName.trim() && (newContactEmail.trim() === "" || emailRegex.test(newContactEmail.trim()));
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
 
@@ -567,7 +567,7 @@ const CreateInvoicePage: React.FC = () => {
       missingFields.push("Select a client");
     } else {
       if (!newClientName.trim()) missingFields.push("New client name");
-      if (!emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
+      if (newClientEmail.trim() !== "" && !emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
     }
   }
   if (!contactValid) {
@@ -575,7 +575,7 @@ const CreateInvoicePage: React.FC = () => {
       missingFields.push("Select a contact");
     } else {
       if (!newContactFirstName.trim()) missingFields.push("Contact first name");
-      if (!emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
+      if (newContactEmail.trim() !== "" && !emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
     }
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
@@ -954,7 +954,7 @@ const CreateInvoicePage: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Email address *</Label>
+                    <Label className="text-xs text-muted-foreground">Email address (optional)</Label>
                     <Input
                       type="email"
                       placeholder="billing@acme.com"
@@ -1089,7 +1089,7 @@ const CreateInvoicePage: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Email *</Label>
+                  <Label className="text-xs text-muted-foreground">Email (optional)</Label>
                   <Input
                     type="email"
                     placeholder="jane@example.com"
