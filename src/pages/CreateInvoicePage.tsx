@@ -744,7 +744,7 @@ const CreateInvoicePage: React.FC = () => {
     if (!schema) return { valid: false, missing: ["Loading schema..."] };
     const missing: string[] = [];
     for (const f of schema.fields) {
-      if (HIDDEN_SCHEMA_FIELDS.has(f.name)) continue;
+      if (isHiddenField(schema, f.name)) continue;
       const v = (values[f.name] || "").trim();
       if (f.required && !v) missing.push(formatLabel(f.name));
       if (v && /email/i.test(f.name) && !emailRegex.test(v)) {
