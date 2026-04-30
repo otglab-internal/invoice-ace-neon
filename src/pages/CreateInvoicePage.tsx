@@ -957,7 +957,8 @@ const CreateInvoicePage: React.FC = () => {
               : (() => {
                   const checkbox = selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
                   if (checkbox.length > 0) return checkbox;
-                  const edited = (existingContactFields.EmailAddress || "").trim();
+                  const emailFieldName = pickEmailField(contactSchema);
+                  const edited = (emailFieldName ? existingContactFields[emailFieldName] || "" : "").trim();
                   return edited && emailRegex.test(edited) ? [edited] : [];
                 })())
           : [],
