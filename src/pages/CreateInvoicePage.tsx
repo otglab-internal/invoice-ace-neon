@@ -240,16 +240,33 @@ const CreateInvoicePage: React.FC = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactMode, setContactMode] = useState<"select" | "new">("select");
   const [contactId, setContactId] = useState("");
-  // New contact (person) form fields
-  const [newContactFirstName, setNewContactFirstName] = useState("");
-  const [newContactLastName, setNewContactLastName] = useState("");
-  const [newContactEmail, setNewContactEmail] = useState<string>("");
+  // Schema-driven new client / new contact forms
+  type SchemaField = { name: string; required: boolean; type: string };
+  type EntitySchema = { display_field: string; fields: SchemaField[] } | null;
+  const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
+  const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
+  const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
+  const [newContactFields, setNewContactFields] = useState<Record<string, string>>({});
   const [newContactPersons, setNewContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
-  // New client form
+  // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
-  const [newClientName, setNewClientName] = useState("");
-  const [newClientEmail, setNewClientEmail] = useState("");
-  const [newClientAccountNumber, setNewClientAccountNumber] = useState("");
+
+  // Fields hidden from the user — system-managed (e.g. ClientGUID auto-generated on submit).
+  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID"]);
+
+  // Heuristic field-name pickers used to map dynamic schemas onto our invoice payload (display name + email).
+  const pickEmailField = (schema: EntitySchema): string | null => {
+    if (!schema) return null;
+    const f = schema.fields.find((x) => /email/i.test(x.name));
+    return f?.name ?? null;
+  };
+  const formatLabel = (name: string): string =>
+    name
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/_/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^./, (c) => c.toUpperCase());
   const [existingPrimaryEmail, setExistingPrimaryEmail] = useState<string>("");
   const [existingContactPersons, setExistingContactPersons] = useState<Array<{ firstName: string; lastName: string; email: string; includeInEmails: boolean }>>([]);
   const [invoiceDate] = useState(() => {
@@ -390,6 +407,38 @@ const CreateInvoicePage: React.FC = () => {
     loadXeroData();
   }, []);
 
+  // Fetch dynamic schemas for clients & contacts so "create new" forms render whatever fields each org has configured.
+  useEffect(() => {
+    let cancelled = false;
+    const headers = {
+      "x-org-id": getOrgId(),
+      "x-environment": localStorage.getItem("auth_environment") || "production",
+    };
+    const fetchSchema = async (entity: "clients" | "contacts") => {
+      try {
+        const { data } = await supabase.functions.invoke("clients-api-proxy", {
+          body: { action: "describe", entity },
+          headers,
+        });
+        if (cancelled || !data?.fields) return null;
+        return {
+          display_field: data.display_field,
+          fields: data.fields as Array<{ name: string; required: boolean; type: string }>,
+        };
+      } catch (err) {
+        console.warn(`Failed to describe ${entity}:`, err);
+        return null;
+      }
+    };
+    (async () => {
+      const [c, p] = await Promise.all([fetchSchema("clients"), fetchSchema("contacts")]);
+      if (cancelled) return;
+      if (c) setClientSchema(c);
+      if (p) setContactSchema(p);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     let active = true;
     const identityFilters: Array<Record<string, string>> = [];
@@ -462,7 +511,7 @@ const CreateInvoicePage: React.FC = () => {
     if (!clientId) {
       setContacts([]);
       setContactId("");
-      setContactMode("select");
+      setContactMode(clientMode === "new" ? "new" : "select");
       return;
     }
     const selectedClient = clients.find((c) => c.id === clientId);
@@ -519,7 +568,7 @@ const CreateInvoicePage: React.FC = () => {
     };
     fetchContactsForClient();
     return () => { cancelled = true; };
-  }, [clientId, clients]);
+  }, [clientId, clients, clientMode]);
 
   // When the selected contact changes, default to selecting all of its emails.
   useEffect(() => {
@@ -546,18 +595,57 @@ const CreateInvoicePage: React.FC = () => {
     setLineItems((prev) => [...prev, createLineItem(defaultId)]);
   }, [templates]);
 
-  const newContactFullName = [newContactFirstName.trim(), newContactLastName.trim()].filter(Boolean).join(" ").trim();
-  const contactName = contactMode === "select"
+  // Map dynamic schema field-values into the canonical name + email used by invoice payload.
+  const getDynamicName = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): string => {
+    if (!schema) return "";
+    return (values[schema.display_field] || "").trim();
+  };
+  const getDynamicEmail = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): string => {
+    const f = pickEmailField(schema);
+    return f ? (values[f] || "").trim() : "";
+  };
+
+  const newClientName = getDynamicName(clientSchema, newClientFields);
+  const newClientEmail = getDynamicEmail(clientSchema, newClientFields);
+  const newContactFullName = getDynamicName(contactSchema, newContactFields);
+  const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
+
+  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
+
+  const contactName = effectiveContactMode === "select"
     ? contacts.find((c) => c.id === contactId)?.name || ""
     : newContactFullName;
 
-  const clientValid = clientMode === "select"
-    ? !!clientId
-    : !!newClientName.trim() && emailRegex.test(newClientEmail.trim());
-  const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
-  const contactValid = effectiveContactMode === "select"
-    ? !!contactId
-    : !!newContactFirstName.trim() && emailRegex.test(newContactEmail.trim());
+  // Validate dynamic schema: every required (visible) field must have a value, and any email-named field
+  // that has been filled in must be a valid email address.
+  const validateSchemaValues = (
+    schema: EntitySchema,
+    values: Record<string, string>,
+  ): { valid: boolean; missing: string[] } => {
+    if (!schema) return { valid: false, missing: ["Loading schema..."] };
+    const missing: string[] = [];
+    for (const f of schema.fields) {
+      if (HIDDEN_SCHEMA_FIELDS.has(f.name)) continue;
+      const v = (values[f.name] || "").trim();
+      if (f.required && !v) missing.push(formatLabel(f.name));
+      if (v && /email/i.test(f.name) && !emailRegex.test(v)) {
+        missing.push(`Valid ${formatLabel(f.name)}`);
+      }
+    }
+    return { valid: missing.length === 0, missing };
+  };
+
+  const clientNewCheck = validateSchemaValues(clientSchema, newClientFields);
+  const contactNewCheck = validateSchemaValues(contactSchema, newContactFields);
+
+  const clientValid = clientMode === "select" ? !!clientId : clientNewCheck.valid;
+  const contactValid = effectiveContactMode === "select" ? !!contactId : contactNewCheck.valid;
   const lineItemsValid = lineItems.every((item) => isLineItemValid(item, templates, trackingCategories));
   const allValid = clientValid && contactValid && lineItemsValid;
 
@@ -566,16 +654,14 @@ const CreateInvoicePage: React.FC = () => {
     if (clientMode === "select") {
       missingFields.push("Select a client");
     } else {
-      if (!newClientName.trim()) missingFields.push("New client name");
-      if (!emailRegex.test(newClientEmail.trim())) missingFields.push("Valid client email");
+      clientNewCheck.missing.forEach((m) => missingFields.push(`Client: ${m}`));
     }
   }
   if (!contactValid) {
     if (effectiveContactMode === "select") {
       missingFields.push("Select a contact");
     } else {
-      if (!newContactFirstName.trim()) missingFields.push("Contact first name");
-      if (!emailRegex.test(newContactEmail.trim())) missingFields.push("Valid contact email");
+      contactNewCheck.missing.forEach((m) => missingFields.push(`Contact: ${m}`));
     }
   }
   if (!lineItemsValid) missingFields.push("Complete all line items");
@@ -631,13 +717,16 @@ const CreateInvoicePage: React.FC = () => {
 
       if (clientMode === "new") {
         try {
-          const clientGuid = crypto.randomUUID();
-          const clientData: Record<string, string> = {
-            ContactName: newClientName.trim(),
-            EmailAddress: newClientEmail.trim(),
-            ClientGUID: clientGuid,
-          };
-          if (newClientAccountNumber.trim()) clientData.AccountNumber = newClientAccountNumber.trim();
+          // Build payload from whatever fields the schema declares — only send non-empty values,
+          // plus an auto-generated ClientGUID for the system-managed identity field if present.
+          const clientData: Record<string, string> = {};
+          for (const f of clientSchema?.fields ?? []) {
+            const v = (newClientFields[f.name] || "").trim();
+            if (v) clientData[f.name] = v;
+          }
+          if (clientSchema?.fields.some((f) => f.name === "ClientGUID")) {
+            clientData.ClientGUID = crypto.randomUUID();
+          }
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
             body: { action: "create", entity: "clients", payload: { data: clientData } },
             headers: xeroHeaders,
@@ -646,7 +735,7 @@ const CreateInvoicePage: React.FC = () => {
             throw new Error(createRes?.error || createErr?.message || "Failed to create client");
           }
           effectiveClientId = String(createRes.data.id);
-          effectiveClientName = newClientName.trim();
+          effectiveClientName = newClientName;
           // Reflect in local list so subsequent UI is consistent.
           setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName }].sort((a, b) => a.name.localeCompare(b.name)));
         } catch (clientErr: any) {
@@ -659,18 +748,20 @@ const CreateInvoicePage: React.FC = () => {
       let effectiveContactId = contactId;
       let effectiveContactName = contactName;
 
-      if (contactMode === "new") {
+      if (effectiveContactMode === "new") {
         if (!effectiveClientId) {
           toast.error("Cannot create contact: client is missing");
           setSubmitting(false);
           return;
         }
         try {
+          const contactData: Record<string, string> = {};
+          for (const f of contactSchema?.fields ?? []) {
+            const v = (newContactFields[f.name] || "").trim();
+            if (v) contactData[f.name] = v;
+          }
           const contactPayload = {
-            data: {
-              Name: newContactFullName,
-              ContactNumber: newContactEmail.trim(),
-            },
+            data: contactData,
             parent_id: effectiveClientId,
           };
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
@@ -722,7 +813,7 @@ const CreateInvoicePage: React.FC = () => {
         send_to_client: sendToClient,
         due_days: Number(dueDays) || 7,
         recipient_emails: sendToClient
-          ? (contactMode === "new"
+          ? (effectiveContactMode === "new"
               ? [newContactEmail.trim(), ...newContactPersons.filter((p) => p.includeInEmails).map((p) => p.email.trim())]
                   .filter((e) => emailRegex.test(e))
               : (() => {
@@ -735,7 +826,7 @@ const CreateInvoicePage: React.FC = () => {
                   return selectedRecipientEmails.map((e) => e.trim()).filter((e) => emailRegex.test(e));
                 })())
           : [],
-        contact_persons: contactMode === "new"
+        contact_persons: effectiveContactMode === "new"
           ? newContactPersons
               .filter((p) => p.firstName.trim() && emailRegex.test(p.email.trim()))
               .map((p) => ({ first_name: p.firstName.trim(), last_name: p.lastName.trim(), email: p.email.trim(), include_in_emails: p.includeInEmails }))
@@ -819,14 +910,10 @@ const CreateInvoicePage: React.FC = () => {
       const defaultId = templates.length > 0 ? templates[0].id : FREETEXT_ID;
       setClientMode("select");
       setClientId("");
-      setNewClientName("");
-      setNewClientEmail("");
-      setNewClientAccountNumber("");
+      setNewClientFields({});
       setContactMode("select");
       setContactId("");
-      setNewContactFirstName("");
-      setNewContactLastName("");
-      setNewContactEmail("");
+      setNewContactFields({});
       setNewContactPersons([]);
       setReference("");
       setSendToClient(false);
@@ -891,7 +978,12 @@ const CreateInvoicePage: React.FC = () => {
                           value="__create_new_client__"
                           onSelect={() => {
                             setClientMode("new");
-                            setNewClientName(clientSearch);
+                            // Seed the display field (e.g. ContactName) with the search text, if schema is loaded.
+                            setNewClientFields(
+                              clientSchema?.display_field
+                                ? { [clientSchema.display_field]: clientSearch }
+                                : {}
+                            );
                             setClientId("");
                             // Reset contact when switching to a brand-new client
                             setContactMode("new");
@@ -935,41 +1027,38 @@ const CreateInvoicePage: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         setClientMode("select");
-                        setNewClientName("");
-                        setNewClientEmail("");
-                        setNewClientAccountNumber("");
+                        setNewClientFields({});
                         setContactMode("select");
+                        setNewContactFields({});
                       }}
                     >
                       Cancel
                     </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Client name *</Label>
-                    <Input
-                      placeholder="Acme Pte Ltd"
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Email address *</Label>
-                    <Input
-                      type="email"
-                      placeholder="billing@acme.com"
-                      value={newClientEmail}
-                      onChange={(e) => setNewClientEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">Account number (optional)</Label>
-                    <Input
-                      placeholder="ACC-001"
-                      value={newClientAccountNumber}
-                      onChange={(e) => setNewClientAccountNumber(e.target.value)}
-                    />
-                  </div>
+                  {!clientSchema ? (
+                    <p className="text-xs text-muted-foreground">Loading client fields…</p>
+                  ) : (
+                    clientSchema.fields
+                      .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                      .map((f, idx) => {
+                        const isEmail = /email/i.test(f.name);
+                        return (
+                          <div key={f.name} className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">
+                              {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                            </Label>
+                            <Input
+                              type={isEmail ? "email" : "text"}
+                              value={newClientFields[f.name] || ""}
+                              onChange={(e) =>
+                                setNewClientFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                              }
+                              autoFocus={idx === 0}
+                            />
+                          </div>
+                        );
+                      })
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Add the contact person below — both will be created on submit.
                   </p>
@@ -1013,9 +1102,11 @@ const CreateInvoicePage: React.FC = () => {
                               value="__create_new__"
                               onSelect={() => {
                                 setContactMode("new");
-                                setNewContactFirstName(contactSearch);
-                                setNewContactLastName("");
-                                setNewContactEmail("");
+                                setNewContactFields(
+                                  contactSchema?.display_field
+                                    ? { [contactSchema.display_field]: contactSearch }
+                                    : {}
+                                );
                                 setContactId("");
                                 setContactOpen(false);
                               }}
@@ -1030,8 +1121,7 @@ const CreateInvoicePage: React.FC = () => {
                                 onSelect={() => {
                                   setContactId(c.id);
                                   setContactMode("select");
-                                  setNewContactFirstName("");
-                                  setNewContactLastName("");
+                                  setNewContactFields({});
                                   setContactOpen(false);
                                 }}
                               >
@@ -1046,7 +1136,7 @@ const CreateInvoicePage: React.FC = () => {
                   </Popover>
                 )}
 
-            {contactMode === "new" && (
+            {effectiveContactMode === "new" && (
               <div className="space-y-3 animate-fade-in rounded-lg border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold font-display text-foreground uppercase tracking-wide">
@@ -1059,9 +1149,7 @@ const CreateInvoicePage: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         setContactMode("select");
-                        setNewContactFirstName("");
-                        setNewContactLastName("");
-                        setNewContactEmail("");
+                        setNewContactFields({});
                         setNewContactPersons([]);
                       }}
                     >
@@ -1069,34 +1157,30 @@ const CreateInvoicePage: React.FC = () => {
                     </Button>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">First name *</Label>
-                    <Input
-                      placeholder="Jane"
-                      value={newContactFirstName}
-                      onChange={(e) => setNewContactFirstName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Last name</Label>
-                    <Input
-                      placeholder="Doe"
-                      value={newContactLastName}
-                      onChange={(e) => setNewContactLastName(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Email *</Label>
-                  <Input
-                    type="email"
-                    placeholder="jane@example.com"
-                    value={newContactEmail}
-                    onChange={(e) => setNewContactEmail(e.target.value)}
-                  />
-                </div>
+                {!contactSchema ? (
+                  <p className="text-xs text-muted-foreground">Loading contact fields…</p>
+                ) : (
+                  contactSchema.fields
+                    .filter((f) => !HIDDEN_SCHEMA_FIELDS.has(f.name))
+                    .map((f, idx) => {
+                      const isEmail = /email/i.test(f.name);
+                      return (
+                        <div key={f.name} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">
+                            {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                          </Label>
+                          <Input
+                            type={isEmail ? "email" : "text"}
+                            value={newContactFields[f.name] || ""}
+                            onChange={(e) =>
+                              setNewContactFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                            autoFocus={idx === 0}
+                          />
+                        </div>
+                      );
+                    })
+                )}
               </div>
             )}
             {contactMode === "select" && contactId && (() => {
