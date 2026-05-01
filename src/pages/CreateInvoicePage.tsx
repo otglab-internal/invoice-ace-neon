@@ -1306,6 +1306,11 @@ const CreateInvoicePage: React.FC = () => {
                       </Button>
                     </div>
                     {contacts.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground italic">
+                        Contacts with no email will be skipped.
+                      </p>
+                    )}
+                    {contacts.length > 0 && (
                       <div className="space-y-1.5 max-h-72 overflow-y-auto">
                         {contacts.flatMap((c) => {
                           const emails = c.emails ?? [];
