@@ -229,6 +229,24 @@ const CreateInvoicePage: React.FC = () => {
     display_field: string;
     fields: SchemaField[];
   } | null;
+  const CLIENT_SCHEMA_FIELDS: SchemaField[] = [
+    { name: "CustomerName", type: "text", required: true },
+    { name: "Registered Address", type: "text", required: false },
+    { name: "UEN", type: "text", required: false },
+    { name: "Country", type: "text", required: false },
+    { name: "TypeOfCustomer", type: "text", required: false },
+    { name: "Industry", type: "text", required: false },
+    { name: "OldID", type: "text", required: false },
+  ];
+  const CONTACT_SCHEMA_FIELDS: SchemaField[] = [
+    { name: "ContactName", type: "text", required: true },
+    { name: "hasBillingEmailFlag", type: "boolean", required: true },
+    { name: "ContactNumber", type: "text", required: false },
+    { name: "Designation", type: "text", required: false },
+    { name: "Email", type: "text", required: false },
+    { name: "Remarks", type: "text", required: false },
+    { name: "OldID", type: "text", required: false },
+  ];
   const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
   const [newClientFields, setNewClientFields] = useState<Record<string, string>>({});
@@ -343,8 +361,8 @@ const CreateInvoicePage: React.FC = () => {
     const fetchClients = async () => {
       setLoadingClients(true);
       try {
-        const schemaFields = clientSchema?.fields.map((f) => f.name) ?? [];
-        const select = Array.from(new Set(["CustomerName", ...schemaFields]));
+        const schemaFields = (clientSchema?.fields.length ? clientSchema.fields : CLIENT_SCHEMA_FIELDS).map((f) => f.name);
+        const select = Array.from(new Set(["id", "CustomerName", ...schemaFields]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
@@ -447,9 +465,12 @@ const CreateInvoicePage: React.FC = () => {
           headers,
         });
         if (cancelled || !data?.fields) return null;
+        const fallback = entity === "clients"
+          ? { display_field: "CustomerName", fields: CLIENT_SCHEMA_FIELDS }
+          : { display_field: "ContactName", fields: CONTACT_SCHEMA_FIELDS };
         return {
-          display_field: data.display_field,
-          fields: data.fields as SchemaField[],
+          display_field: data.display_field || fallback.display_field,
+          fields: Array.isArray(data.fields) && data.fields.length > 0 ? data.fields as SchemaField[] : fallback.fields,
         };
       } catch (err) {
         console.warn(`Failed to describe ${entity}:`, err);
@@ -548,9 +569,9 @@ const CreateInvoicePage: React.FC = () => {
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
       try {
-        const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
+        const schemaFields = (contactSchema?.fields.length ? contactSchema.fields : CONTACT_SCHEMA_FIELDS).map((f) => f.name);
         // Schema-driven relationship: contacts.parent_id (UUID) → clients.id
-        const select = Array.from(new Set(["id", "parent_id", ...schemaFields]));
+        const select = Array.from(new Set(["id", "parent_id", "ContactName", ...schemaFields]));
 
         const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
@@ -994,6 +1015,7 @@ const CreateInvoicePage: React.FC = () => {
       setSendToClient(false);
       setDueDays("7");
       setLineItems([createLineItem(defaultId)]);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       toast.error("Something went wrong");
     } finally {
