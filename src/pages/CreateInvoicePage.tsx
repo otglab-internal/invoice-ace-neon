@@ -569,9 +569,9 @@ const CreateInvoicePage: React.FC = () => {
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
       try {
-        const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
+        const schemaFields = (contactSchema?.fields.length ? contactSchema.fields : CONTACT_SCHEMA_FIELDS).map((f) => f.name);
         // Schema-driven relationship: contacts.parent_id (UUID) → clients.id
-        const select = Array.from(new Set(["id", "parent_id", ...schemaFields]));
+        const select = Array.from(new Set(["id", "parent_id", "ContactName", ...schemaFields]));
 
         const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
