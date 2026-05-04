@@ -1015,6 +1015,7 @@ const CreateInvoicePage: React.FC = () => {
       setSendToClient(false);
       setDueDays("7");
       setLineItems([createLineItem(defaultId)]);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       toast.error("Something went wrong");
     } finally {
