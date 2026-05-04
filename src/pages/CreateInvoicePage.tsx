@@ -695,6 +695,8 @@ const CreateInvoicePage: React.FC = () => {
     const missing: string[] = [];
     for (const f of schema.fields) {
       if (isHiddenField(schema, f.name)) continue;
+      // Boolean fields always have a defined value (default false in form), so presence is satisfied.
+      if (f.type === "boolean") continue;
       const v = (values[f.name] || "").trim();
       if (f.required && !v) missing.push(formatLabel(f.name));
       if (v && isEmailFieldName(f.name) && !emailRegex.test(v)) {
