@@ -549,119 +549,46 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingContacts(true);
       try {
         const schemaFields = contactSchema?.fields.map((f) => f.name) ?? [];
-        // Schema-driven relationship resolution.
-        // describe payload tells us:
-        //   contactSchema.link_field           — FK column on contacts (e.g. "ClientGuid")
-        //   contactSchema.parent_business_key  — the column on clients it references (e.g. "ClientGuid")
-        // Fall back to legacy hardcoded names when the proxy hasn't been updated yet.
-        const linkField = contactSchema?.link_field || "ClientGUID";
-        const parentBusinessKey = contactSchema?.parent_business_key || clientSchema?.business_key || "ClientGUID";
-        const selectedClient = clients.find((c) => c.id === clientId);
-        const parentBusinessValue =
-          selectedClient?.fields?.[parentBusinessKey] ||
-          selectedClient?.fields?.ClientGUID ||
-          selectedClient?.fields?.ClientGuid ||
-          clientId;
+        // Schema-driven relationship: contacts.parent_id (UUID) → clients.id
+        const select = Array.from(new Set(["id", "parent_id", ...schemaFields]));
 
-        // Build select from ONLY fields that actually exist on this entity's schema,
-        // plus `id` (always present). Including unknown columns causes some proxy
-        // versions to silently drop the `where` clause and return every row.
-        const knownFields = new Set<string>(schemaFields);
-        const candidateExtras = [
-          "ContactName", "Name", "FirstName", "LastName",
-          "EmailAddress", "ContactPersons", "parent_id",
-          linkField, "ClientGUID", "ClientGuid",
-        ];
-        const select = Array.from(new Set([
-          "id",
-          ...schemaFields,
-          ...candidateExtras.filter((f) => knownFields.has(f)),
-        ]));
+        const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
+          body: {
+            action: "read",
+            entity: "contacts",
+            payload: { select, limit: 1000, where: { parent_id: clientId } },
+          },
+          headers: xeroHeaders,
+        });
+        if (cancelled) return;
+        let rows: any[] = Array.isArray(byParent?.data) ? byParent.data : [];
 
-        const matchesSelectedClient = (r: any): boolean =>
-          (r?.[linkField] != null && String(r[linkField]) === String(parentBusinessValue)) ||
-          (r?.parent_id != null && String(r.parent_id) === clientId) ||
-          (r?.ClientGUID != null && String(r.ClientGUID) === String(parentBusinessValue)) ||
-          (r?.ClientGuid != null && String(r.ClientGuid) === String(parentBusinessValue));
+        // Defensive: if proxy ignored `where`, re-filter client-side.
+        rows = rows.filter((r) => r?.parent_id != null && String(r.parent_id) === clientId);
 
-        let rows: any[] = [];
-        // Attempt 1: server-side filter by the schema-declared link field
-        if (parentBusinessValue) {
-          const { data: byLink } = await supabase.functions.invoke("clients-api-proxy", {
-            body: {
-              action: "read",
-              entity: "contacts",
-              payload: { select, limit: 1000, where: { [linkField]: parentBusinessValue } },
-            },
-            headers: xeroHeaders,
-          });
-          if (cancelled) return;
-          rows = Array.isArray(byLink?.data) ? byLink.data : [];
-        }
-
-        // Attempt 2: legacy parent_id fallback (older orgs)
-        if (rows.length === 0) {
-          const { data: byParent } = await supabase.functions.invoke("clients-api-proxy", {
-            body: {
-              action: "read",
-              entity: "contacts",
-              payload: { select, limit: 1000, where: { parent_id: clientId } },
-            },
-            headers: xeroHeaders,
-          });
-          if (cancelled) return;
-          rows = Array.isArray(byParent?.data) ? byParent.data : [];
-        }
-
-        // Attempt 3: fetch all if still empty
-        if (rows.length === 0) {
-          const { data: all } = await supabase.functions.invoke("clients-api-proxy", {
-            body: {
-              action: "read",
-              entity: "contacts",
-              payload: { select, limit: 2000 },
-            },
-            headers: xeroHeaders,
-          });
-          if (cancelled) return;
-          rows = Array.isArray(all?.data) ? all.data : [];
-        }
-
-        // Defensive client-side filter — some proxy versions silently ignore `where`
-        // and return every row, so we always re-filter against the selected client.
-        rows = rows.filter(matchesSelectedClient);
         const emailField = pickEmailField(contactSchema);
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
-          if (row.EmailAddress && typeof row.EmailAddress === "string" && emailRegex.test(row.EmailAddress)) {
-            emails.add(row.EmailAddress);
-          }
-          if (Array.isArray(row.ContactPersons)) {
-            for (const p of row.ContactPersons) {
-              if (p?.IncludeInEmails && p?.EmailAddress) emails.add(p.EmailAddress);
-            }
-          }
-          // Also seed from the schema's designated email field (covers orgs that store the
-          // billing email under non-obvious names like "ContactNumber").
           if (emailField) {
             const v = row?.[emailField];
             if (typeof v === "string" && emailRegex.test(v)) emails.add(v);
           }
-          const fullName = [row.FirstName, row.LastName].filter(Boolean).join(" ").trim();
           const fields: Record<string, string> = {};
           for (const k of schemaFields) {
             const v = row?.[k];
             if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
           }
+          const displayName = contactSchema?.display_field
+            ? row?.[contactSchema.display_field]
+            : null;
           return {
             id: String(row.id),
-            name: row.ContactName || row.Name || fullName || "(no name)",
+            name: displayName || row.ContactName || "(no name)",
             emails: Array.from(emails),
             fields,
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
           };
         });
-        // Rows are already scoped to the selected client (by parent_id or ClientGUID).
         mapped.sort((a, b) => a.name.localeCompare(b.name));
         setContacts(mapped);
         setContactId("");
