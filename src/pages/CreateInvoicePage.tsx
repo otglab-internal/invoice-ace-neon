@@ -344,12 +344,7 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingClients(true);
       try {
         const schemaFields = clientSchema?.fields.map((f) => f.name) ?? [];
-        const displayField = clientSchema?.display_field;
-        const select = Array.from(new Set([
-          ...(displayField ? [displayField] : []),
-          "CustomerName", "ContactName", "Name",
-          ...schemaFields,
-        ]));
+        const select = Array.from(new Set(["CustomerName", ...schemaFields]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
@@ -365,11 +360,9 @@ const CreateInvoicePage: React.FC = () => {
               const v = row?.[k];
               if (v !== undefined && v !== null) fields[k] = String(v);
             }
-            const displayName = (displayField ? row?.[displayField] : undefined)
-              || row.CustomerName || row.ContactName || row.Name;
             return {
               id: String(row.id),
-              name: displayName ? String(displayName) : "(no name)",
+              name: row.CustomerName ? String(row.CustomerName) : "(no name)",
               fields,
             };
           });
