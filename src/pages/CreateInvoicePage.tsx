@@ -833,25 +833,21 @@ const CreateInvoicePage: React.FC = () => {
           return;
         }
         try {
-          const contactData: Record<string, string> = {};
+          // Build payload from declared fields. Coerce boolean-typed fields from string ("true"/"false")
+          // to real booleans; everything else is sent as a trimmed string when non-empty.
+          const contactData: Record<string, unknown> = {};
           for (const f of contactSchema?.fields ?? []) {
-            const v = (newContactFields[f.name] || "").trim();
-            if (v) contactData[f.name] = v;
+            if (isHiddenField(contactSchema, f.name)) continue;
+            const raw = newContactFields[f.name];
+            if (raw === undefined) continue;
+            if (f.type === "boolean") {
+              contactData[f.name] = isTruthyFlag(raw);
+            } else {
+              const v = (raw || "").trim();
+              if (v) contactData[f.name] = v;
+            }
           }
-          // Populate the schema-declared FK column with the parent's business key
-          // so the new contact is properly linked to its client.
-          const linkField = contactSchema?.link_field;
-          const parentBusinessKey =
-            contactSchema?.parent_business_key || clientSchema?.business_key || null;
-          const selectedClientRow = clients.find((c) => c.id === effectiveClientId);
-          const parentBusinessValue =
-            (parentBusinessKey && selectedClientRow?.fields?.[parentBusinessKey]) ||
-            selectedClientRow?.fields?.ClientGUID ||
-            selectedClientRow?.fields?.ClientGuid ||
-            "";
-          if (linkField && parentBusinessValue && !contactData[linkField]) {
-            contactData[linkField] = parentBusinessValue;
-          }
+          // Contacts link to their parent client purely via parent_id (UUID).
           const contactPayload = {
             data: contactData,
             parent_id: effectiveClientId,
