@@ -1285,6 +1285,22 @@ const CreateInvoicePage: React.FC = () => {
                     .filter((f) => !isHiddenField(contactSchema, f.name))
                     .map((f, idx) => {
                       const isEmail = isEmailFieldName(f.name);
+                      if (f.type === "boolean") {
+                        const checked = isTruthyFlag(newContactFields[f.name]);
+                        return (
+                          <div key={f.name} className="flex items-center justify-between rounded-md border border-border bg-background/40 px-3 py-2">
+                            <Label className="text-xs text-muted-foreground">
+                              {formatLabel(f.name)} {f.required ? "*" : "(optional)"}
+                            </Label>
+                            <Switch
+                              checked={checked}
+                              onCheckedChange={(v) =>
+                                setNewContactFields((prev) => ({ ...prev, [f.name]: v ? "true" : "false" }))
+                              }
+                            />
+                          </div>
+                        );
+                      }
                       return (
                         <div key={f.name} className="space-y-1">
                           <Label className="text-xs text-muted-foreground">
