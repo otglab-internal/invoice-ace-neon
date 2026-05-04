@@ -228,10 +228,6 @@ const CreateInvoicePage: React.FC = () => {
   type EntitySchema = {
     display_field: string;
     fields: SchemaField[];
-    // New describe metadata (optional for backward compatibility):
-    link_field?: string | null;          // FK column on child pointing to parent business key
-    business_key?: string | null;        // child's natural/business identity column (e.g. ContactGuid)
-    parent_business_key?: string | null; // parent's business key referenced by link_field (e.g. ClientGuid)
   } | null;
   const [clientSchema, setClientSchema] = useState<EntitySchema>(null);
   const [contactSchema, setContactSchema] = useState<EntitySchema>(null);
