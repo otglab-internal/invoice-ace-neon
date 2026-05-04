@@ -344,7 +344,7 @@ const CreateInvoicePage: React.FC = () => {
       setLoadingClients(true);
       try {
         const schemaFields = clientSchema?.fields.map((f) => f.name) ?? [];
-        const select = Array.from(new Set(["ContactName", "Name", ...schemaFields]));
+        const select = Array.from(new Set(["CustomerName", ...schemaFields]));
         const { data } = await supabase.functions.invoke("clients-api-proxy", {
           body: {
             action: "read",
@@ -362,7 +362,7 @@ const CreateInvoicePage: React.FC = () => {
             }
             return {
               id: String(row.id),
-              name: row.ContactName || row.Name || "(no name)",
+              name: row.CustomerName ? String(row.CustomerName) : "(no name)",
               fields,
             };
           });
@@ -578,12 +578,9 @@ const CreateInvoicePage: React.FC = () => {
             const v = row?.[k];
             if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
           }
-          const displayName = contactSchema?.display_field
-            ? row?.[contactSchema.display_field]
-            : null;
           return {
             id: String(row.id),
-            name: displayName || row.ContactName || "(no name)",
+            name: row.ContactName ? String(row.ContactName) : "(no name)",
             emails: Array.from(emails),
             fields,
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
@@ -658,12 +655,16 @@ const CreateInvoicePage: React.FC = () => {
   }, [templates]);
 
   // Map dynamic schema field-values into the canonical name + email used by invoice payload.
+  // Clients always use CustomerName; contacts always use ContactName.
   const getDynamicName = (
     schema: EntitySchema,
     values: Record<string, string>,
+    entity?: "clients" | "contacts",
   ): string => {
+    if (entity === "clients") return (values.CustomerName || "").trim();
+    if (entity === "contacts") return (values.ContactName || "").trim();
     if (!schema) return "";
-    return (values[schema.display_field] || "").trim();
+    return (values[schema.display_field] || values.CustomerName || values.ContactName || "").trim();
   };
   const getDynamicEmail = (
     schema: EntitySchema,
@@ -673,9 +674,9 @@ const CreateInvoicePage: React.FC = () => {
     return f ? (values[f] || "").trim() : "";
   };
 
-  const newClientName = getDynamicName(clientSchema, newClientFields);
+  const newClientName = getDynamicName(clientSchema, newClientFields, "clients");
   const newClientEmail = getDynamicEmail(clientSchema, newClientFields);
-  const newContactFullName = getDynamicName(contactSchema, newContactFields);
+  const newContactFullName = getDynamicName(contactSchema, newContactFields, "contacts");
   const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
 
   const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
@@ -1052,12 +1053,8 @@ const CreateInvoicePage: React.FC = () => {
                           value="__create_new_client__"
                           onSelect={() => {
                             setClientMode("new");
-                            // Seed the display field (e.g. ContactName) with the search text, if schema is loaded.
-                            setNewClientFields(
-                              clientSchema?.display_field
-                                ? { [clientSchema.display_field]: clientSearch }
-                                : {}
-                            );
+                            // Seed CustomerName with the search text.
+                            setNewClientFields({ CustomerName: clientSearch });
                             setClientId("");
                             // Reset contact when switching to a brand-new client
                             setContactMode("new");
