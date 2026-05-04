@@ -622,7 +622,7 @@ const CreateInvoicePage: React.FC = () => {
     const preselectedIds: string[] = [];
     const preselectedEmails: string[] = [];
     for (const c of contacts) {
-      const flag = c.fields?.HasBillingEmailFlag;
+      const flag = c.fields?.hasBillingEmailFlag ?? c.fields?.HasBillingEmailFlag;
       if (isTruthyFlag(flag)) {
         preselectedIds.push(c.id);
         for (const e of c.emails ?? []) preselectedEmails.push(e);
