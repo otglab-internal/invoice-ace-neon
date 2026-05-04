@@ -578,12 +578,9 @@ const CreateInvoicePage: React.FC = () => {
             const v = row?.[k];
             if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
           }
-          const displayName = contactSchema?.display_field
-            ? row?.[contactSchema.display_field]
-            : null;
           return {
             id: String(row.id),
-            name: displayName || row.ContactName || "(no name)",
+            name: row.ContactName ? String(row.ContactName) : "(no name)",
             emails: Array.from(emails),
             fields,
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
