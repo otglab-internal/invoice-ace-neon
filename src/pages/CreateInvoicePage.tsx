@@ -655,12 +655,16 @@ const CreateInvoicePage: React.FC = () => {
   }, [templates]);
 
   // Map dynamic schema field-values into the canonical name + email used by invoice payload.
+  // Clients always use CustomerName; contacts always use ContactName.
   const getDynamicName = (
     schema: EntitySchema,
     values: Record<string, string>,
+    entity?: "clients" | "contacts",
   ): string => {
+    if (entity === "clients") return (values.CustomerName || "").trim();
+    if (entity === "contacts") return (values.ContactName || "").trim();
     if (!schema) return "";
-    return (values[schema.display_field] || "").trim();
+    return (values[schema.display_field] || values.CustomerName || values.ContactName || "").trim();
   };
   const getDynamicEmail = (
     schema: EntitySchema,
