@@ -245,15 +245,14 @@ const CreateInvoicePage: React.FC = () => {
   // New client form mode
   const [clientMode, setClientMode] = useState<"select" | "new">("select");
 
-  // Fields hidden from the user — system-managed (auto-generated business keys, FK links).
-  const HIDDEN_SCHEMA_FIELDS = new Set(["ClientGUID", "ClientGuid"]);
+  // System-managed envelope fields hidden from the user — the proxy returns these on every record
+  // (id/parent_id/created_at/updated_at) and they should never be user-editable.
+  const HIDDEN_SCHEMA_FIELDS = new Set([
+    "id", "parent_id", "created_at", "updated_at",
+  ]);
   const isHiddenField = (schema: EntitySchema, fieldName: string): boolean => {
     if (HIDDEN_SCHEMA_FIELDS.has(fieldName)) return true;
     if (!schema) return false;
-    // Auto-hide schema-declared business key (e.g. ContactGuid) and FK link field
-    // — both are system-managed and should not be user-editable.
-    if (schema.business_key && schema.business_key === fieldName) return true;
-    if (schema.link_field && schema.link_field === fieldName) return true;
     const f = schema.fields.find((x) => x.name === fieldName);
     if (f?.is_primary_key || f?.is_foreign_key) return true;
     return false;
