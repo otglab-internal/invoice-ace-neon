@@ -674,9 +674,9 @@ const CreateInvoicePage: React.FC = () => {
     return f ? (values[f] || "").trim() : "";
   };
 
-  const newClientName = getDynamicName(clientSchema, newClientFields);
+  const newClientName = getDynamicName(clientSchema, newClientFields, "clients");
   const newClientEmail = getDynamicEmail(clientSchema, newClientFields);
-  const newContactFullName = getDynamicName(contactSchema, newContactFields);
+  const newContactFullName = getDynamicName(contactSchema, newContactFields, "contacts");
   const newContactEmail = getDynamicEmail(contactSchema, newContactFields);
 
   const effectiveContactMode = clientMode === "new" ? "new" : contactMode;
