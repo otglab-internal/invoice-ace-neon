@@ -1053,12 +1053,8 @@ const CreateInvoicePage: React.FC = () => {
                           value="__create_new_client__"
                           onSelect={() => {
                             setClientMode("new");
-                            // Seed the display field (e.g. ContactName) with the search text, if schema is loaded.
-                            setNewClientFields(
-                              clientSchema?.display_field
-                                ? { [clientSchema.display_field]: clientSearch }
-                                : {}
-                            );
+                            // Seed CustomerName with the search text.
+                            setNewClientFields({ CustomerName: clientSearch });
                             setClientId("");
                             // Reset contact when switching to a brand-new client
                             setContactMode("new");
