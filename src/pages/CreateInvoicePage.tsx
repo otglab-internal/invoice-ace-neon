@@ -795,20 +795,14 @@ const CreateInvoicePage: React.FC = () => {
 
       if (clientMode === "new") {
         try {
-          // Build payload from whatever fields the schema declares — only send non-empty values,
-          // plus an auto-generated business-key value (e.g. ClientGuid) if the schema defines one.
+          // Build payload from whatever fields the schema declares — only send non-empty values.
+          // System-managed envelope fields (id, parent_id, created_at, updated_at) are filled in
+          // server-side and must not be included.
           const clientData: Record<string, string> = {};
           for (const f of clientSchema?.fields ?? []) {
+            if (isHiddenField(clientSchema, f.name)) continue;
             const v = (newClientFields[f.name] || "").trim();
             if (v) clientData[f.name] = v;
-          }
-          // Schema-driven business key (falls back to legacy "ClientGUID" name).
-          const clientBusinessKey =
-            clientSchema?.business_key ||
-            (clientSchema?.fields.some((f) => f.name === "ClientGUID") ? "ClientGUID" : null) ||
-            (clientSchema?.fields.some((f) => f.name === "ClientGuid") ? "ClientGuid" : null);
-          if (clientBusinessKey && !clientData[clientBusinessKey]) {
-            clientData[clientBusinessKey] = crypto.randomUUID();
           }
           const { data: createRes, error: createErr } = await supabase.functions.invoke("clients-api-proxy", {
             body: { action: "create", entity: "clients", payload: { data: clientData } },
@@ -819,8 +813,7 @@ const CreateInvoicePage: React.FC = () => {
           }
           effectiveClientId = String(createRes.data.id);
           effectiveClientName = newClientName;
-          // Reflect in local list so subsequent UI is consistent — keep the new business-key
-          // value on the row so contact-fetch can resolve children immediately.
+          // Reflect in local list so subsequent UI is consistent.
           const newRowFields: Record<string, string> = { ...clientData };
           setClients((prev) => [...prev, { id: effectiveClientId, name: effectiveClientName, fields: newRowFields }].sort((a, b) => a.name.localeCompare(b.name)));
         } catch (clientErr: any) {
