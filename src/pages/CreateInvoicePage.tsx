@@ -863,10 +863,11 @@ const CreateInvoicePage: React.FC = () => {
           for (const f of contactSchema?.fields ?? []) {
             if (isHiddenField(contactSchema, f.name)) continue;
             const raw = newContactFields[f.name];
-            if (raw === undefined) continue;
             if (f.type === "boolean") {
+              // Always send a boolean (defaults to false) — the API requires the field even if untouched.
               contactData[f.name] = isTruthyFlag(raw);
             } else {
+              if (raw === undefined) continue;
               const v = (raw || "").trim();
               if (v) contactData[f.name] = v;
             }
