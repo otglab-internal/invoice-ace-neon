@@ -1,7 +1,12 @@
 import { createRoot } from "react-dom/client";
 import { neonQuery } from "@/lib/neon-client";
+import { patchFunctionsInvoke } from "@/lib/patch-functions-invoke";
 import App from "./App.tsx";
 import "./index.css";
+
+// Globally rewrite "Edge Function returned a non-2xx status code" into the
+// real message returned by the edge function body.
+patchFunctionsInvoke();
 
 // Load favicon from global_config on startup
 (async () => {
