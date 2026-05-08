@@ -32,6 +32,22 @@ function getDb(req: Request) {
   return neon(url);
 }
 
+async function runQuery(sql: ReturnType<typeof neon>, query: string, params: unknown[]) {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await sql.query(query, params);
+    } catch (e) {
+      lastErr = e;
+      const retryable = (e as any)?.["neon:retryable"] === true
+        || /Control plane request failed|fetch failed|ECONNRESET|ETIMEDOUT/i.test(String((e as any)?.message || e));
+      if (!retryable) throw e;
+      await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 const ALLOWED_TABLES = new Set([
   "invoices", "invoice_templates", "invoice_logs",
   "staff_centre_assignments", "user_approval_flags", "global_config",
