@@ -1,3 +1,5 @@
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -11,6 +13,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Require a valid app JWT before exposing any staff PII.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
 
   try {
     const url = new URL(req.url);
