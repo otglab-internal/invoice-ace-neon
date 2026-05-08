@@ -290,6 +290,27 @@ const CreateInvoicePage: React.FC = () => {
     const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
     return byAlias?.name ?? null;
   };
+  const getRecordValue = (row: any, fieldName: string): unknown => {
+    const sources = [row, row?.data, row?.fields];
+    for (const source of sources) {
+      if (!source || typeof source !== "object") continue;
+      if (source[fieldName] !== undefined && source[fieldName] !== null) return source[fieldName];
+      const key = Object.keys(source).find((k) => k.toLowerCase() === fieldName.toLowerCase());
+      if (key && source[key] !== undefined && source[key] !== null) return source[key];
+    }
+    return undefined;
+  };
+  const getRecordText = (row: any, fieldNames: Array<string | null | undefined>): string => {
+    for (const fieldName of fieldNames) {
+      if (!fieldName) continue;
+      const value = getRecordValue(row, fieldName);
+      if (value !== undefined && value !== null && typeof value !== "object") {
+        const text = String(value).trim();
+        if (text) return text;
+      }
+    }
+    return "";
+  };
   const isTruthyFlag = (v: unknown): boolean => {
     if (v === true || v === 1) return true;
     if (typeof v === "string") {
