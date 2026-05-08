@@ -25,21 +25,22 @@ export function patchFunctionsInvoke() {
     const { data, error } = result || {};
 
     if (error) {
+      let msg = `${functionName} failed`;
       try {
-        const msg = await parseEdgeError(error, data, `${functionName} failed`);
-        if (msg) {
-          try { (error as any).message = msg; } catch { /* readonly — ignore */ }
-          // Some Supabase error objects have a frozen message; wrap into a new Error.
-          if ((error as any).message !== msg) {
-            const wrapped = new Error(msg);
-            (wrapped as any).context = (error as any).context;
-            (wrapped as any).name = (error as any).name || "FunctionsHttpError";
-            return { data, error: wrapped };
-          }
-        }
+        const parsed = await parseEdgeError(error, data, msg);
+        if (parsed) msg = parsed;
       } catch {
         /* ignore */
       }
+      // Strip the generic Supabase wrapper text if it ever leaks through.
+      if (/Edge Function returned a non-2xx status code/i.test(msg)) {
+        msg = `${functionName} failed`;
+      }
+      // Always wrap into a fresh Error so frozen `message` getters can't leak the generic text.
+      const wrapped = new Error(msg);
+      (wrapped as any).context = (error as any).context;
+      (wrapped as any).name = (error as any).name || "FunctionsHttpError";
+      return { data, error: wrapped };
     }
 
     return result;
