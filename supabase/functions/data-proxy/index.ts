@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
