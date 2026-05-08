@@ -613,17 +613,18 @@ const CreateInvoicePage: React.FC = () => {
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
           if (emailField) {
-            const v = row?.[emailField];
+            const v = getRecordValue(row, emailField);
             if (typeof v === "string" && emailRegex.test(v)) emails.add(v);
           }
           const fields: Record<string, string> = {};
           for (const k of schemaFields) {
-            const v = row?.[k];
+            const v = getRecordValue(row, k);
             if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
           }
+          const name = getRecordText(row, [contactSchema?.display_field, "ContactName", "Name"]);
           return {
             id: String(row.id),
-            name: row.ContactName ? String(row.ContactName) : "(no name)",
+            name: name || "Unnamed contact",
             emails: Array.from(emails),
             fields,
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
