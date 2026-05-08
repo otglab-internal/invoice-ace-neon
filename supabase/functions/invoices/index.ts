@@ -518,6 +518,13 @@ Deno.serve(async (req) => {
 
     // notify-approval — webhook proxy
     if (action === "notify-approval") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice } = body;
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
 
