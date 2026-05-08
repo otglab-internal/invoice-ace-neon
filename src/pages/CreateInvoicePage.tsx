@@ -586,9 +586,11 @@ const CreateInvoicePage: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     };
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
