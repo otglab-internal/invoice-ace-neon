@@ -103,6 +103,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // All Xero actions require an authenticated app user.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
+
   try {
     const orgId = req.headers.get("x-org-id") || "";
     const environment = req.headers.get("x-environment") || "production";
