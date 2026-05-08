@@ -447,6 +447,13 @@ Deno.serve(async (req) => {
 
     // notify-amendment — sends amended invoice to dedicated amendment webhook
     if (action === "notify-amendment") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice, previous } = body;
       const amendmentWebhookUrl = "https://n8n.srv1031900.hstgr.cloud/webhook-test/989fb99f-80c1-420a-9f92-614322b00c08";
 
