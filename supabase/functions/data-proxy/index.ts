@@ -273,6 +273,6 @@ Deno.serve(async (req) => {
     return err(400, "Unknown action. Valid: query, insert, update, delete, upsert");
   } catch (e) {
     console.error("data-proxy error:", e);
-    return err(500, String(e));
+    return err(500, "Internal server error");
   }
 });
