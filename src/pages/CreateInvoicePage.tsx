@@ -396,12 +396,13 @@ const CreateInvoicePage: React.FC = () => {
           const mapped: XeroClient[] = data.data.map((row: any) => {
             const fields: Record<string, string> = {};
             for (const k of schemaFields) {
-              const v = row?.[k];
+              const v = getRecordValue(row, k);
               if (v !== undefined && v !== null) fields[k] = String(v);
             }
+            const name = getRecordText(row, [clientSchema?.display_field, "CustomerName", "Name"]);
             return {
               id: String(row.id),
-              name: row.CustomerName ? String(row.CustomerName) : "(no name)",
+              name: name || "Unnamed client",
               fields,
             };
           });
