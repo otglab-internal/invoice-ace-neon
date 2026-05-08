@@ -836,9 +836,11 @@ const CreateInvoicePage: React.FC = () => {
       });
 
       // Step 1: If creating a new client and/or contact, push them to the auth app first.
-      const xeroHeaders = {
+      const authToken = localStorage.getItem("auth_token");
+      const xeroHeaders: Record<string, string> = {
         "x-org-id": getOrgId(),
         "x-environment": localStorage.getItem("auth_environment") || "production",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       };
 
       let effectiveClientId = clientId;
