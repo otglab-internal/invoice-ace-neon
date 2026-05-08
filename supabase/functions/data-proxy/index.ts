@@ -36,7 +36,7 @@ async function runQuery(sql: ReturnType<typeof neon>, query: string, params: unk
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await runQuery(sql, query, params);
+      return await sql.query(query, params);
     } catch (e) {
       lastErr = e;
       const retryable = (e as any)?.["neon:retryable"] === true
