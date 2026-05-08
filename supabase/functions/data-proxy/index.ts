@@ -36,7 +36,7 @@ async function runQuery(sql: ReturnType<typeof neon>, query: string, params: unk
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await sql.query(query, params);
+      return await runQuery(sql, query, params);
     } catch (e) {
       lastErr = e;
       const retryable = (e as any)?.["neon:retryable"] === true
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
         query += ` LIMIT $${params.length}`;
       }
 
-      const rows = await sql.query(query, params);
+      const rows = await runQuery(sql, query, params);
       return ok({ rows: maybeSingle ? (rows[0] || null) : rows });
     }
 
@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
       const placeholders = values.map((_, i) => `$${i + 1}`);
 
       const query = `INSERT INTO ${tbl} (${keys.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-      const rows = await sql.query(query, values);
+      const rows = await runQuery(sql, query, values);
       return ok({ row: rows[0] });
     }
 
@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
       query += " RETURNING *";
 
-      const rows = await sql.query(query, params);
+      const rows = await runQuery(sql, query, params);
       return ok({ rows });
     }
 
@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
       let query = `DELETE FROM ${tbl}`;
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
 
-      await sql.query(query, params);
+      await runQuery(sql, query, params);
       return ok({ success: true });
     }
 
@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
         .join(", ");
 
       const query = `INSERT INTO ${tbl} (${colList}) VALUES (${valList}) ON CONFLICT (${safeCK}) DO UPDATE SET ${updateList} RETURNING *`;
-      const rows = await sql.query(query, vals);
+      const rows = await runQuery(sql, query, vals);
       return ok({ row: rows[0] });
     }
 
