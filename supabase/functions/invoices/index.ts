@@ -596,6 +596,13 @@ Deno.serve(async (req) => {
 
     // send-approval-email — re-enabled, sends to configured approval_notice_emails
     if (action === "send-approval-email") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice } = body;
       const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
       const environment = req.headers.get("x-environment") || "production";
