@@ -136,9 +136,11 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
   // Fetch Xero contacts, accounts, tracking categories, and visible-account config
   useEffect(() => {
     if (!open) return;
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     };
 
     const loadAll = async () => {

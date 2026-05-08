@@ -29,10 +29,13 @@ import { getOrgId } from "@/lib/runtime-config";
 import { logActivity } from "@/lib/activity-logger";
 
 function getXeroHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "x-org-id": getOrgId(),
     "x-environment": localStorage.getItem("auth_environment") || "production",
   };
+  const token = localStorage.getItem("auth_token");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return headers;
 }
 
 interface ConfigEntry {

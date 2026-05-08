@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
           const proxyRes = await fetch(proxyUrl, {
             headers: {
               apikey: Deno.env.get("SUPABASE_ANON_KEY") || "",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_ANON_KEY") || ""}`,
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""}`,
               "x-org-id": orgIdResolved,
               "x-environment": envResolved,
             },
@@ -447,6 +447,13 @@ Deno.serve(async (req) => {
 
     // notify-amendment — sends amended invoice to dedicated amendment webhook
     if (action === "notify-amendment") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice, previous } = body;
       const amendmentWebhookUrl = "https://n8n.srv1031900.hstgr.cloud/webhook-test/989fb99f-80c1-420a-9f92-614322b00c08";
 
@@ -511,6 +518,13 @@ Deno.serve(async (req) => {
 
     // notify-approval — webhook proxy
     if (action === "notify-approval") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice } = body;
       const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
 
@@ -582,6 +596,13 @@ Deno.serve(async (req) => {
 
     // send-approval-email — re-enabled, sends to configured approval_notice_emails
     if (action === "send-approval-email") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice } = body;
       const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
       const environment = req.headers.get("x-environment") || "production";
@@ -634,6 +655,13 @@ Deno.serve(async (req) => {
 
     // send-approved-email — sends to configured approved_invoice_emails after approval
     if (action === "send-approved-email") {
+      const claims = await authenticate(req);
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const { invoice } = body;
       const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
       const environment = req.headers.get("x-environment") || "production";
@@ -897,7 +925,7 @@ Deno.serve(async (req) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("Invoices error:", msg, err instanceof Error ? err.stack : "");
-    return new Response(JSON.stringify({ error: "Internal server error", detail: msg }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

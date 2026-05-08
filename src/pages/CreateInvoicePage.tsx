@@ -374,9 +374,11 @@ const CreateInvoicePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     };
 
     const fetchClients = async () => {
@@ -584,9 +586,11 @@ const CreateInvoicePage: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     };
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
@@ -832,9 +836,11 @@ const CreateInvoicePage: React.FC = () => {
       });
 
       // Step 1: If creating a new client and/or contact, push them to the auth app first.
-      const xeroHeaders = {
+      const authToken = localStorage.getItem("auth_token");
+      const xeroHeaders: Record<string, string> = {
         "x-org-id": getOrgId(),
         "x-environment": localStorage.getItem("auth_environment") || "production",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       };
 
       let effectiveClientId = clientId;

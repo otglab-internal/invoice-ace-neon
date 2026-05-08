@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,6 +123,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Require a valid app JWT for all data-proxy requests.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
 
   try {
     const sql = getDb(req);
@@ -268,6 +273,6 @@ Deno.serve(async (req) => {
     return err(400, "Unknown action. Valid: query, insert, update, delete, upsert");
   } catch (e) {
     console.error("data-proxy error:", e);
-    return err(500, String(e));
+    return err(500, "Internal server error");
   }
 });
