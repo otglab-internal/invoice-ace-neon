@@ -14,9 +14,16 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Require a valid app JWT before exposing any staff PII.
-  const claims = await authenticate(req);
-  if (!claims) return unauthorizedResponse(corsHeaders);
+  // Allow either a valid app JWT (frontend) or the service-role key (internal
+  // server-to-server calls from other edge functions like invoices/api-submit).
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const isInternal = !!bearer && !!serviceRoleKey && bearer === serviceRoleKey;
+  if (!isInternal) {
+    const claims = await authenticate(req);
+    if (!claims) return unauthorizedResponse(corsHeaders);
+  }
 
   try {
     const url = new URL(req.url);
