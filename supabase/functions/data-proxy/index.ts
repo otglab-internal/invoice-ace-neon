@@ -124,6 +124,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require a valid app JWT for all data-proxy requests.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
+
   try {
     const sql = getDb(req);
     const body = await req.json();
