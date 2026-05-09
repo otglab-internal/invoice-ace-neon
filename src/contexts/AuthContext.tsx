@@ -92,11 +92,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const storedUser = localStorage.getItem("auth_user");
+    const storedToken = localStorage.getItem("auth_token");
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
     const storedUserId = localStorage.getItem("auth_user_id");
     let storedEmail = normalizeAuthEmail(localStorage.getItem("auth_email"));
     if (storedUser) {
+      if (!storedToken) {
+        logout();
+        setIsLoading(false);
+        return;
+      }
       try {
         const parsed = JSON.parse(storedUser);
         setUser(parsed);
@@ -140,7 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     setIsLoading(false);
-  }, [fetchTags]);
+  }, [fetchTags, logout]);
 
   const login = useCallback(async (email: string, password: string, env: string) => {
     const orgId = getOrgId();
@@ -187,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(msg);
     }
     if (!data.success || !data.user) throw new Error("Verification failed");
+    if (!data.token) throw new Error("Verification failed: session token missing");
 
     const authUser: AuthUser = {
       firstName: data.user.first_name,
@@ -225,9 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setPendingEmail(null);
     setPendingEnvironment(null);
-    if (data.token) {
-      localStorage.setItem("auth_token", data.token);
-    }
+    localStorage.setItem("auth_token", data.token);
     // Anchor the absolute-timeout clock to this fresh login.
     markSessionStart();
 
