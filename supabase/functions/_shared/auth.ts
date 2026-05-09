@@ -1,5 +1,38 @@
-// Shared HS256 JWT verification for edge functions.
+// Shared HS256 JWT helpers for edge functions.
 // Mirrors the createJwt/verifyJwt logic in supabase/functions/auth/index.ts.
+
+export async function createJwt(payload: Record<string, unknown>): Promise<string> {
+  const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret) throw new Error("JWT signing secret is not configured");
+
+  const enc = new TextEncoder();
+  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  const now = Math.floor(Date.now() / 1000);
+  const claims = { ...payload, iat: now, exp: now + 86400 };
+  const body = btoa(JSON.stringify(claims))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(`${header}.${body}`));
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  return `${header}.${body}.${signature}`;
+}
 
 export async function verifyJwt(token: string): Promise<Record<string, unknown> | null> {
   try {
