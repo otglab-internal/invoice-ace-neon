@@ -99,7 +99,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let storedEmail = normalizeAuthEmail(localStorage.getItem("auth_email"));
     if (storedUser) {
       if (!storedToken) {
-        logout();
+        localStorage.removeItem("auth_user");
+        localStorage.removeItem("auth_environment");
+        localStorage.removeItem("auth_system_id");
+        localStorage.removeItem("auth_user_id");
+        localStorage.removeItem("auth_email");
+        localStorage.removeItem("auth_login_email");
+        clearSessionMarkers();
         setIsLoading(false);
         return;
       }
@@ -146,7 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     setIsLoading(false);
-  }, [fetchTags, logout]);
+  }, [fetchTags]);
 
   const login = useCallback(async (email: string, password: string, env: string) => {
     const orgId = getOrgId();
