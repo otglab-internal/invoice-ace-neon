@@ -34,7 +34,7 @@ function getXeroHeaders(): Record<string, string> {
     "x-environment": localStorage.getItem("auth_environment") || "production",
   };
   const token = localStorage.getItem("auth_token");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token) headers["x-app-jwt"] = token;
   return headers;
 }
 
