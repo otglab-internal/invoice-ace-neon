@@ -80,13 +80,15 @@ const AllStaffPage: React.FC = () => {
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
       const orgId = getOrgId();
+      const authToken = localStorage.getItem("auth_token") || "";
       const usersRes = await fetch(
         `https://${projectId}.supabase.co/functions/v1/get-users-proxy?environment=${env}&org_id=${encodeURIComponent(orgId)}`,
         {
           method: "GET",
           headers: {
             "apikey": anonKey,
-            "Authorization": `Bearer ${anonKey}`,
+            "Authorization": `Bearer ${authToken || anonKey}`,
+            "x-app-jwt": authToken,
           },
         }
       );
