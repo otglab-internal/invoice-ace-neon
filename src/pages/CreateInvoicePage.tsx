@@ -290,6 +290,27 @@ const CreateInvoicePage: React.FC = () => {
     const byAlias = schema.fields.find((x) => EMAIL_FIELD_ALIASES.includes(x.name));
     return byAlias?.name ?? null;
   };
+  const getRecordValue = (row: any, fieldName: string): unknown => {
+    const sources = [row, row?.data, row?.fields];
+    for (const source of sources) {
+      if (!source || typeof source !== "object") continue;
+      if (source[fieldName] !== undefined && source[fieldName] !== null) return source[fieldName];
+      const key = Object.keys(source).find((k) => k.toLowerCase() === fieldName.toLowerCase());
+      if (key && source[key] !== undefined && source[key] !== null) return source[key];
+    }
+    return undefined;
+  };
+  const getRecordText = (row: any, fieldNames: Array<string | null | undefined>): string => {
+    for (const fieldName of fieldNames) {
+      if (!fieldName) continue;
+      const value = getRecordValue(row, fieldName);
+      if (value !== undefined && value !== null && typeof value !== "object") {
+        const text = String(value).trim();
+        if (text) return text;
+      }
+    }
+    return "";
+  };
   const isTruthyFlag = (v: unknown): boolean => {
     if (v === true || v === 1) return true;
     if (typeof v === "string") {
@@ -353,9 +374,11 @@ const CreateInvoicePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { "x-app-jwt": authToken } : {}),
     };
 
     const fetchClients = async () => {
@@ -375,12 +398,13 @@ const CreateInvoicePage: React.FC = () => {
           const mapped: XeroClient[] = data.data.map((row: any) => {
             const fields: Record<string, string> = {};
             for (const k of schemaFields) {
-              const v = row?.[k];
+              const v = getRecordValue(row, k);
               if (v !== undefined && v !== null) fields[k] = String(v);
             }
+            const name = getRecordText(row, [clientSchema?.display_field, "CustomerName", "Name"]);
             return {
               id: String(row.id),
-              name: row.CustomerName ? String(row.CustomerName) : "(no name)",
+              name: name || "Unnamed client",
               fields,
             };
           });
@@ -562,9 +586,11 @@ const CreateInvoicePage: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const xeroHeaders = {
+    const authToken = localStorage.getItem("auth_token");
+    const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
+      ...(authToken ? { "x-app-jwt": authToken } : {}),
     };
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
@@ -591,17 +617,18 @@ const CreateInvoicePage: React.FC = () => {
         const mapped: XeroContact[] = rows.map((row: any) => {
           const emails = new Set<string>();
           if (emailField) {
-            const v = row?.[emailField];
+            const v = getRecordValue(row, emailField);
             if (typeof v === "string" && emailRegex.test(v)) emails.add(v);
           }
           const fields: Record<string, string> = {};
           for (const k of schemaFields) {
-            const v = row?.[k];
+            const v = getRecordValue(row, k);
             if (v !== undefined && v !== null && typeof v !== "object") fields[k] = String(v);
           }
+          const name = getRecordText(row, [contactSchema?.display_field, "ContactName", "Name"]);
           return {
             id: String(row.id),
-            name: row.ContactName ? String(row.ContactName) : "(no name)",
+            name: name || "Unnamed contact",
             emails: Array.from(emails),
             fields,
             parent_id: row.parent_id ? String(row.parent_id) : undefined,
@@ -809,9 +836,11 @@ const CreateInvoicePage: React.FC = () => {
       });
 
       // Step 1: If creating a new client and/or contact, push them to the auth app first.
-      const xeroHeaders = {
+      const authToken = localStorage.getItem("auth_token");
+      const xeroHeaders: Record<string, string> = {
         "x-org-id": getOrgId(),
         "x-environment": localStorage.getItem("auth_environment") || "production",
+        ...(authToken ? { "x-app-jwt": authToken } : {}),
       };
 
       let effectiveClientId = clientId;

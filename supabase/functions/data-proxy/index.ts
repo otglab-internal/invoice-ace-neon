@@ -1,9 +1,10 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-app-jwt, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
@@ -30,6 +31,22 @@ function getDb(req: Request) {
     throw new Error(`No database connection configured for org="${org}" env="${env}"`);
   }
   return neon(url);
+}
+
+async function runQuery(sql: ReturnType<typeof neon>, query: string, params: unknown[]) {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await sql.query(query, params);
+    } catch (e) {
+      lastErr = e;
+      const retryable = (e as any)?.["neon:retryable"] === true
+        || /Control plane request failed|fetch failed|ECONNRESET|ETIMEDOUT/i.test(String((e as any)?.message || e));
+      if (!retryable) throw e;
+      await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 const ALLOWED_TABLES = new Set([
@@ -107,6 +124,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require a valid app JWT for all data-proxy requests.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
+
   try {
     const sql = getDb(req);
     const body = await req.json();
@@ -156,7 +177,7 @@ Deno.serve(async (req) => {
         query += ` LIMIT $${params.length}`;
       }
 
-      const rows = await sql.query(query, params);
+      const rows = await runQuery(sql, query, params);
       return ok({ rows: maybeSingle ? (rows[0] || null) : rows });
     }
 
@@ -174,7 +195,7 @@ Deno.serve(async (req) => {
       const placeholders = values.map((_, i) => `$${i + 1}`);
 
       const query = `INSERT INTO ${tbl} (${keys.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
-      const rows = await sql.query(query, values);
+      const rows = await runQuery(sql, query, values);
       return ok({ row: rows[0] });
     }
 
@@ -203,7 +224,7 @@ Deno.serve(async (req) => {
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
       query += " RETURNING *";
 
-      const rows = await sql.query(query, params);
+      const rows = await runQuery(sql, query, params);
       return ok({ rows });
     }
 
@@ -221,7 +242,7 @@ Deno.serve(async (req) => {
       let query = `DELETE FROM ${tbl}`;
       if (conditions.length > 0) query += ` WHERE ${conditions.join(" AND ")}`;
 
-      await sql.query(query, params);
+      await runQuery(sql, query, params);
       return ok({ success: true });
     }
 
@@ -245,13 +266,13 @@ Deno.serve(async (req) => {
         .join(", ");
 
       const query = `INSERT INTO ${tbl} (${colList}) VALUES (${valList}) ON CONFLICT (${safeCK}) DO UPDATE SET ${updateList} RETURNING *`;
-      const rows = await sql.query(query, vals);
+      const rows = await runQuery(sql, query, vals);
       return ok({ row: rows[0] });
     }
 
     return err(400, "Unknown action. Valid: query, insert, update, delete, upsert");
   } catch (e) {
     console.error("data-proxy error:", e);
-    return err(500, String(e));
+    return err(500, "Internal server error");
   }
 });

@@ -1,7 +1,9 @@
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-app-jwt, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const GET_USERS_URL = "https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/get-users";
@@ -10,6 +12,17 @@ const EXTERNAL_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Allow either a valid app JWT (frontend) or the service-role key (internal
+  // server-to-server calls from other edge functions like invoices/api-submit).
+  const authHeader = req.headers.get("authorization") || "";
+  const bearer = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const isInternal = !!bearer && !!serviceRoleKey && bearer === serviceRoleKey;
+  if (!isInternal) {
+    const claims = await authenticate(req);
+    if (!claims) return unauthorizedResponse(corsHeaders);
   }
 
   try {

@@ -1,4 +1,5 @@
 import { neon } from "npm:@neondatabase/serverless";
+import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +102,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // All Xero actions require an authenticated app user.
+  const claims = await authenticate(req);
+  if (!claims) return unauthorizedResponse(corsHeaders);
 
   try {
     const orgId = req.headers.get("x-org-id") || "";

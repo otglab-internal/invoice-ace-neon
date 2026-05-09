@@ -3,7 +3,7 @@ import { neon } from "npm:@neondatabase/serverless";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-app-jwt, x-client-info, apikey, content-type, x-environment, x-org-id, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 // Map org_id + environment to the correct tenant database secret
@@ -138,8 +138,16 @@ Deno.serve(async (req) => {
     const sql = getDb(req);
     const { action, ...body } = await req.json();
 
-    // ACTION: health-check - verify connectivity and list tables
+    // ACTION: health-check - verify connectivity and list tables (auth required)
     if (action === "health-check") {
+      const authHeader = req.headers.get("authorization");
+      const claims = authHeader?.startsWith("Bearer ") ? await verifyJwt(authHeader.slice(7)) : null;
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       try {
         await sql`SELECT 1`;
         const tables = await sql`
@@ -162,8 +170,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ACTION: init-tables - Create required tables if they don't exist
+    // ACTION: init-tables - Create required tables if they don't exist (admin only)
     if (action === "init-tables") {
+      const authHeader = req.headers.get("authorization");
+      const claims = authHeader?.startsWith("Bearer ") ? await verifyJwt(authHeader.slice(7)) : null;
+      if (!claims) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (claims.role !== "admin") {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       try {
         await sql`
           CREATE TABLE IF NOT EXISTS users (

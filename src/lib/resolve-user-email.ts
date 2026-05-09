@@ -63,9 +63,12 @@ async function fetchUsers(orgId: string, environment: string): Promise<any[]> {
   // reliably and the proxy reads `environment`/`org_id` from the URL.
   try {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-users-proxy?environment=${encodeURIComponent(environment)}&org_id=${encodeURIComponent(orgId)}`;
+    const authToken = localStorage.getItem("auth_token") || "";
     const res = await fetch(url, {
       headers: {
         apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+        Authorization: `Bearer ${authToken || (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string)}`,
+        "x-app-jwt": authToken,
         "x-org-id": orgId,
         "x-environment": environment,
       },

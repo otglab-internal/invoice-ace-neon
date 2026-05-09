@@ -1,3 +1,5 @@
+import { createJwt } from "../_shared/auth.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -36,6 +38,16 @@ Deno.serve(async (req) => {
       });
 
       const data = await response.json();
+      if (response.ok && data?.success && data?.user && !data.token) {
+        data.token = await createJwt({
+          sub: data.user.id || data.system_id,
+          role: data.user.role,
+          roles: data.user.roles || [],
+          email: data.user.email,
+          env: data.environment || "production",
+          org: orgId,
+        });
+      }
       return new Response(JSON.stringify(data), {
         status: response.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
