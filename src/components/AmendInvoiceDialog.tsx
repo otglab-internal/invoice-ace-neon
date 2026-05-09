@@ -140,7 +140,7 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
     const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(authToken ? { "x-app-jwt": authToken } : {}),
     };
 
     const loadAll = async () => {
