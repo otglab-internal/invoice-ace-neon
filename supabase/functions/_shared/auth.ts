@@ -43,6 +43,15 @@ export async function verifyJwt(token: string): Promise<Record<string, unknown> 
 }
 
 export async function authenticate(req: Request): Promise<Record<string, unknown> | null> {
+  // Prefer x-app-jwt because supabase-js's functions.invoke overrides the
+  // Authorization header with the project anon key, clobbering any token
+  // the caller tries to attach. Fall back to Authorization for direct fetch
+  // callers and internal server-to-server calls.
+  const appJwt = req.headers.get("x-app-jwt");
+  if (appJwt) {
+    const claims = await verifyJwt(appJwt);
+    if (claims) return claims;
+  }
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
   return verifyJwt(authHeader.replace("Bearer ", ""));
