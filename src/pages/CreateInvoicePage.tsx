@@ -378,7 +378,7 @@ const CreateInvoicePage: React.FC = () => {
     const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(authToken ? { "x-app-jwt": authToken } : {}),
     };
 
     const fetchClients = async () => {
@@ -590,7 +590,7 @@ const CreateInvoicePage: React.FC = () => {
     const xeroHeaders: Record<string, string> = {
       "x-org-id": getOrgId(),
       "x-environment": localStorage.getItem("auth_environment") || "production",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(authToken ? { "x-app-jwt": authToken } : {}),
     };
     const fetchContactsForClient = async () => {
       setLoadingContacts(true);
@@ -840,7 +840,7 @@ const CreateInvoicePage: React.FC = () => {
       const xeroHeaders: Record<string, string> = {
         "x-org-id": getOrgId(),
         "x-environment": localStorage.getItem("auth_environment") || "production",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        ...(authToken ? { "x-app-jwt": authToken } : {}),
       };
 
       let effectiveClientId = clientId;

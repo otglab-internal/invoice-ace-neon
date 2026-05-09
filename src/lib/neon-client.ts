@@ -13,7 +13,9 @@ function getHeaders(): Record<string, string> {
   try { headers["x-org-id"] = getOrgId(); } catch { /* noop */ }
   headers["x-environment"] = localStorage.getItem("auth_environment") || "production";
   const token = localStorage.getItem("auth_token");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  // Use x-app-jwt because supabase-js's functions.invoke overrides Authorization
+  // with the project anon key, clobbering any token we put there.
+  if (token) headers["x-app-jwt"] = token;
   return headers;
 }
 
