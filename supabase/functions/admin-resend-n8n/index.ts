@@ -1,5 +1,7 @@
 // One-off admin tool: re-fires the n8n approval webhook for the latest
 // invoice matching a given contact name in a specific org/environment.
+// Also supports action="status" to inspect recent invoices/logs,
+// and action="check_key" to verify a Xero webhook signing key matches our stored secret.
 import { neon } from "npm:@neondatabase/serverless";
 
 const corsHeaders = {
@@ -27,6 +29,27 @@ Deno.serve(async (req) => {
     const url = Deno.env.get(env === "production" ? mapping.prod : mapping.sb);
     if (!url) throw new Error(`no db url for ${orgId} ${env}`);
     const sql = neon(url);
+
+    if (action === "check_key") {
+      const orgUpper = orgId === "stridekidz" ? "SK" : "OTG";
+      const envSuffix = env === "sandbox" ? "SB" : "PROD";
+      const secretName = `XERO_WEBHOOK_KEY_${orgUpper}_${envSuffix}`;
+      const stored = Deno.env.get(secretName) || "";
+      const provided = (body.key || "") as string;
+      return new Response(JSON.stringify({
+        secretName,
+        stored_present: !!stored,
+        stored_length: stored.length,
+        stored_first6: stored.slice(0, 6),
+        stored_last6: stored.slice(-6),
+        provided_length: provided.length,
+        provided_first6: provided.slice(0, 6),
+        provided_last6: provided.slice(-6),
+        match: stored === provided,
+      }, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (action === "status") {
       const recent = await sql.query(
