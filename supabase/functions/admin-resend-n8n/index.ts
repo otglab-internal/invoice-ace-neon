@@ -19,7 +19,8 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const orgId = body.org_id || "stridekidz";
     const env = body.environment || "production";
-    const contactName = body.contact_name || "Bing Chi";
+    const contactName = body.contact_name || null;
+    const action = body.action || "resend";
 
     const mapping = ORG_DB_MAP[orgId];
     if (!mapping) throw new Error(`unknown org ${orgId}`);
@@ -27,9 +28,27 @@ Deno.serve(async (req) => {
     if (!url) throw new Error(`no db url for ${orgId} ${env}`);
     const sql = neon(url);
 
+    if (action === "status") {
+      const recent = await sql.query(
+        `SELECT id, invoice_number, contact_name, status, amendment_status, total, created_at, approved_at, invoice_pdf_url, receipt_pdf_url
+         FROM invoices ORDER BY created_at DESC LIMIT 5`,
+        [],
+      );
+      const logs = await sql.query(
+        `SELECT invoice_id, action_type, source, performed_by_name, created_at, details
+         FROM invoice_logs ORDER BY created_at DESC LIMIT 10`,
+        [],
+      );
+      return new Response(JSON.stringify({ recent, logs }, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const rows = await sql.query(
-      `SELECT * FROM invoices WHERE contact_name ILIKE $1 ORDER BY created_at DESC LIMIT 1`,
-      [`%${contactName}%`],
+      contactName
+        ? `SELECT * FROM invoices WHERE contact_name ILIKE $1 ORDER BY created_at DESC LIMIT 1`
+        : `SELECT * FROM invoices ORDER BY created_at DESC LIMIT 1`,
+      contactName ? [`%${contactName}%`] : [],
     ) as any[];
     if (!rows || rows.length === 0) {
       return new Response(JSON.stringify({ error: "no invoice found" }), {
