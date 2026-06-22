@@ -19,6 +19,9 @@ interface ReceiptPdfData {
   companyName?: string | null;
   companySsm?: string | null;
   companyAddress?: string | null;
+  amountPaid?: number;
+  amountDue?: number;
+  isPartial?: boolean;
 }
 
 const A4_WIDTH = 595.28;
