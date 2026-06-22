@@ -250,7 +250,7 @@ const DashboardPage: React.FC = () => {
                   </div>
                   <InvoiceRowActions
                     canViewPdf={!!inv.invoice_pdf_url}
-                    canDownloadReceipt={inv.status === "paid" || inv.status === "partially_paid"}
+                    canDownloadReceipt={["paid", "partially_paid", "partiallypaid", "partially paid", "partially-paid"].includes((inv.status || "").toLowerCase().trim())}
                     canAmend={canAmendInvoice(inv)}
                     loadingPdf={loadingPdf === inv.id}
                     loadingReceipt={loadingReceipt === inv.id}
