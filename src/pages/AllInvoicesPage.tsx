@@ -286,7 +286,7 @@ const AllInvoicesPage: React.FC = () => {
                   </div>
                   <InvoiceRowActions
                     canViewPdf={!!inv.invoice_pdf_url}
-                    canDownloadReceipt={inv.status === "paid"}
+                    canDownloadReceipt={inv.status === "paid" || inv.status === "partially_paid"}
                     canAmend={canAmendInvoice(inv)}
                     loadingPdf={loadingPdf === inv.id}
                     loadingReceipt={loadingReceipt === inv.id}
