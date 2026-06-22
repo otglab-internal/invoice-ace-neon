@@ -334,7 +334,7 @@ Deno.serve(async (req) => {
       }
 
       let receiptPdfPath: string | null = null;
-      if (newLocalStatus === "paid") {
+      if (newLocalStatus === "paid" || newLocalStatus === "partially_paid") {
         try {
           const invoiceRows = await sql.query(
             `SELECT invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency FROM invoices WHERE id = $1 LIMIT 1`,
@@ -355,6 +355,9 @@ Deno.serve(async (req) => {
               companyName: config.company_name || null,
               companySsm: config.company_ssm || null,
               companyAddress: config.company_address || null,
+              amountPaid,
+              amountDue,
+              isPartial: newLocalStatus === "partially_paid",
             });
             receiptPdfPath = await uploadReceiptPdfToStorage(localInvoice.id as string, receiptPdfBytes, xeroInvoiceNumber);
           }

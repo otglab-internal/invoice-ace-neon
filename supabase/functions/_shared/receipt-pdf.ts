@@ -19,6 +19,9 @@ interface ReceiptPdfData {
   companyName?: string | null;
   companySsm?: string | null;
   companyAddress?: string | null;
+  amountPaid?: number;
+  amountDue?: number;
+  isPartial?: boolean;
 }
 
 const A4_WIDTH = 595.28;
@@ -166,8 +169,18 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
     }
   }
 
-  drawText("PAYMENT RECEIPT", pageWidth - MARGIN, y - 2, { size: 22, font: bold, align: "right" });
+  const isPartial = !!data.isPartial;
+  const amountPaid = Number(data.amountPaid ?? (isPartial ? 0 : data.total)) || 0;
+  const amountDue = Number(data.amountDue ?? (isPartial ? Math.max(data.total - amountPaid, 0) : 0)) || 0;
+  const titleText = isPartial ? "PAYMENT RECEIPT" : "PAYMENT RECEIPT";
+  const subtitleText = isPartial ? "(Partial Payment)" : null;
+
+  drawText(titleText, pageWidth - MARGIN, y - 2, { size: 22, font: bold, align: "right" });
   y -= 22;
+  if (subtitleText) {
+    drawText(subtitleText, pageWidth - MARGIN, y, { size: 10, font: bold, color: TEXT_GRAY, align: "right" });
+    y -= 14;
+  }
 
   // Company block (right aligned)
   const companyLines: Array<{ text: string; bold?: boolean }> = [];
@@ -208,7 +221,7 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   y -= 42;
 
   drawField("Submitted By", data.submittedByName, leftCol, y);
-  drawField("Status", "PAID", rightCol, y);
+  drawField("Status", isPartial ? "PARTIALLY PAID" : "PAID", rightCol, y);
   y -= 34;
 
   drawTableHeader(y);
@@ -245,13 +258,33 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   y -= 8;
   drawLine(colQty - 56, y, pageWidth - MARGIN, y);
   y -= 20;
-  drawText("TOTAL PAID", colRate - 56, y, { size: 11, font: bold, align: "right" });
-  drawText(formatCurrency(data.total, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+
+  if (isPartial) {
+    drawText("Invoice Total", colRate - 56, y, { size: 10, font: regular, color: TEXT_GRAY, align: "right" });
+    drawText(formatCurrency(data.total, currency), colAmt, y, { size: 10, font: regular, align: "right" });
+    y -= 16;
+    drawText("Amount Paid", colRate - 56, y, { size: 11, font: bold, align: "right" });
+    drawText(formatCurrency(amountPaid, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+    y -= 16;
+    drawLine(colQty - 56, y + 6, pageWidth - MARGIN, y + 6, MID_GRAY, 0.4);
+    drawText("Balance Due", colRate - 56, y, { size: 11, font: bold, color: rgb(0.72, 0.11, 0.11), align: "right" });
+    drawText(formatCurrency(amountDue, currency), colAmt, y, { size: 11, font: bold, color: rgb(0.72, 0.11, 0.11), align: "right" });
+  } else {
+    drawText("TOTAL PAID", colRate - 56, y, { size: 11, font: bold, align: "right" });
+    drawText(formatCurrency(data.total, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+  }
 
   y -= 34;
   drawLine(MARGIN, y, pageWidth - MARGIN, y);
   y -= 18;
-  drawText("This receipt confirms payment has been received. Thank you for your business.", MARGIN, y, { size: 8, font: regular, color: MID_GRAY });
+  const footerMessage = isPartial
+    ? `This receipt confirms a partial payment of ${formatCurrency(amountPaid, currency)} has been received. A balance of ${formatCurrency(amountDue, currency)} remains outstanding.`
+    : "This receipt confirms payment has been received. Thank you for your business.";
+  const footerLines = wrapText(footerMessage, contentWidth, regular, 8);
+  for (const line of footerLines) {
+    drawText(line, MARGIN, y, { size: 8, font: regular, color: MID_GRAY });
+    y -= 11;
+  }
 
   return await pdfDoc.save();
 }
