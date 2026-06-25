@@ -19,6 +19,8 @@ interface ConfigMap {
   [key: string]: string;
 }
 
+type DbClient = ReturnType<typeof neon>;
+
 
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
