@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { neonQuery } from "@/lib/neon-client";
 import { toast } from "@/hooks/use-toast";
 import { generateReceiptPdf } from "@/lib/generate-receipt-pdf";
+import { canDownloadReceiptPdf, getSignedPdfUrl, isFullyPaidStatus, syncReceiptPdf } from "@/lib/invoice-receipts";
 import { useBranding } from "@/hooks/use-branding";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import InvoiceRowActions from "@/components/InvoiceRowActions";
@@ -27,6 +28,7 @@ interface Invoice {
   line_items: any[];
   amendment_status: string | null;
   invoice_pdf_url: string | null;
+  receipt_pdf_url: string | null;
   /** Per-invoice currency captured at submission time. */
   currency?: string | null;
 }
@@ -70,7 +72,7 @@ const AllInvoicesPage: React.FC = () => {
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
     const queryOptions: any = {
-      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url, currency",
+      select: "id, contact_name, contact_id, reference, invoice_date, total, status, created_at, invoice_number, submitted_by_system_id, submitted_by_name, line_items, amendment_status, invoice_pdf_url, receipt_pdf_url, currency",
       order: { column: "created_at", ascending: false },
     };
 
@@ -138,6 +140,27 @@ const AllInvoicesPage: React.FC = () => {
   const handleDownloadReceipt = useCallback(async (inv: Invoice) => {
     setLoadingReceipt(inv.id);
     try {
+      let receiptPath = inv.receipt_pdf_url;
+
+      if (!receiptPath && canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)) {
+        const synced = await syncReceiptPdf(inv.id);
+        receiptPath = synced.receiptPdfUrl;
+        setAllInvoices((current) => current.map((item) => (
+          item.id === inv.id
+            ? { ...item, receipt_pdf_url: synced.receiptPdfUrl, status: synced.status || item.status }
+            : item
+        )));
+      }
+
+      if (receiptPath) {
+        window.open(await getSignedPdfUrl(receiptPath), "_blank");
+        return;
+      }
+
+      if (!isFullyPaidStatus(inv.status)) {
+        throw new Error("Receipt PDF is not available yet");
+      }
+
       await generateReceiptPdf({
         invoiceNumber: inv.invoice_number,
         contactName: inv.contact_name,
@@ -152,8 +175,8 @@ const AllInvoicesPage: React.FC = () => {
         companySsm,
         companyAddress,
       });
-    } catch {
-      toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Error", description: (err as Error)?.message || "Failed to generate receipt", variant: "destructive" });
     } finally {
       setLoadingReceipt(null);
     }
@@ -286,7 +309,7 @@ const AllInvoicesPage: React.FC = () => {
                   </div>
                   <InvoiceRowActions
                     canViewPdf={!!inv.invoice_pdf_url}
-                    canDownloadReceipt={["paid", "partially_paid", "partiallypaid", "partially paid", "partially-paid"].includes((inv.status || "").toLowerCase().trim())}
+                    canDownloadReceipt={canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)}
                     canAmend={canAmendInvoice(inv)}
                     loadingPdf={loadingPdf === inv.id}
                     loadingReceipt={loadingReceipt === inv.id}

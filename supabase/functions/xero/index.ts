@@ -1,5 +1,7 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { authenticate, unauthorizedResponse } from "../_shared/auth.ts";
+import { uploadToR2 } from "../_shared/r2-utils.ts";
+import { createReceiptPdfBytes } from "../_shared/receipt-pdf.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,6 +98,28 @@ async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ a
   await upsertConfig(sql, "xero_refresh_token", data.refresh_token);
 
   return { access_token: data.access_token, refresh_token: data.refresh_token };
+}
+
+async function uploadReceiptPdfToStorage(localInvoiceId: string, pdfBytes: Uint8Array): Promise<string> {
+  const storagePath = `receipts/${localInvoiceId}.pdf`;
+  await uploadToR2(storagePath, pdfBytes, "application/pdf");
+  return storagePath;
+}
+
+async function fetchXeroInvoiceByNumber(invoiceNumber: string, accessToken: string, tenantId: string) {
+  const safeInvoiceNumber = invoiceNumber.replace(/"/g, '\\"');
+  const where = `InvoiceNumber=="${safeInvoiceNumber}"`;
+  const res = await fetch(`${XERO_API_URL}/Invoices?where=${encodeURIComponent(where)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Xero-Tenant-Id": tenantId,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) return { invoice: null, status: res.status };
+
+  const data = await res.json();
+  return { invoice: data.Invoices?.[0] || null, status: res.status };
 }
 
 Deno.serve(async (req) => {
@@ -247,6 +271,153 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    if (action === "sync-invoice-receipt") {
+      const invoiceId = typeof body.invoice_id === "string" ? body.invoice_id : "";
+      if (!invoiceId) {
+        return new Response(JSON.stringify({ error: "Missing invoice_id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const invoiceRows = await sql.query(
+        `SELECT id, invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency, receipt_pdf_url
+         FROM invoices
+         WHERE id = $1
+         LIMIT 1`,
+        [invoiceId],
+      );
+      const invoiceRecord = invoiceRows[0];
+      if (!invoiceRecord) {
+        return new Response(JSON.stringify({ error: "Invoice not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (invoiceRecord.receipt_pdf_url) {
+        return new Response(JSON.stringify({
+          success: true,
+          receipt_pdf_url: invoiceRecord.receipt_pdf_url,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const invoiceNumber = (invoiceRecord.invoice_number as string | null) || "";
+      if (!invoiceNumber) {
+        return new Response(JSON.stringify({ error: "Invoice number is missing" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const config = await getConfigMap(
+        sql,
+        [
+          "xero_client_id",
+          "xero_client_secret",
+          "xero_access_token",
+          "xero_refresh_token",
+          "xero_tenant_id",
+          "logo_url",
+          "company_name",
+          "company_ssm",
+          "company_address",
+        ],
+      );
+
+      if (!config.xero_access_token || !config.xero_tenant_id) {
+        return new Response(JSON.stringify({ error: "Xero not connected" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      let lookup = await fetchXeroInvoiceByNumber(invoiceNumber, accessToken, config.xero_tenant_id);
+      if (lookup.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (!refreshed) {
+          return new Response(JSON.stringify({ error: "Xero token expired. Please reconnect." }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        accessToken = refreshed.access_token;
+        lookup = await fetchXeroInvoiceByNumber(invoiceNumber, accessToken, config.xero_tenant_id);
+      }
+
+      if (!lookup.invoice) {
+        return new Response(JSON.stringify({ error: "Invoice not found in Xero" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const xeroInvoice = lookup.invoice as Record<string, unknown>;
+      const xeroStatus = ((xeroInvoice.Status as string) || "").toUpperCase();
+      const amountPaid = Number(xeroInvoice.AmountPaid ?? 0);
+      const amountDue = Number(xeroInvoice.AmountDue ?? 0);
+      const total = Number(xeroInvoice.Total ?? invoiceRecord.total ?? 0);
+      const isPartial = amountPaid > 0 && amountDue > 0;
+      const isPaid = xeroStatus === "PAID" || (amountPaid > 0 && amountDue <= 0);
+
+      if (!isPartial && !isPaid) {
+        return new Response(JSON.stringify({ error: "No payment has been recorded for this invoice yet" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const receiptPdfBytes = await createReceiptPdfBytes({
+        invoiceNumber,
+        contactName: (invoiceRecord.contact_name as string) || "—",
+        invoiceDate: (invoiceRecord.invoice_date as string) || "—",
+        reference: (invoiceRecord.reference as string | null) || null,
+        total,
+        lineItems: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items as Array<Record<string, unknown>> : [],
+        submittedByName: (invoiceRecord.submitted_by_name as string) || "—",
+        currency: (invoiceRecord.currency as string | null) || "RM",
+        logoUrl: config.logo_url || null,
+        companyName: config.company_name || null,
+        companySsm: config.company_ssm || null,
+        companyAddress: config.company_address || null,
+        amountPaid: isPartial ? amountPaid : total,
+        amountDue: isPartial ? amountDue : 0,
+        isPartial,
+      });
+
+      const receiptPdfPath = await uploadReceiptPdfToStorage(invoiceId, receiptPdfBytes);
+      const newStatus = isPartial ? "partially_paid" : "paid";
+      if (newStatus === "paid") {
+        await sql.query(
+          `UPDATE invoices
+           SET status = $2,
+               receipt_pdf_url = $3,
+               amendment_status = NULL,
+               amendment_data = NULL,
+               amendment_note = NULL,
+               amendment_requested_by = NULL,
+               amendment_requested_by_name = NULL,
+               amendment_requested_at = NULL
+           WHERE id = $1`,
+          [invoiceId, newStatus, receiptPdfPath],
+        );
+      } else {
+        await sql.query(
+          `UPDATE invoices SET status = $2, receipt_pdf_url = $3 WHERE id = $1`,
+          [invoiceId, newStatus, receiptPdfPath],
+        );
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        receipt_pdf_url: receiptPdfPath,
+        status: newStatus,
+        amount_paid: amountPaid,
+        amount_due: amountDue,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ACTION: disconnect

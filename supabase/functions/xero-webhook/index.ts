@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
       }
 
       const matchingInvoices = await sql.query(
-        `SELECT id, status, amendment_status FROM invoices WHERE invoice_number = $1 LIMIT 1`,
+        `SELECT id, status, amendment_status, receipt_pdf_url FROM invoices WHERE invoice_number = $1 LIMIT 1`,
         [xeroInvoiceNumber],
       );
 
@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
 
       const localInvoice = matchingInvoices[0];
 
-      if (localInvoice.status === "paid") {
+      if (localInvoice.status === "paid" && localInvoice.receipt_pdf_url) {
         console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} already marked as paid, skipping`);
         continue;
       }
