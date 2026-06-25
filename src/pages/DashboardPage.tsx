@@ -240,52 +240,57 @@ const DashboardPage: React.FC = () => {
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-sm font-semibold font-display text-foreground">Recent Invoices</h2>
           </div>
-          <div className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-3 border-b border-border bg-muted/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <span>Invoice #</span>
-            <span>Contact</span>
-            <span>Date</span>
-            <span className="text-right">Amount</span>
-            <span>Status</span>
-            <span>Actions</span>
-          </div>
-          <div className="divide-y divide-border">
-            {loading ? (
-              <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</div>
-            ) : recentInvoices.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-muted-foreground">No invoices yet</div>
-            ) : (
-              recentInvoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-2.5 items-center hover:bg-muted/30 transition-colors"
-                >
-                  <span className="text-sm font-medium text-foreground truncate">
-                    {inv.invoice_number || "—"}
-                  </span>
-                  <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
-                  <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
-                  <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
-                    <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
-                    <span>{formatAmount(inv.total)}</span>
-                  </div>
-                  <div className="flex justify-start">
-                    <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
-                  </div>
-                  <InvoiceRowActions
-                    canViewPdf={!!inv.invoice_pdf_url}
-                    canDownloadReceipt={canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)}
-                    canAmend={canAmendInvoice(inv)}
-                    loadingPdf={loadingPdf === inv.id}
-                    loadingReceipt={loadingReceipt === inv.id}
-                    onViewPdf={() => handleViewPdf(inv)}
-                    onDownloadReceipt={() => handleDownloadReceipt(inv)}
-                    onAmend={() => setAmendInvoice(inv)}
-                  />
-                </div>
-              ))
-            )}
+          <div className="overflow-x-auto">
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-3 border-b border-border bg-muted/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                <span>Invoice #</span>
+                <span>Contact</span>
+                <span>Date</span>
+                <span className="text-right">Amount</span>
+                <span>Status</span>
+                <span>Actions</span>
+              </div>
+              <div className="divide-y divide-border">
+                {loading ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">Loading…</div>
+                ) : recentInvoices.length === 0 ? (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">No invoices yet</div>
+                ) : (
+                  recentInvoices.map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="grid grid-cols-[110px_minmax(0,1.5fr)_100px_110px_110px_120px] gap-3 px-5 py-2.5 items-center hover:bg-muted/30 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {inv.invoice_number || "—"}
+                      </span>
+                      <span className="text-sm text-foreground truncate">{inv.contact_name}</span>
+                      <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
+                      <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
+                        <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
+                        <span>{formatAmount(inv.total)}</span>
+                      </div>
+                      <div className="flex justify-start">
+                        <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
+                      </div>
+                      <InvoiceRowActions
+                        canViewPdf={!!inv.invoice_pdf_url}
+                        canDownloadReceipt={canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)}
+                        canAmend={canAmendInvoice(inv)}
+                        loadingPdf={loadingPdf === inv.id}
+                        loadingReceipt={loadingReceipt === inv.id}
+                        onViewPdf={() => handleViewPdf(inv)}
+                        onDownloadReceipt={() => handleDownloadReceipt(inv)}
+                        onAmend={() => setAmendInvoice(inv)}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
 
       <AmendInvoiceDialog
