@@ -43,7 +43,26 @@ export async function getSignedPdfUrl(storagePath: string): Promise<string> {
   return result.signedUrl;
 }
 
-export async function syncReceiptPdf(invoiceId: string): Promise<{ receiptPdfUrl: string; status?: string }> {
+export interface InvoiceReceiptRow {
+  id: string;
+  invoice_id: string;
+  xero_payment_id: string | null;
+  payment_number: number;
+  amount: number;
+  payment_date: string | null;
+  reference: string | null;
+  amount_paid_after: number | null;
+  amount_due_after: number | null;
+  is_consolidated: boolean;
+  receipt_pdf_url: string | null;
+  created_at: string;
+}
+
+export async function syncReceiptPdf(invoiceId: string): Promise<{
+  receiptPdfUrl: string;
+  status?: string;
+  receipts: InvoiceReceiptRow[];
+}> {
   const { data, error } = await supabase.functions.invoke("xero", {
     body: { action: "sync-invoice-receipt", invoice_id: invoiceId },
     headers: getFunctionHeaders(),
@@ -54,5 +73,20 @@ export async function syncReceiptPdf(invoiceId: string): Promise<{ receiptPdfUrl
   }
   if (!data?.receipt_pdf_url) throw new Error("Receipt PDF is not available yet");
 
-  return { receiptPdfUrl: data.receipt_pdf_url, status: data.status };
+  return {
+    receiptPdfUrl: data.receipt_pdf_url,
+    status: data.status,
+    receipts: Array.isArray(data.receipts) ? data.receipts : [],
+  };
+}
+
+export async function listInvoiceReceipts(invoiceId: string): Promise<InvoiceReceiptRow[]> {
+  const { data, error } = await supabase.functions.invoke("xero", {
+    body: { action: "list-invoice-receipts", invoice_id: invoiceId },
+    headers: getFunctionHeaders(),
+  });
+  if (error || data?.error) {
+    throw new Error(data?.error || "Failed to fetch receipts");
+  }
+  return Array.isArray(data?.receipts) ? data.receipts : [];
 }

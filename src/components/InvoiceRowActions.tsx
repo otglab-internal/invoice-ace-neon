@@ -1,17 +1,16 @@
 import React from "react";
-import { Eye, Download, Pencil } from "lucide-react";
+import { Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Props {
   canViewPdf: boolean;
-  canDownloadReceipt: boolean;
   canAmend: boolean;
   loadingPdf: boolean;
-  loadingReceipt: boolean;
   onViewPdf: () => void;
-  onDownloadReceipt: () => void;
   onAmend: () => void;
+  /** Rendered receipt dropdown menu (per-payment receipts). */
+  receiptSlot?: React.ReactNode;
 }
 
 const IconBtn: React.FC<{
@@ -48,27 +47,18 @@ const IconBtn: React.FC<{
 
 const InvoiceRowActions: React.FC<Props> = ({
   canViewPdf,
-  canDownloadReceipt,
   canAmend,
   loadingPdf,
-  loadingReceipt,
   onViewPdf,
-  onDownloadReceipt,
   onAmend,
+  receiptSlot,
 }) => {
   return (
     <div className="flex items-center gap-1 justify-start">
       <IconBtn label="View invoice PDF" available={canViewPdf} onClick={onViewPdf} loading={loadingPdf}>
         <Eye className="w-4 h-4" />
       </IconBtn>
-      <IconBtn
-        label="Download receipt PDF"
-        available={canDownloadReceipt}
-        onClick={onDownloadReceipt}
-        loading={loadingReceipt}
-      >
-        <Download className="w-4 h-4" />
-      </IconBtn>
+      {receiptSlot}
       <IconBtn label="Amend invoice" available={canAmend} onClick={onAmend}>
         <Pencil className="w-4 h-4" />
       </IconBtn>

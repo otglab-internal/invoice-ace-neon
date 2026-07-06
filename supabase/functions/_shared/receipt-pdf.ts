@@ -6,6 +6,13 @@ interface LineItem {
   cost?: number;
 }
 
+export interface PaymentEntry {
+  number: number;
+  amount: number;
+  date?: string | null;
+  reference?: string | null;
+}
+
 interface ReceiptPdfData {
   invoiceNumber: string | null;
   contactName: string;
@@ -22,6 +29,15 @@ interface ReceiptPdfData {
   amountPaid?: number;
   amountDue?: number;
   isPartial?: boolean;
+  /** Receipt mode. "single" preserves legacy behaviour. */
+  mode?: "single" | "payment" | "consolidated";
+  /** For mode="payment": this payment's details. */
+  paymentNumber?: number;
+  paymentAmount?: number;
+  paymentDate?: string | null;
+  paymentReference?: string | null;
+  /** For mode="consolidated" or "payment": full ordered list of payments applied. */
+  paymentsList?: PaymentEntry[];
 }
 
 const A4_WIDTH = 595.28;
@@ -169,11 +185,32 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
     }
   }
 
+  const mode = data.mode || (data.isPartial ? "single" : "single");
+  const isPayment = mode === "payment";
+  const isConsolidated = mode === "consolidated";
   const isPartial = !!data.isPartial;
+
+  const paymentsList = Array.isArray(data.paymentsList) ? data.paymentsList : [];
+  const paymentAmount = Number(data.paymentAmount ?? 0) || 0;
   const amountPaid = Number(data.amountPaid ?? (isPartial ? 0 : data.total)) || 0;
   const amountDue = Number(data.amountDue ?? (isPartial ? Math.max(data.total - amountPaid, 0) : 0)) || 0;
-  const titleText = isPartial ? "PAYMENT RECEIPT" : "PAYMENT RECEIPT";
-  const subtitleText = isPartial ? "(Partial Payment)" : null;
+
+  let titleText = "PAYMENT RECEIPT";
+  let subtitleText: string | null = null;
+  let statusLabel = isPartial ? "PARTIALLY PAID" : "PAID";
+  if (isPayment) {
+    titleText = "PAYMENT RECEIPT";
+    subtitleText = data.paymentNumber
+      ? `Payment #${data.paymentNumber}${amountDue > 0 ? " (Partial)" : " (Final)"}`
+      : "(Payment)";
+    statusLabel = amountDue > 0 ? "PARTIALLY PAID" : "PAID";
+  } else if (isConsolidated) {
+    titleText = "PAYMENT RECEIPT";
+    subtitleText = "(Consolidated – Paid in Full)";
+    statusLabel = "PAID";
+  } else if (isPartial) {
+    subtitleText = "(Partial Payment)";
+  }
 
   drawText(titleText, pageWidth - MARGIN, y - 2, { size: 22, font: bold, align: "right" });
   y -= 22;
@@ -211,7 +248,7 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   y -= 22;
 
   drawField("Invoice Number", data.invoiceNumber || "—", leftCol, y);
-  drawField("Date", data.invoiceDate, rightCol, y);
+  drawField("Invoice Date", data.invoiceDate, rightCol, y);
   y -= 42;
 
   drawField("Bill To", data.contactName, leftCol, y);
@@ -220,8 +257,14 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   }
   y -= 42;
 
+  if (isPayment) {
+    drawField("Payment Date", data.paymentDate || "—", leftCol, y);
+    drawField("Payment Ref", data.paymentReference || "—", rightCol, y);
+    y -= 42;
+  }
+
   drawField("Submitted By", data.submittedByName, leftCol, y);
-  drawField("Status", isPartial ? "PARTIALLY PAID" : "PAID", rightCol, y);
+  drawField("Status", statusLabel, rightCol, y);
   y -= 34;
 
   drawTableHeader(y);
@@ -259,7 +302,48 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   drawLine(colQty - 56, y, pageWidth - MARGIN, y);
   y -= 20;
 
-  if (isPartial) {
+  if (isPayment) {
+    // This payment breakdown
+    const priorPaid = Math.max(amountPaid - paymentAmount, 0);
+    drawText("Invoice Total", colRate - 56, y, { size: 10, font: regular, color: TEXT_GRAY, align: "right" });
+    drawText(formatCurrency(data.total, currency), colAmt, y, { size: 10, font: regular, align: "right" });
+    y -= 16;
+    if (priorPaid > 0) {
+      drawText("Previously Paid", colRate - 56, y, { size: 10, font: regular, color: TEXT_GRAY, align: "right" });
+      drawText(formatCurrency(priorPaid, currency), colAmt, y, { size: 10, font: regular, align: "right" });
+      y -= 16;
+    }
+    drawText("This Payment", colRate - 56, y, { size: 11, font: bold, align: "right" });
+    drawText(formatCurrency(paymentAmount, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+    y -= 16;
+    drawLine(colQty - 56, y + 6, pageWidth - MARGIN, y + 6, MID_GRAY, 0.4);
+    if (amountDue > 0) {
+      drawText("Balance Due", colRate - 56, y, { size: 11, font: bold, color: rgb(0.72, 0.11, 0.11), align: "right" });
+      drawText(formatCurrency(amountDue, currency), colAmt, y, { size: 11, font: bold, color: rgb(0.72, 0.11, 0.11), align: "right" });
+    } else {
+      drawText("Balance Due", colRate - 56, y, { size: 11, font: bold, align: "right" });
+      drawText(formatCurrency(0, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+    }
+  } else if (isConsolidated) {
+    drawText("Invoice Total", colRate - 56, y, { size: 10, font: regular, color: TEXT_GRAY, align: "right" });
+    drawText(formatCurrency(data.total, currency), colAmt, y, { size: 10, font: regular, align: "right" });
+    y -= 16;
+    drawText("TOTAL PAID", colRate - 56, y, { size: 11, font: bold, align: "right" });
+    drawText(formatCurrency(amountPaid || data.total, currency), colAmt, y, { size: 11, font: bold, align: "right" });
+    y -= 22;
+
+    // Payments breakdown
+    if (paymentsList.length > 0) {
+      drawText("Payments Applied", MARGIN, y, { size: 10, font: bold, color: TEXT_GRAY });
+      y -= 14;
+      for (const p of paymentsList) {
+        const label = `Payment #${p.number}${p.date ? ` – ${p.date}` : ""}${p.reference ? ` (${p.reference})` : ""}`;
+        drawText(label, MARGIN, y, { size: 9, font: regular, color: TEXT_DARK });
+        drawText(formatCurrency(p.amount, currency), colAmt, y, { size: 9, font: regular, align: "right" });
+        y -= 12;
+      }
+    }
+  } else if (isPartial) {
     drawText("Invoice Total", colRate - 56, y, { size: 10, font: regular, color: TEXT_GRAY, align: "right" });
     drawText(formatCurrency(data.total, currency), colAmt, y, { size: 10, font: regular, align: "right" });
     y -= 16;
@@ -277,14 +361,24 @@ export async function createReceiptPdfBytes(data: ReceiptPdfData): Promise<Uint8
   y -= 34;
   drawLine(MARGIN, y, pageWidth - MARGIN, y);
   y -= 18;
-  const footerMessage = isPartial
-    ? `This receipt confirms a partial payment of ${formatCurrency(amountPaid, currency)} has been received. A balance of ${formatCurrency(amountDue, currency)} remains outstanding.`
-    : "This receipt confirms payment has been received. Thank you for your business.";
+  let footerMessage: string;
+  if (isPayment) {
+    footerMessage = amountDue > 0
+      ? `This receipt confirms a payment of ${formatCurrency(paymentAmount, currency)} has been received. A balance of ${formatCurrency(amountDue, currency)} remains outstanding.`
+      : `This receipt confirms the final payment of ${formatCurrency(paymentAmount, currency)} has been received. Invoice paid in full. Thank you for your business.`;
+  } else if (isConsolidated) {
+    footerMessage = `This consolidated receipt confirms the invoice has been paid in full across ${paymentsList.length || 1} payment${(paymentsList.length || 1) === 1 ? "" : "s"}. Thank you for your business.`;
+  } else if (isPartial) {
+    footerMessage = `This receipt confirms a partial payment of ${formatCurrency(amountPaid, currency)} has been received. A balance of ${formatCurrency(amountDue, currency)} remains outstanding.`;
+  } else {
+    footerMessage = "This receipt confirms payment has been received. Thank you for your business.";
+  }
   const footerLines = wrapText(footerMessage, contentWidth, regular, 8);
   for (const line of footerLines) {
     drawText(line, MARGIN, y, { size: 8, font: regular, color: MID_GRAY });
     y -= 11;
   }
+
 
   return await pdfDoc.save();
 }
