@@ -312,11 +312,6 @@ Deno.serve(async (req) => {
 
       const localInvoice = matchingInvoices[0];
 
-      if (localInvoice.status === "paid" && localInvoice.receipt_pdf_url) {
-        console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} already marked as paid, skipping`);
-        continue;
-      }
-
       // Fetch latest PDF from Xero and replace in storage
       let newPdfPath: string | null = null;
       try {
@@ -333,37 +328,44 @@ Deno.serve(async (req) => {
         console.error(`xero-webhook: PDF fetch/upload error for ${xeroInvoiceNumber}:`, pdfErr);
       }
 
+      // Reconcile per-payment receipts (generates one PDF per Xero payment,
+      // plus a consolidated receipt when fully paid).
       let receiptPdfPath: string | null = null;
-      if (newLocalStatus === "paid" || newLocalStatus === "partially_paid") {
-        try {
-          const invoiceRows = await sql.query(
-            `SELECT invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency FROM invoices WHERE id = $1 LIMIT 1`,
-            [localInvoice.id],
-          );
-          const invoiceRecord = invoiceRows[0];
-          if (invoiceRecord) {
-            const receiptPdfBytes = await createReceiptPdfBytes({
-              invoiceNumber: (invoiceRecord.invoice_number as string | null) || xeroInvoiceNumber,
-              contactName: (invoiceRecord.contact_name as string) || "—",
-              invoiceDate: (invoiceRecord.invoice_date as string) || "—",
+      let receiptCount = 0;
+      try {
+        const invoiceRows = await sql.query(
+          `SELECT id, invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency FROM invoices WHERE id = $1 LIMIT 1`,
+          [localInvoice.id],
+        );
+        const invoiceRecord = invoiceRows[0];
+        if (invoiceRecord) {
+          const result = await reconcileInvoicePayments({
+            sql,
+            invoiceId: localInvoice.id as string,
+            invoiceRecord: {
+              id: localInvoice.id as string,
+              invoice_number: (invoiceRecord.invoice_number as string | null) || xeroInvoiceNumber,
+              contact_name: (invoiceRecord.contact_name as string) || "—",
+              invoice_date: (invoiceRecord.invoice_date as string) || "—",
               reference: (invoiceRecord.reference as string | null) || null,
               total: Number(invoiceRecord.total || 0),
-              lineItems: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items as Array<Record<string, unknown>> : [],
-              submittedByName: (invoiceRecord.submitted_by_name as string) || "—",
+              line_items: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items : [],
+              submitted_by_name: (invoiceRecord.submitted_by_name as string) || "—",
               currency: (invoiceRecord.currency as string | null) || "RM",
+            },
+            xeroInvoice,
+            branding: {
               logoUrl: config.logo_url || null,
               companyName: config.company_name || null,
               companySsm: config.company_ssm || null,
               companyAddress: config.company_address || null,
-              amountPaid,
-              amountDue,
-              isPartial: newLocalStatus === "partially_paid",
-            });
-            receiptPdfPath = await uploadReceiptPdfToStorage(localInvoice.id as string, receiptPdfBytes, xeroInvoiceNumber);
-          }
-        } catch (receiptErr) {
-          console.error(`xero-webhook: Receipt generation/upload error for ${xeroInvoiceNumber}:`, receiptErr);
+            },
+          });
+          receiptPdfPath = result.latestReceiptPath;
+          receiptCount = result.rows.length;
         }
+      } catch (receiptErr) {
+        console.error(`xero-webhook: Receipt reconciliation error for ${xeroInvoiceNumber}:`, receiptErr);
       }
 
       // For fully paid, clear amendment fields; for partial, just update status
@@ -400,7 +402,8 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""}${receiptPdfPath ? " + receipt generated" : ""}`);
+      console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""} (${receiptCount} receipt row(s))`);
+
 
       if (newLocalStatus === "paid") {
         try {
