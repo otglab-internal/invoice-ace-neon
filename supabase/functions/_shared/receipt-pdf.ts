@@ -6,6 +6,13 @@ interface LineItem {
   cost?: number;
 }
 
+export interface PaymentEntry {
+  number: number;
+  amount: number;
+  date?: string | null;
+  reference?: string | null;
+}
+
 interface ReceiptPdfData {
   invoiceNumber: string | null;
   contactName: string;
@@ -22,6 +29,15 @@ interface ReceiptPdfData {
   amountPaid?: number;
   amountDue?: number;
   isPartial?: boolean;
+  /** Receipt mode. "single" preserves legacy behaviour. */
+  mode?: "single" | "payment" | "consolidated";
+  /** For mode="payment": this payment's details. */
+  paymentNumber?: number;
+  paymentAmount?: number;
+  paymentDate?: string | null;
+  paymentReference?: string | null;
+  /** For mode="consolidated" or "payment": full ordered list of payments applied. */
+  paymentsList?: PaymentEntry[];
 }
 
 const A4_WIDTH = 595.28;
