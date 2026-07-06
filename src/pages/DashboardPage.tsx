@@ -275,14 +275,20 @@ const DashboardPage: React.FC = () => {
                       </div>
                       <InvoiceRowActions
                         canViewPdf={!!inv.invoice_pdf_url}
-                        canDownloadReceipt={canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)}
                         canAmend={canAmendInvoice(inv)}
                         loadingPdf={loadingPdf === inv.id}
-                        loadingReceipt={loadingReceipt === inv.id}
                         onViewPdf={() => handleViewPdf(inv)}
-                        onDownloadReceipt={() => handleDownloadReceipt(inv)}
                         onAmend={() => setAmendInvoice(inv)}
+                        receiptSlot={
+                          <ReceiptDownloadMenu
+                            invoiceId={inv.id}
+                            invoiceNumber={inv.invoice_number}
+                            currency={displayCurrency(inv.currency || currency)}
+                            available={canDownloadReceiptPdf(inv.status, inv.receipt_pdf_url)}
+                          />
+                        }
                       />
+
                     </div>
                   ))
                 )}
