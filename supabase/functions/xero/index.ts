@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (action === "sync-invoice-receipt") {
+    if (action === "sync-invoice-receipt" || action === "list-invoice-receipts") {
       const invoiceId = typeof body.invoice_id === "string" ? body.invoice_id : "";
       if (!invoiceId) {
         return new Response(JSON.stringify({ error: "Missing invoice_id" }), {
@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
       }
 
       const invoiceRows = await sql.query(
-        `SELECT id, invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency, receipt_pdf_url
+        `SELECT id, invoice_number, contact_name, invoice_date, reference, total, line_items, submitted_by_name, currency, receipt_pdf_url, status
          FROM invoices
          WHERE id = $1
          LIMIT 1`,
@@ -300,14 +300,22 @@ Deno.serve(async (req) => {
         });
       }
 
-      if (invoiceRecord.receipt_pdf_url) {
-        return new Response(JSON.stringify({
-          success: true,
-          receipt_pdf_url: invoiceRecord.receipt_pdf_url,
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const invoiceNumber = (invoiceRecord.invoice_number as string | null) || "";
+
+      // For pure list action, just return existing rows without hitting Xero
+      // (unless there are none yet — then fall through to sync).
+      if (action === "list-invoice-receipts") {
+        const existing = await listInvoicePayments(sql, invoiceId);
+        if (existing.length > 0) {
+          return new Response(JSON.stringify({
+            success: true,
+            receipts: existing,
+            status: invoiceRecord.status,
+          }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        // else fall through to sync
       }
 
-      const invoiceNumber = (invoiceRecord.invoice_number as string | null) || "";
       if (!invoiceNumber) {
         return new Response(JSON.stringify({ error: "Invoice number is missing" }), {
           status: 400,
@@ -362,7 +370,6 @@ Deno.serve(async (req) => {
       const xeroStatus = ((xeroInvoice.Status as string) || "").toUpperCase();
       const amountPaid = Number(xeroInvoice.AmountPaid ?? 0);
       const amountDue = Number(xeroInvoice.AmountDue ?? 0);
-      const total = Number(xeroInvoice.Total ?? invoiceRecord.total ?? 0);
       const isPartial = amountPaid > 0 && amountDue > 0;
       const isPaid = xeroStatus === "PAID" || (amountPaid > 0 && amountDue <= 0);
 
@@ -373,31 +380,35 @@ Deno.serve(async (req) => {
         });
       }
 
-      const receiptPdfBytes = await createReceiptPdfBytes({
-        invoiceNumber,
-        contactName: (invoiceRecord.contact_name as string) || "—",
-        invoiceDate: (invoiceRecord.invoice_date as string) || "—",
-        reference: (invoiceRecord.reference as string | null) || null,
-        total,
-        lineItems: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items as Array<Record<string, unknown>> : [],
-        submittedByName: (invoiceRecord.submitted_by_name as string) || "—",
-        currency: (invoiceRecord.currency as string | null) || "RM",
-        logoUrl: config.logo_url || null,
-        companyName: config.company_name || null,
-        companySsm: config.company_ssm || null,
-        companyAddress: config.company_address || null,
-        amountPaid: isPartial ? amountPaid : total,
-        amountDue: isPartial ? amountDue : 0,
-        isPartial,
+      const result = await reconcileInvoicePayments({
+        sql,
+        invoiceId,
+        invoiceRecord: {
+          id: invoiceId,
+          invoice_number: invoiceNumber,
+          contact_name: (invoiceRecord.contact_name as string) || "—",
+          invoice_date: (invoiceRecord.invoice_date as string) || "—",
+          reference: (invoiceRecord.reference as string | null) || null,
+          total: Number(invoiceRecord.total || 0),
+          line_items: Array.isArray(invoiceRecord.line_items) ? invoiceRecord.line_items : [],
+          submitted_by_name: (invoiceRecord.submitted_by_name as string) || "—",
+          currency: (invoiceRecord.currency as string | null) || "RM",
+        },
+        xeroInvoice,
+        branding: {
+          logoUrl: config.logo_url || null,
+          companyName: config.company_name || null,
+          companySsm: config.company_ssm || null,
+          companyAddress: config.company_address || null,
+        },
       });
 
-      const receiptPdfPath = await uploadReceiptPdfToStorage(invoiceId, receiptPdfBytes);
-      const newStatus = isPartial ? "partially_paid" : "paid";
+      const newStatus = result.isFullyPaid ? "paid" : "partially_paid";
       if (newStatus === "paid") {
         await sql.query(
           `UPDATE invoices
            SET status = $2,
-               receipt_pdf_url = $3,
+               receipt_pdf_url = COALESCE($3, receipt_pdf_url),
                amendment_status = NULL,
                amendment_data = NULL,
                amendment_note = NULL,
@@ -405,23 +416,25 @@ Deno.serve(async (req) => {
                amendment_requested_by_name = NULL,
                amendment_requested_at = NULL
            WHERE id = $1`,
-          [invoiceId, newStatus, receiptPdfPath],
+          [invoiceId, newStatus, result.latestReceiptPath],
         );
       } else {
         await sql.query(
-          `UPDATE invoices SET status = $2, receipt_pdf_url = $3 WHERE id = $1`,
-          [invoiceId, newStatus, receiptPdfPath],
+          `UPDATE invoices SET status = $2, receipt_pdf_url = COALESCE($3, receipt_pdf_url) WHERE id = $1`,
+          [invoiceId, newStatus, result.latestReceiptPath],
         );
       }
 
       return new Response(JSON.stringify({
         success: true,
-        receipt_pdf_url: receiptPdfPath,
+        receipts: result.rows,
+        receipt_pdf_url: result.latestReceiptPath,
         status: newStatus,
         amount_paid: amountPaid,
         amount_due: amountDue,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+
 
     // ACTION: disconnect
     if (action === "disconnect") {
