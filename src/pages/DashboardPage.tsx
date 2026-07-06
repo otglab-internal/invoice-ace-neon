@@ -10,6 +10,7 @@ import { canDownloadReceiptPdf, getSignedPdfUrl, isFullyPaidStatus, syncReceiptP
 import { useBranding } from "@/hooks/use-branding";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import InvoiceRowActions from "@/components/InvoiceRowActions";
+import ReceiptDownloadMenu from "@/components/ReceiptDownloadMenu";
 
 interface Invoice {
   id: string;
