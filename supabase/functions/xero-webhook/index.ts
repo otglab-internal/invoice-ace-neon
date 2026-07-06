@@ -1,6 +1,6 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { uploadToR2 } from "../_shared/r2-utils.ts";
-import { createReceiptPdfBytes } from "../_shared/receipt-pdf.ts";
+import { reconcileInvoicePayments } from "../_shared/invoice-payments.ts";
 import { stripPdfProtection } from "../_shared/pdf-strip.ts";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP } from "../_shared/email-utils.ts";
 import { dispatchApiPush } from "../_shared/api-push.ts";
