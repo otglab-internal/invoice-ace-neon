@@ -38,7 +38,8 @@ Deno.serve(async (req) => {
       });
 
       const data = await response.json();
-      if (response.ok && data?.success && data?.user && !data.token) {
+      if (response.ok && data?.success && data?.user) {
+        if (data.token) data.upstream_token = data.token;
         data.token = await createJwt({
           sub: data.user.id || data.system_id,
           role: data.user.role,
