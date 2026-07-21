@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Copy, KeyRound } from "lucide-react";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const INVOICES = `${SUPABASE_URL}/functions/v1/invoices`;
@@ -10,6 +12,29 @@ const LOGIN = `${SUPABASE_URL}/functions/v1/login-proxy`;
 const PDF_WEBHOOK = `${SUPABASE_URL}/functions/v1/invoice-pdf-webhook`;
 
 const ApiDocsPage: React.FC = () => {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "missing" | "failed">("idle");
+  const currentJwt = useMemo(() => {
+    try {
+      return localStorage.getItem("auth_token") || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const copyCurrentJwt = async () => {
+    if (!currentJwt) {
+      setCopyStatus("missing");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentJwt);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-8">
@@ -25,6 +50,25 @@ const ApiDocsPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <Badge className="bg-amber-600 text-xs">AUTH</Badge>
             <h2 className="text-sm font-semibold font-display text-foreground">Authentication</h2>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-xs font-semibold text-foreground">Current browser session JWT</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  For CRM testing, copy this after logging in and completing 2FA, then use it as the raw <code>x-app-jwt</code> header value.
+                </p>
+                {copyStatus === "copied" && <p className="mt-1 text-xs text-emerald-600">Copied. Use it without a Bearer prefix.</p>}
+                {copyStatus === "missing" && <p className="mt-1 text-xs text-destructive">No JWT found. Sign out, sign in again, and complete 2FA.</p>}
+                {copyStatus === "failed" && <p className="mt-1 text-xs text-destructive">Unable to copy automatically. Check browser clipboard permissions.</p>}
+              </div>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={copyCurrentJwt} className="shrink-0">
+              <Copy className="mr-2 h-4 w-4" />
+              Copy JWT
+            </Button>
           </div>
 
           <p className="text-xs text-muted-foreground">

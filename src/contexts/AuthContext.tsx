@@ -187,7 +187,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const orgId = getOrgId();
 
     const { data, error } = await supabase.functions.invoke("login-proxy", {
-      body: { action: "verify-2fa", challenge_token: challengeToken, totp_code: code, org_id: orgId },
+      body: {
+        action: "verify-2fa",
+        challenge_token: challengeToken,
+        totp_code: code,
+        environment: pendingEnvironment || "production",
+        org_id: orgId,
+      },
     });
 
     if (error) {
