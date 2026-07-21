@@ -45,9 +45,10 @@ Deno.serve(async (req) => {
           role: data.user.role,
           roles: data.user.roles || [],
           email: data.user.email,
-          env: data.environment || "production",
+          env: data.environment || environment || "production",
           org: orgId,
         });
+        if (!data.environment) data.environment = environment || "production";
       }
       return new Response(JSON.stringify(data), {
         status: response.status,
