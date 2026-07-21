@@ -249,7 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     markSessionStart();
 
     if (userId) await fetchTags(userId);
-  }, [fetchTags, pendingEmail]);
+  }, [fetchTags, pendingEmail, pendingEnvironment]);
 
   const logout = useCallback(() => {
     setUser(null);

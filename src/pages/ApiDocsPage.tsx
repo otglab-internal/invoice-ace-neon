@@ -60,7 +60,7 @@ const ApiDocsPage: React.FC = () => {
                 <p className="mt-1 text-xs text-muted-foreground">
                   For CRM testing, copy this after logging in and completing 2FA, then use it as the raw <code>x-app-jwt</code> header value.
                 </p>
-                {copyStatus === "copied" && <p className="mt-1 text-xs text-emerald-600">Copied. Use it without a Bearer prefix.</p>}
+                {copyStatus === "copied" && <p className="mt-1 text-xs text-primary">Copied. Use it without a Bearer prefix.</p>}
                 {copyStatus === "missing" && <p className="mt-1 text-xs text-destructive">No JWT found. Sign out, sign in again, and complete 2FA.</p>}
                 {copyStatus === "failed" && <p className="mt-1 text-xs text-destructive">Unable to copy automatically. Check browser clipboard permissions.</p>}
               </div>
