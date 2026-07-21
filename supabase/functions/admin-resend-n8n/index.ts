@@ -67,6 +67,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "api_submissions") {
+      const rows = await sql.query(
+        `SELECT id, invoice_number, contact_name, submitted_by_system_id, submitted_by_name, submitted_by_email, callback_url, status, total, created_at
+         FROM invoices
+         WHERE submitted_by_system_id IS NOT NULL AND submitted_by_system_id <> ''
+         ORDER BY created_at DESC LIMIT 25`,
+        [],
+      );
+      return new Response(JSON.stringify({ count: rows.length, rows }, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const rows = await sql.query(
       contactName
         ? `SELECT * FROM invoices WHERE contact_name ILIKE $1 ORDER BY created_at DESC LIMIT 1`
