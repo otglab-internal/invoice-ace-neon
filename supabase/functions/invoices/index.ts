@@ -704,7 +704,7 @@ Deno.serve(async (req) => {
     }
 
     const sql = getDb(req, bodyOrgId);
-    const userId = claims.sub as string;
+    const userId = claims.id as string;
 
     // ACTION: create
     if (action === "create") {
