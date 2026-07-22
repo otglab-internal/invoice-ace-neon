@@ -401,8 +401,8 @@ const ApprovalsPage: React.FC = () => {
             </td>
             <td className="py-3 px-4 text-xs text-foreground">{inv.amendment_data?.contact_name || inv.contact_name}</td>
             <td className="py-3 px-4 text-xs text-muted-foreground">{inv.amendment_requested_by_name || "Unknown"}</td>
-            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">{inv.currency || "RM"} {Number(inv.total).toFixed(2)}</td>
-            <td className="py-3 px-4 text-right text-xs font-medium text-foreground">{inv.currency || "RM"} {Number(inv.amendment_data?.total || 0).toFixed(2)}</td>
+            <td className="py-3 px-4 text-right text-sm font-semibold text-foreground">{inv.currency || "RM"} {formatAmount(inv.total)}</td>
+            <td className="py-3 px-4 text-right text-sm font-semibold text-foreground">{inv.currency || "RM"} {formatAmount(inv.amendment_data?.total)}</td>
             <td className="py-3 px-4 text-right text-xs text-muted-foreground">
               {inv.amendment_requested_at ? new Date(inv.amendment_requested_at).toLocaleDateString("en-MY") : "—"}
             </td>
