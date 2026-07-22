@@ -1474,7 +1474,7 @@ const CreateInvoicePage: React.FC = () => {
             <div className="text-sm text-muted-foreground flex-1 min-w-0">
               {total > 0 ? (
                 <span>
-                  Total: <strong className="text-foreground">{currency} {total.toFixed(2)}</strong>
+                  Total: <strong className="text-foreground text-base">{currency} {formatAmount(total)}</strong>
                   {lineItems.length > 1 && <span className="ml-2">({lineItems.length} items)</span>}
                 </span>
               ) : (
