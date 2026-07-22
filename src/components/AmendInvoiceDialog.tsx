@@ -516,8 +516,8 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
             </div>
           </div>
 
-          <div className="text-sm font-medium text-foreground">
-            New Total: {invoice?.currency || "RM"} {total.toFixed(2)}
+          <div className="text-base font-semibold text-foreground">
+            New Total: {invoice?.currency || "RM"} {formatAmount(total)}
           </div>
 
           <div>
