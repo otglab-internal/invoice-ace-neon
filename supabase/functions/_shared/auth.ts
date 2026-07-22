@@ -152,10 +152,58 @@ async function verifyApiKey(
   return null;
 }
 
+async function verifyLocalSession(token: string): Promise<Principal | null> {
+  try {
+    const raw = token.slice("ses_local_".length);
+    const [bodyB64, sigB64] = raw.split(".");
+    if (!bodyB64 || !sigB64) return null;
+    const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const expected = new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(bodyB64)),
+    );
+    const b64urlToBytes = (s: string) => {
+      const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "==".slice((s.length + 2) % 4);
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    };
+    const actual = b64urlToBytes(sigB64);
+    if (actual.length !== expected.length) return null;
+    let diff = 0;
+    for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
+    if (diff !== 0) return null;
+    const body = JSON.parse(new TextDecoder().decode(b64urlToBytes(bodyB64))) as Record<string, unknown>;
+    if (typeof body.exp === "number" && Date.now() > body.exp) return null;
+    const id = pickString(body.sub);
+    if (!id) return null;
+    return {
+      kind: "session",
+      id,
+      email: pickString(body.email),
+      role: pickString(body.role, "user"),
+      name: pickString(body.email, id),
+      allowedSystems: ["*"],
+      raw: body,
+    };
+  } catch (e) {
+    console.error("verifyLocalSession error:", e);
+    return null;
+  }
+}
+
 async function verifySession(
   token: string,
   orgId: string,
 ): Promise<Principal | null> {
+  if (token.startsWith("ses_local_")) return verifyLocalSession(token);
   try {
     const res = await fetch(AUTH_URL, {
       method: "POST",
@@ -190,6 +238,7 @@ async function verifySession(
     return null;
   }
 }
+
 
 /**
  * Verify credentials on an inbound request.
