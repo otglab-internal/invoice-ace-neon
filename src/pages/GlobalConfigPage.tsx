@@ -79,6 +79,9 @@ const GlobalConfigPage: React.FC = () => {
     connected: boolean;
     hasCredentials: boolean;
     hasContactWritePermission?: boolean | null;
+    missingRequiredScopes?: string[];
+    grantedScopeCount?: number;
+    scopeSource?: string;
   }>({ connected: false, hasCredentials: false, hasContactWritePermission: null });
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
@@ -193,6 +196,9 @@ const GlobalConfigPage: React.FC = () => {
           connected: data.connected,
           hasCredentials: data.hasCredentials,
           hasContactWritePermission: data.hasContactWritePermission ?? null,
+          missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
+          grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
+          scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
         });
       }
     } catch {
@@ -261,7 +267,7 @@ const GlobalConfigPage: React.FC = () => {
         body: { action: "disconnect" },
         headers: getXeroHeaders(),
       });
-      setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials, hasContactWritePermission: null });
+      setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials, hasContactWritePermission: null, missingRequiredScopes: [] });
       await logActivity("xero_disconnected", "config", performerId, performerName);
       toast({ title: "Xero disconnected" });
     } catch {
@@ -301,11 +307,18 @@ const GlobalConfigPage: React.FC = () => {
           toast({
             title: "Xero connected successfully",
             description: data.hasContactWritePermission === false
-              ? "Contact creation permission was not granted. Reconnect and approve all requested permissions."
+              ? `Contact creation permission was not granted. Missing: ${(data.missingRequiredScopes || ["accounting.contacts"]).join(", ")}`
               : `Tenant: ${data.tenant}`,
             variant: data.hasContactWritePermission === false ? "destructive" : undefined,
           });
-          setXeroStatus({ connected: true, hasCredentials: true, hasContactWritePermission: data.hasContactWritePermission ?? null });
+          setXeroStatus({
+            connected: true,
+            hasCredentials: true,
+            hasContactWritePermission: data.hasContactWritePermission ?? null,
+            missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
+            grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
+            scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
+          });
           logActivity("xero_connected", "config", performerId, performerName, { tenant: data.tenant });
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
@@ -477,7 +490,8 @@ const GlobalConfigPage: React.FC = () => {
                               Disconnect
                             </Button>
                             <Button type="button" variant="outline" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
-                              Reconnect
+                              {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                              Reauthorize
                             </Button>
                           </>
                         ) : (
@@ -487,6 +501,21 @@ const GlobalConfigPage: React.FC = () => {
                           </Button>
                         )}
                       </div>
+                      {xeroStatus.connected && xeroStatus.hasContactWritePermission === false && (
+                        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                          Xero did not grant contact creation access. Reauthorize and approve all requested permissions.
+                          {(xeroStatus.missingRequiredScopes?.length || 0) > 0 && (
+                            <div className="mt-1 font-mono break-all">
+                              Missing: {xeroStatus.missingRequiredScopes?.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {xeroStatus.connected && xeroStatus.hasContactWritePermission === null && (
+                        <div className="rounded-md border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+                          Xero scope details are unavailable for this token. Reauthorize if contact creation fails.
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 
