@@ -733,7 +733,7 @@ const ApprovalsPage: React.FC = () => {
             <div className="space-y-3 text-sm">
               <p><span className="text-muted-foreground">ID:</span> <code className="text-xs">{detailInvoice.id}</code></p>
               <p><span className="text-muted-foreground">Contact:</span> {detailInvoice.contact_name}</p>
-              <p><span className="text-muted-foreground">Amount:</span> RM {Number(detailInvoice.total).toFixed(2)}</p>
+              <p><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">RM {formatAmount(detailInvoice.total)}</span></p>
               <p><span className="text-muted-foreground">Date:</span> {detailInvoice.invoice_date}</p>
               {detailInvoice.reference && <p><span className="text-muted-foreground">Reference:</span> {detailInvoice.reference}</p>}
               <p><span className="text-muted-foreground">Submitted by:</span> {detailInvoice.submitted_by_name}</p>
