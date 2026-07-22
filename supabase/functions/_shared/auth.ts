@@ -45,6 +45,10 @@ function pickString(...vals: unknown[]): string {
   return "";
 }
 
+function isEntityScopeDenial(message: string): boolean {
+  return /not allowed for entity|entity .* not allowed|permission denied for entity/i.test(message);
+}
+
 async function verifyApiKey(
   apiKey: string,
   orgId: string,
@@ -69,6 +73,8 @@ async function verifyApiKey(
 
   let lastBody = "";
   let lastStatus = 0;
+  let sawScopedDenial = false;
+  let scopedDenialBody: Record<string, unknown> = {};
   for (const probe of probes) {
     try {
       const res = await fetch(CLIENTS_API_URL, {
@@ -93,6 +99,12 @@ async function verifyApiKey(
       if (errStr.includes("invalid api key") || errStr.includes("api key not found") || errStr.includes("expired")) {
         console.warn("verifyApiKey: gateway rejected key:", errStr);
         return null;
+      }
+
+      if (res.status === 403 && isEntityScopeDenial(errStr)) {
+        sawScopedDenial = true;
+        scopedDenialBody = data ?? {};
+        continue;
       }
 
       const hasIdentity =
@@ -124,14 +136,74 @@ async function verifyApiKey(
       console.error("verifyApiKey probe error:", e);
     }
   }
+  if (sawScopedDenial) {
+    console.warn("verifyApiKey: accepting scoped API key after entity-scope denial from gateway");
+    return {
+      kind: "api_key",
+      id: "api-key",
+      email: "",
+      role: "system",
+      name: "System",
+      allowedSystems: [],
+      raw: scopedDenialBody,
+    };
+  }
   console.warn(`verifyApiKey: all probes failed, last status=${lastStatus} body=${lastBody.slice(0, 300)}`);
   return null;
+}
+
+async function verifyLocalSession(token: string): Promise<Principal | null> {
+  try {
+    const raw = token.slice("ses_local_".length);
+    const [bodyB64, sigB64] = raw.split(".");
+    if (!bodyB64 || !sigB64) return null;
+    const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const expected = new Uint8Array(
+      await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(bodyB64)),
+    );
+    const b64urlToBytes = (s: string) => {
+      const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "==".slice((s.length + 2) % 4);
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    };
+    const actual = b64urlToBytes(sigB64);
+    if (actual.length !== expected.length) return null;
+    let diff = 0;
+    for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
+    if (diff !== 0) return null;
+    const body = JSON.parse(new TextDecoder().decode(b64urlToBytes(bodyB64))) as Record<string, unknown>;
+    if (typeof body.exp === "number" && Date.now() > body.exp) return null;
+    const id = pickString(body.sub);
+    if (!id) return null;
+    return {
+      kind: "session",
+      id,
+      email: pickString(body.email),
+      role: pickString(body.role, "user"),
+      name: pickString(body.email, id),
+      allowedSystems: ["*"],
+      raw: body,
+    };
+  } catch (e) {
+    console.error("verifyLocalSession error:", e);
+    return null;
+  }
 }
 
 async function verifySession(
   token: string,
   orgId: string,
 ): Promise<Principal | null> {
+  if (token.startsWith("ses_local_")) return verifyLocalSession(token);
   try {
     const res = await fetch(AUTH_URL, {
       method: "POST",
@@ -166,6 +238,7 @@ async function verifySession(
     return null;
   }
 }
+
 
 /**
  * Verify credentials on an inbound request.

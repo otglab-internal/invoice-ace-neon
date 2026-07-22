@@ -51,6 +51,14 @@ Deno.serve(async (req) => {
   try {
     const { action, org_id: bodyOrgId, ...body } = await req.json();
 
+    // ping / health — canary probes; no auth required, always returns ok
+    if (action === "ping" || action === "health") {
+      return new Response(
+        JSON.stringify({ ok: true, service: "invoices", action, timestamp: new Date().toISOString() }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // api-submit — external system invoice push (no auth required)
     if (action === "api-submit") {
       const { system_id, user_id, user_name, user_email, contact_id, contact_name, invoice_date, reference, line_items, source_system, source_system_name, callback_url, currency: bodyCurrency } = body;

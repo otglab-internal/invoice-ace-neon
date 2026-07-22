@@ -54,6 +54,19 @@ const normalizeAuthEmail = (value: string | null | undefined): string | null => 
   return normalized;
 };
 
+const normalizeAuthToken = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const normalized = value.trim();
+  if (!normalized) return null;
+
+  const lower = normalized.toLowerCase();
+  if (lower === "undefined" || lower === "null") return null;
+  // Local JWTs were removed; only opaque gateway session tokens are valid for the UI.
+  if (/^[^.]+\.[^.]+\.[^.]+$/.test(normalized)) return null;
+
+  return normalized;
+};
+
 export const useAuth = () => {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
@@ -92,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const storedUser = localStorage.getItem("auth_user");
-    const storedToken = localStorage.getItem("auth_token");
+    const storedToken = normalizeAuthToken(localStorage.getItem("auth_token"));
     const storedEnv = localStorage.getItem("auth_environment");
     const storedSysId = localStorage.getItem("auth_system_id");
     const storedUserId = localStorage.getItem("auth_user_id");
@@ -105,6 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem("auth_user_id");
         localStorage.removeItem("auth_email");
         localStorage.removeItem("auth_login_email");
+        localStorage.removeItem("auth_token");
         clearSessionMarkers();
         setIsLoading(false);
         return;
@@ -205,7 +219,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(msg);
     }
     if (!data.success || !data.user) throw new Error("Verification failed");
-    if (!data.token) throw new Error("Verification failed: session token missing");
+    const sessionToken =
+      data.token ||
+      data.session_token ||
+      data.access_token ||
+      data.user?.token ||
+      data.user?.session_token ||
+      data.user?.access_token ||
+      "";
+    if (!sessionToken) throw new Error("Verification failed: no credential returned by auth service");
 
     const authUser: AuthUser = {
       firstName: data.user.first_name,
@@ -244,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setPendingEmail(null);
     setPendingEnvironment(null);
-    localStorage.setItem("auth_token", data.token);
+    localStorage.setItem("auth_token", sessionToken);
     // Anchor the absolute-timeout clock to this fresh login.
     markSessionStart();
 

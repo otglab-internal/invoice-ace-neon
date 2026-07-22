@@ -11,6 +11,9 @@ patchFunctionsInvoke();
 // Load favicon from global_config on startup
 (async () => {
   try {
+    const token = localStorage.getItem("auth_token")?.trim();
+    if (!token || ["undefined", "null"].includes(token.toLowerCase()) || /^[^.]+\.[^.]+\.[^.]+$/.test(token)) return;
+
     const { data } = await neonQuery("global_config", {
       select: "value",
       filters: { key: "favicon_url" },
