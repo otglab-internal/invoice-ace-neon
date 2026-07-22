@@ -43,9 +43,6 @@ const displayCurrency = (currency?: string | null) => {
   return c.replace(/\$$/, "");
 };
 
-const formatAmount = (amount: number) =>
-  amount.toLocaleString("en-MY", { minimumFractionDigits: 2 });
-
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
 
