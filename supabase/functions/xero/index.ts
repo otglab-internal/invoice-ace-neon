@@ -281,9 +281,11 @@ Deno.serve(async (req) => {
       }
 
       const tokenData = await tokenRes.json();
+      const grantedScopes = getTokenResponseScopes(tokenData);
 
       await upsertConfig(sql, "xero_access_token", tokenData.access_token);
       await upsertConfig(sql, "xero_refresh_token", tokenData.refresh_token);
+      await upsertConfig(sql, "xero_granted_scopes", grantedScopes.join(" "));
 
       const connRes = await fetch(XERO_CONNECTIONS_URL, {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
@@ -303,7 +305,12 @@ Deno.serve(async (req) => {
         await upsertConfig(sql, "xero_tenant_id", connections[0].tenantId);
       }
 
-      return new Response(JSON.stringify({ success: true, tenant: connections[0]?.tenantName || "Connected" }), {
+      return new Response(JSON.stringify({
+        success: true,
+        tenant: connections[0]?.tenantName || "Connected",
+        hasContactWritePermission: hasContactWriteScope(grantedScopes),
+        grantedScopes,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -312,15 +319,18 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const config = await getConfigMap(
         sql,
-        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id"],
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_granted_scopes"],
       );
       const connected = !!(config.xero_access_token && config.xero_tenant_id);
+      const grantedScopes = normalizeScopes(config.xero_granted_scopes || "");
 
       return new Response(
         JSON.stringify({
           connected,
           hasCredentials: !!(config.xero_client_id && config.xero_client_secret),
           tenantId: config.xero_tenant_id || null,
+          hasContactWritePermission: hasContactWriteScope(grantedScopes),
+          grantedScopes,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
