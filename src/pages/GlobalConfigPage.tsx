@@ -246,7 +246,7 @@ const GlobalConfigPage: React.FC = () => {
     try {
       const redirectUri = `${window.location.origin}/global-config`;
       const { data, error } = await supabase.functions.invoke("xero", {
-        body: { action: "get-auth-url", redirectUri },
+        body: { action: "get-auth-url", redirectUri, forceReauthorize: xeroStatus.connected },
         headers: getXeroHeaders(),
       });
       if (error || data?.error) {
