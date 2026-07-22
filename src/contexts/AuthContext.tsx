@@ -219,7 +219,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(msg);
     }
     if (!data.success || !data.user) throw new Error("Verification failed");
-    if (!data.token) throw new Error("Verification failed: session token missing");
+    const sessionToken =
+      data.token ||
+      data.session_token ||
+      data.access_token ||
+      data.user?.token ||
+      data.user?.session_token ||
+      data.user?.access_token ||
+      "";
+    if (!sessionToken) throw new Error("Verification failed: no credential returned by auth service");
 
     const authUser: AuthUser = {
       firstName: data.user.first_name,
@@ -258,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setPendingEmail(null);
     setPendingEnvironment(null);
-    localStorage.setItem("auth_token", data.token);
+    localStorage.setItem("auth_token", sessionToken);
     // Anchor the absolute-timeout clock to this fresh login.
     markSessionStart();
 
