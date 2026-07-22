@@ -495,7 +495,7 @@ const ApprovalsPage: React.FC = () => {
                       <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-1 text-xs">
                         <p><span className="text-muted-foreground">Contact:</span> {selectedAmendment.amendment_data?.contact_name}</p>
                         <p><span className="text-muted-foreground">Reference:</span> {selectedAmendment.amendment_data?.reference || "—"}</p>
-                        <p><span className="text-muted-foreground">Total:</span> {selectedAmendment.currency || "RM"} {Number(selectedAmendment.amendment_data?.total || 0).toFixed(2)}</p>
+                        <p><span className="text-muted-foreground">Total:</span> <span className="font-semibold">{selectedAmendment.currency || "RM"} {formatAmount(selectedAmendment.amendment_data?.total)}</span></p>
                         <p className="text-muted-foreground mt-2 font-medium">Line Items ({selectedAmendment.amendment_data?.line_items?.length || 0})</p>
                         {(selectedAmendment.amendment_data?.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-primary/30 mt-1">
