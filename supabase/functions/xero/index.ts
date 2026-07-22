@@ -180,7 +180,10 @@ Deno.serve(async (req) => {
         "accounting.attachments",
         "accounting.settings.read",
       ].join(" ");
-      const url = `${XERO_AUTH_URL}?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}`;
+      // prompt=consent forces Xero to re-display the permission screen so newly
+      // added scopes (e.g. accounting.contacts write) are actually granted on
+      // reconnect instead of Xero silently reusing the prior grant.
+      const url = `${XERO_AUTH_URL}?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&state=${state}&prompt=consent`;
 
       return new Response(JSON.stringify({ url, state }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
