@@ -630,8 +630,8 @@ const ApprovalsPage: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="text-sm font-medium text-foreground">
-                            Total: {selected.currency || "RM"} {editTotal.toFixed(2)}
+                          <div className="text-base font-semibold text-foreground">
+                            Total: {selected.currency || "RM"} {formatAmount(editTotal)}
                           </div>
 
                           <div className="flex gap-2">
