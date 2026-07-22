@@ -81,7 +81,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ environment = "production" }) => 
       await verify2FA(otpCode, challengeToken);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      setError(friendlyError(msg));
+      const lower = msg.toLowerCase();
+      // Upstream invalidates the challenge token after a wrong code, so send
+      // the user back to credentials to request a fresh challenge.
+      if (lower.includes("expired challenge") || lower.includes("invalid or expired challenge")) {
+        setStep("credentials");
+        setOtpCode("");
+        setChallengeToken("");
+        setError("Your verification code expired. Please sign in again to receive a new code.");
+      } else if (lower.includes("invalid 2fa") || lower.includes("invalid totp") || lower.includes("invalid code")) {
+        setOtpCode("");
+        setError("Invalid verification code. Please try again.");
+      } else {
+        setError(friendlyError(msg));
+      }
     } finally {
       setLoading(false);
     }
