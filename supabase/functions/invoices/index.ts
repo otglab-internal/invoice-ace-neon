@@ -1,6 +1,7 @@
 import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
 import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
+import { authenticate as fgAuthenticate } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Max-Age": "86400",
 };
+
 
 const ORG_DB_MAP: Record<string, { prod: string; sb: string }> = {
   otg_lab: { prod: "DATABASE_URL_OTG_PROD", sb: "DATABASE_URL_OTG_SB" },
@@ -33,41 +35,13 @@ function getDb(req: Request, orgId?: string) {
   return neon(url);
 }
 
-// Verify JWT from auth function
-async function verifyJwt(token: string): Promise<Record<string, unknown> | null> {
-  try {
-    const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const enc = new TextEncoder();
-    const [header, body, signature] = token.split(".");
-
-    const key = await crypto.subtle.importKey(
-      "raw", enc.encode(secret),
-      { name: "HMAC", hash: "SHA-256" }, false, ["verify"]
-    );
-
-    const sigStr = signature.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = sigStr + "=".repeat((4 - (sigStr.length % 4)) % 4);
-    const sigBytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-
-    const valid = await crypto.subtle.verify("HMAC", key, sigBytes, enc.encode(`${header}.${body}`));
-    if (!valid) return null;
-
-    const bodyStr = body.replace(/-/g, "+").replace(/_/g, "/");
-    const bodyPadded = bodyStr + "=".repeat((4 - (bodyStr.length % 4)) % 4);
-    const payload = JSON.parse(atob(bodyPadded));
-
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+// Auth: delegates to Federated Gateway helper.
+// Accepts x-api-key OR session token (x-app-jwt / Authorization Bearer).
+// Returns a Principal with { id, role, email, allowedSystems } or null.
+async function authenticate(req: Request) {
+  return await fgAuthenticate(req);
 }
 
-async function authenticate(req: Request): Promise<Record<string, unknown> | null> {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  return verifyJwt(authHeader.replace("Bearer ", ""));
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
