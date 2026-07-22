@@ -50,42 +50,82 @@ async function verifyApiKey(
   orgId: string,
   environment: string,
 ): Promise<Principal | null> {
-  try {
-    // Use a lightweight describe ping — clients-api runs verifyApiKey on every
-    // action, so any successful call proves the key is valid and echoes back
-    // the allowedSystemIds for that key.
-    const res = await fetch(CLIENTS_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: EXTERNAL_ANON_KEY,
-        "x-api-key": apiKey,
-        "x-org-id": orgId,
-        "x-environment": environment,
-      },
-      body: JSON.stringify({ action: "describe", entity: "clients" }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json().catch(() => ({}));
-    const allowed = Array.isArray(data?.allowedSystemIds)
-      ? data.allowedSystemIds.map((s: unknown) => String(s))
-      : Array.isArray(data?.allowed_systems)
-      ? data.allowed_systems.map((s: unknown) => String(s))
-      : [];
-    const systemId = pickString(data?.systemId, data?.system_id, "api-key");
-    return {
-      kind: "api_key",
-      id: systemId,
-      email: pickString(data?.systemName, data?.system_name),
-      role: "system",
-      name: pickString(data?.systemName, data?.system_name, "System"),
-      allowedSystems: allowed,
-      raw: data ?? {},
-    };
-  } catch (e) {
-    console.error("verifyApiKey error:", e);
+  // Basic format gate — mirrors the gateway. Cheap and avoids a round-trip.
+  if (!/^(prod_|sb_)/.test(apiKey)) {
+    console.warn("verifyApiKey: key does not start with prod_/sb_");
     return null;
   }
+  // Probe the gateway. Try a few lightweight actions — different keys are
+  // scoped to different entities, so we accept the first that comes back as
+  // a structured response containing systemId/allowedSystemIds. If the
+  // response is a hard "invalid key" error we bail; if it's just "entity not
+  // allowed" we treat the key itself as valid and move on.
+  const probes: Array<Record<string, unknown>> = [
+    { action: "verify-key" },
+    { action: "describe", entity: "invoices" },
+    { action: "describe", entity: "clients" },
+    { action: "describe", entity: "contacts" },
+  ];
+
+  let lastBody = "";
+  let lastStatus = 0;
+  for (const probe of probes) {
+    try {
+      const res = await fetch(CLIENTS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: EXTERNAL_ANON_KEY,
+          "x-api-key": apiKey,
+          "x-org-id": orgId,
+          "x-environment": environment,
+        },
+        body: JSON.stringify(probe),
+      });
+      const text = await res.text();
+      lastStatus = res.status;
+      lastBody = text;
+      let data: Record<string, unknown> = {};
+      try { data = text ? JSON.parse(text) : {}; } catch { /* not json */ }
+
+      // Hard-fail on invalid key regardless of status
+      const errStr = pickString((data as any)?.error, (data as any)?.message).toLowerCase();
+      if (errStr.includes("invalid api key") || errStr.includes("api key not found") || errStr.includes("expired")) {
+        console.warn("verifyApiKey: gateway rejected key:", errStr);
+        return null;
+      }
+
+      const hasIdentity =
+        typeof (data as any)?.systemId === "string" ||
+        typeof (data as any)?.system_id === "string" ||
+        Array.isArray((data as any)?.allowedSystemIds) ||
+        Array.isArray((data as any)?.allowed_systems);
+
+      // Accept if 2xx, OR if the gateway echoed identity even on 403 (entity-not-allowed).
+      if (res.ok || hasIdentity) {
+        const allowed = Array.isArray((data as any)?.allowedSystemIds)
+          ? (data as any).allowedSystemIds.map((s: unknown) => String(s))
+          : Array.isArray((data as any)?.allowed_systems)
+          ? (data as any).allowed_systems.map((s: unknown) => String(s))
+          : [];
+        const systemId = pickString((data as any)?.systemId, (data as any)?.system_id, "api-key");
+        return {
+          kind: "api_key",
+          id: systemId,
+          email: pickString((data as any)?.systemName, (data as any)?.system_name),
+          role: "system",
+          name: pickString((data as any)?.systemName, (data as any)?.system_name, "System"),
+          allowedSystems: allowed,
+          raw: data ?? {},
+        };
+      }
+      // else: try next probe (entity may just not be permitted for this key)
+    } catch (e) {
+      console.error("verifyApiKey probe error:", e);
+    }
+  }
+  console.warn(`verifyApiKey: all probes failed, last status=${lastStatus} body=${lastBody.slice(0, 300)}`);
+  return null;
 }
 
 async function verifySession(
