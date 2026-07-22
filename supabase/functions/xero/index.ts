@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
         "profile",
         "email",
         "offline_access",
-        "accounting.contacts.read",
+        "accounting.contacts",
         "accounting.invoices",
         "accounting.payments",
         "accounting.attachments",
@@ -833,6 +833,35 @@ Deno.serve(async (req) => {
         method: "POST",
         body: JSON.stringify({ Contacts: [payload] }),
       });
+      if (createRes.status === 401 || createRes.status === 403) {
+        const errText = await createRes.text();
+        console.error("Xero create-xero-contact unauthorized:", errText);
+        const refreshed = await refreshAccessToken(sql, config);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          const retryRes = await doFetch(`${XERO_API_URL}/Contacts`, {
+            method: "POST",
+            body: JSON.stringify({ Contacts: [payload] }),
+          });
+          if (retryRes.ok) {
+            const cj = await retryRes.json();
+            const created = (cj.Contacts || [])[0];
+            return new Response(JSON.stringify({
+              contact: created ? { id: created.ContactID, name: created.Name, email: created.EmailAddress || null } : null,
+              created: true,
+            }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          const retryErrText = await retryRes.text();
+          console.error("Xero create-xero-contact retry failed:", retryErrText);
+        }
+        return new Response(JSON.stringify({
+          error: "Xero connection is missing contact write permission. Please reconnect Xero from Global Config, then try again.",
+          code: "xero_contact_write_permission_missing",
+          detail: errText,
+        }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       if (!createRes.ok) {
         const errText = await createRes.text();
         console.error("Xero create-xero-contact failed:", errText);
