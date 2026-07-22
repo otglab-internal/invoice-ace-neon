@@ -12,7 +12,12 @@ function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   try { headers["x-org-id"] = getOrgId(); } catch { /* noop */ }
   headers["x-environment"] = localStorage.getItem("auth_environment") || "production";
-  const token = localStorage.getItem("auth_token");
+  const rawToken = localStorage.getItem("auth_token");
+  const token = rawToken
+    && !["undefined", "null"].includes(rawToken.trim().toLowerCase())
+    && !/^[^.]+\.[^.]+\.[^.]+$/.test(rawToken.trim())
+    ? rawToken.trim()
+    : "";
   // Use x-app-jwt because supabase-js's functions.invoke overrides Authorization
   // with the project anon key, clobbering any token we put there.
   if (token) headers["x-app-jwt"] = token;
@@ -20,9 +25,17 @@ function getHeaders(): Record<string, string> {
 }
 
 async function invoke(body: Record<string, unknown>) {
+  const headers = getHeaders();
+  if (!headers["x-app-jwt"] && !headers["x-api-key"]) {
+    return {
+      data: null,
+      error: { message: "Please sign in to continue." },
+    };
+  }
+
   const { data, error } = await supabase.functions.invoke("data-proxy", {
     body,
-    headers: getHeaders(),
+    headers,
   });
   if (error) {
     const message = await parseEdgeError(error, data, "Database request failed");
