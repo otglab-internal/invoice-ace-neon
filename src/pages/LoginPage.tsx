@@ -15,7 +15,7 @@ const friendlyError = (msg: string): string => {
     return "Service configuration error. Please contact your administrator.";
   if (lower.includes("not found") || lower.includes("no user") || lower.includes("user not found"))
     return "No account found with that email address.";
-  if (lower.includes("expired") || lower.includes("session"))
+  if ((lower.includes("expired") || lower.includes("session")) && !lower.includes("credential") && !lower.includes("token missing") && !lower.includes("no credential"))
     return "Your session has expired. Please sign in again.";
   if (lower.includes("too many") || lower.includes("rate") || lower.includes("throttle"))
     return "Too many attempts. Please wait a moment and try again.";
