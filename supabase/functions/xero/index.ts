@@ -851,6 +851,7 @@ Deno.serve(async (req) => {
       }
 
       let accessToken = config.xero_access_token;
+      let contactWriteScope = hasContactWriteScope(getGrantedScopes(accessToken));
 
       const safeName = name.replace(/"/g, '\\"');
       const lookupUrl = `${XERO_API_URL}/Contacts?where=${encodeURIComponent(`Name=="${safeName}"`)}`;
