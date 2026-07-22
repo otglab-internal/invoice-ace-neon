@@ -500,7 +500,7 @@ const ApprovalsPage: React.FC = () => {
                         {(selectedAmendment.amendment_data?.line_items || []).map((li: any, idx: number) => (
                           <div key={idx} className="pl-2 border-l-2 border-primary/30 mt-1">
                             <p className="whitespace-pre-wrap">{(li.description || "").replace(/\\n/g, "\n")}</p>
-                            <p className="text-muted-foreground">Qty: {li.quantity} × {selectedAmendment.currency || "RM"} {Number(li.cost).toFixed(2)}</p>
+                            <p className="text-muted-foreground">Qty: {li.quantity} × {selectedAmendment.currency || "RM"} {formatAmount(li.cost)}</p>
                           </div>
                         ))}
                       </div>
