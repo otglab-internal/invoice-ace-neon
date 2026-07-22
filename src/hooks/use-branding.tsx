@@ -35,6 +35,17 @@ function applyFavicon(faviconUrl: string | null) {
 }
 
 async function fetchBranding(): Promise<BrandingData> {
+  const token = localStorage.getItem("auth_token")?.trim();
+  if (!token || ["undefined", "null"].includes(token.toLowerCase())) {
+    return {
+      logoUrl: null,
+      faviconUrl: null,
+      companyName: null,
+      companySsm: null,
+      companyAddress: null,
+    };
+  }
+
   const { data } = await neonQuery<{ key: string; value: string }>("global_config", {
     select: "key,value",
   });
