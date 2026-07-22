@@ -13,6 +13,7 @@ import { useBranding } from "@/hooks/use-branding";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import InvoiceRowActions from "@/components/InvoiceRowActions";
 import ReceiptDownloadMenu from "@/components/ReceiptDownloadMenu";
+import { formatAmount } from "@/lib/utils";
 
 interface Invoice {
   id: string;
