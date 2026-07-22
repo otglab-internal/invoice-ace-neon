@@ -242,7 +242,12 @@ async function revokeStoredXeroConnection(sql: DbClient, config: ConfigMap): Pro
   return { attempted: true, revoked: true, status: deleteRes.status };
 }
 
-function contactAuthorizationErrorResponse(scopeDiagnostics: ScopeDiagnostics, detail: string, operation: "lookup" | "create") {
+function contactAuthorizationErrorResponse(
+  scopeDiagnostics: ScopeDiagnostics,
+  detail: string,
+  operation: "lookup" | "create",
+  correlationId?: string | null,
+) {
   const missingScope = scopeDiagnostics.hasContactWritePermission === false;
   return new Response(JSON.stringify({
     error: missingScope
@@ -253,6 +258,7 @@ function contactAuthorizationErrorResponse(scopeDiagnostics: ScopeDiagnostics, d
     missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
     grantedScopeCount: scopeDiagnostics.grantedScopeCount,
     scopeSource: scopeDiagnostics.scopeSource,
+    xeroCorrelationId: correlationId || null,
     detail,
   }), {
     status: 400,
@@ -1009,9 +1015,10 @@ Deno.serve(async (req) => {
         lookup = await doFetch(lookupUrl);
       }
       if (lookup.status === 401 || lookup.status === 403) {
+        const correlationId = lookup.headers.get("x-correlation-id") || lookup.headers.get("xero-correlation-id");
         const errText = await lookup.text();
-        console.error("Xero create-xero-contact lookup unauthorized:", errText);
-        return contactAuthorizationErrorResponse(scopeDiagnostics, errText, "lookup");
+        console.error("Xero create-xero-contact lookup unauthorized:", { correlationId, body: errText });
+        return contactAuthorizationErrorResponse(scopeDiagnostics, errText, "lookup", correlationId);
       }
       if (lookup.ok) {
         const lj = await lookup.json();
@@ -1034,8 +1041,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ Contacts: [payload] }),
       });
       if (createRes.status === 401 || createRes.status === 403) {
+        let correlationId = createRes.headers.get("x-correlation-id") || createRes.headers.get("xero-correlation-id");
         const errText = await createRes.text();
-        console.error("Xero create-xero-contact unauthorized:", errText);
+        let latestErrText = errText;
+        console.error("Xero create-xero-contact unauthorized:", { correlationId, body: errText });
         const refreshed = await refreshAccessToken(sql, config);
         if (refreshed) {
           accessToken = refreshed.access_token;
@@ -1052,10 +1061,12 @@ Deno.serve(async (req) => {
               created: true,
             }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
           }
+          correlationId = retryRes.headers.get("x-correlation-id") || retryRes.headers.get("xero-correlation-id") || correlationId;
           const retryErrText = await retryRes.text();
-          console.error("Xero create-xero-contact retry failed:", retryErrText);
+          latestErrText = retryErrText;
+          console.error("Xero create-xero-contact retry failed:", { correlationId, body: retryErrText });
         }
-        return contactAuthorizationErrorResponse(scopeDiagnostics, errText, "create");
+        return contactAuthorizationErrorResponse(scopeDiagnostics, latestErrText, "create", correlationId);
       }
       if (!createRes.ok) {
         const errText = await createRes.text();
