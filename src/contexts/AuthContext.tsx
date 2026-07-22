@@ -266,7 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setPendingEmail(null);
     setPendingEnvironment(null);
-    localStorage.setItem("auth_token", data.token);
+    localStorage.setItem("auth_token", sessionToken);
     // Anchor the absolute-timeout clock to this fresh login.
     markSessionStart();
 
