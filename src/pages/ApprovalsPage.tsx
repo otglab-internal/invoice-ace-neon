@@ -653,7 +653,7 @@ const ApprovalsPage: React.FC = () => {
                             {(selected.line_items || []).map((item: any, idx: number) => (
                               <div key={idx} className="text-xs bg-muted/50 p-2 rounded-lg">
                                 <p className="text-foreground whitespace-pre-wrap">{(item.description || "").replace(/\\n/g, "\n")}</p>
-                                <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × {selected.currency || "RM"} {Number(item.cost).toFixed(2)}</p>
+                                <p className="text-muted-foreground mt-0.5">Qty: {item.quantity} × {selected.currency || "RM"} {formatAmount(item.cost)}</p>
                               </div>
                             ))}
                           </div>
