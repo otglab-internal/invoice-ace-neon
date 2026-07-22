@@ -210,7 +210,6 @@ Deno.serve(async (req) => {
               OR system_id IN (
                 SELECT system_id FROM staff_centre_assignments
                 WHERE lower(user_name) = lower(${resolvedName})
-                   OR lower(user_email) = lower(${resolvedEmail})
               )
             )
           LIMIT 1
