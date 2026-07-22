@@ -462,6 +462,16 @@ const GlobalConfigPage: React.FC = () => {
                               <Link className="w-4 h-4" />
                               <span className="font-medium">Connected to Xero</span>
                             </div>
+                            {xeroStatus.hasContactWritePermission === false && (
+                              <Badge variant="destructive" className="text-xs">
+                                Missing contact permission
+                              </Badge>
+                            )}
+                            {xeroStatus.hasContactWritePermission === true && (
+                              <Badge variant="secondary" className="text-xs">
+                                Contacts enabled
+                              </Badge>
+                            )}
                             <Button type="button" variant="outline" size="sm" onClick={handleXeroDisconnect} disabled={xeroDisconnecting}>
                               {xeroDisconnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Unlink className="w-3 h-3 mr-1" />}
                               Disconnect
