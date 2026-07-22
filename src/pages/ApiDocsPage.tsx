@@ -72,14 +72,18 @@ const ApiDocsPage: React.FC = () => {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Every request goes through two layers:
+            The Federated Gateway now uses <strong>API keys</strong> as the primary credential for
+            inter-system access. There is no JWT or session token required for system-to-system calls.
           </p>
           <ol className="text-xs text-muted-foreground list-decimal pl-5 space-y-1">
             <li>
-              <strong>Gateway auth</strong> — the Supabase publishable (anon) key on <code>apikey</code> and <code>Authorization: Bearer &lt;anon&gt;</code>. This just proves the call is allowed to reach the function; it does not identify a user.
+              <strong>Gateway auth</strong> — the Supabase publishable (anon) key on <code>apikey</code> and <code>Authorization: Bearer &lt;anon&gt;</code>. Proves the call is allowed to reach the function.
             </li>
             <li>
-              <strong>App auth</strong> — an HS256 JWT on <code>x-app-jwt</code>, minted by <code>login-proxy</code> after a successful 2FA verification. Required only for endpoints marked <Badge variant="outline" className="text-xs">x-app-jwt</Badge> below (Xero endpoints). Not required for <code>api-submit</code>, <code>api-get</code> or the PDF webhook.
+              <strong>System auth</strong> — your system's API key on <code>x-api-key</code>. The gateway validates the key and resolves which systems it may act on (<code>allowedSystemIds</code>). Use this for all machine-to-machine calls (CRM → Invoice, etc.).
+            </li>
+            <li>
+              <strong>User session (browser only)</strong> — the opaque session token issued by <code>login-proxy</code> after 2FA is sent as <code>x-app-jwt</code>. Only the web UI needs this path. External integrations should never use it.
             </li>
           </ol>
 
@@ -92,56 +96,24 @@ const ApiDocsPage: React.FC = () => {
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-foreground mb-2">Minting an x-app-jwt (2-step login)</p>
-            <p className="text-xs text-muted-foreground mb-2">
-              Step 1 — <code>login</code> (returns <code>challenge_token</code>):
-            </p>
-            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
-{`curl -X POST '${LOGIN}' \\
-  -H 'Content-Type: application/json' \\
-  -H 'apikey: <SUPABASE_ANON_KEY>' \\
-  -H 'Authorization: Bearer <SUPABASE_ANON_KEY>' \\
-  -d '{
-    "email": "svc-account@example.com",
-    "password": "••••••••",
-    "environment": "sandbox",
-    "org_id": "otg_lab"
-  }'`}
-            </pre>
-            <p className="text-xs text-muted-foreground mt-3 mb-2">
-              Step 2 — <code>verify-2fa</code> (returns <code>token</code>, which is the <code>x-app-jwt</code>):
-            </p>
-            <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
-{`curl -X POST '${LOGIN}' \\
-  -H 'Content-Type: application/json' \\
-  -H 'apikey: <SUPABASE_ANON_KEY>' \\
-  -H 'Authorization: Bearer <SUPABASE_ANON_KEY>' \\
-  -d '{
-    "action": "verify-2fa",
-    "challenge_token": "<from step 1>",
-    "totp_code": "123456",
-    "org_id": "otg_lab"
-  }'`}
-            </pre>
-            <p className="text-xs text-muted-foreground mt-2">
-              The response contains <code>{`{ success, user, token, ... }`}</code>. Send <code>token</code> raw on the <code>x-app-jwt</code> header (no <code>Bearer</code> prefix). Tokens expire 24 hours after minting — re-run the login flow before expiry.
-            </p>
-          </div>
-
-          <div>
-            <p className="text-xs font-semibold text-foreground mb-2">Full header set (endpoints that need app auth)</p>
+            <p className="text-xs font-semibold text-foreground mb-2">Full header set (system-to-system)</p>
             <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
 {`Content-Type: application/json
 apikey: <SUPABASE_ANON_KEY>
 Authorization: Bearer <SUPABASE_ANON_KEY>
-x-app-jwt: <token from verify-2fa>
+x-api-key: <your system API key>
 x-org-id: otg_lab
 x-environment: sandbox`}
             </pre>
+            <p className="text-xs text-muted-foreground mt-2">
+              Before calling on behalf of another system, verify your key's <code>allowedSystemIds</code>
+              includes that target. The gateway will reject the request with <code>403 system_not_allowed</code>
+              otherwise.
+            </p>
           </div>
 
           <div>
-            <p className="text-xs font-semibold text-foreground mb-2">Header set for public endpoints (api-submit, api-get, invoice-pdf-webhook)</p>
+            <p className="text-xs font-semibold text-foreground mb-2">Public endpoints (no auth beyond anon key)</p>
             <pre className="text-xs bg-muted p-4 rounded-lg text-foreground overflow-x-auto whitespace-pre">
 {`Content-Type: application/json
 apikey: <SUPABASE_ANON_KEY>
@@ -150,9 +122,21 @@ x-org-id: otg_lab
 x-environment: sandbox`}
             </pre>
             <p className="text-xs text-muted-foreground mt-2">
-              These endpoints do not read <code>x-app-jwt</code>. Anyone with the publishable anon key and a valid <code>x-org-id</code> can call them, so the anon key is the only shared credential the caller needs.
+              <code>api-submit</code>, <code>api-get</code>, and the PDF webhook currently accept the
+              anon key only. To restrict them to registered systems, add <code>x-api-key</code> and the
+              gateway will enforce allowed-system checks.
             </p>
           </div>
+
+          <div>
+            <p className="text-xs font-semibold text-foreground mb-2">Migrating from JWT</p>
+            <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
+              <li>Remove any 2-step login flow (<code>login</code> → <code>verify-2fa</code>) from server-to-server code.</li>
+              <li>Remove the <code>x-app-jwt</code> header from machine-to-machine callers and replace it with <code>x-api-key</code>.</li>
+              <li>No token expiry / refresh logic required — API keys are long-lived and rotated out-of-band.</li>
+            </ul>
+          </div>
+
         </Card>
 
         {/* Endpoint map */}
