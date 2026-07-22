@@ -11,6 +11,7 @@ import { useBranding } from "@/hooks/use-branding";
 import InvoiceStatusBadge from "@/components/InvoiceStatusBadge";
 import InvoiceRowActions from "@/components/InvoiceRowActions";
 import ReceiptDownloadMenu from "@/components/ReceiptDownloadMenu";
+import { formatAmount } from "@/lib/utils";
 
 interface Invoice {
   id: string;
@@ -39,9 +40,6 @@ const displayCurrency = (currency?: string | null) => {
   if (c === "SGD$") return "SGD";
   return c.replace(/\$$/, "");
 };
-
-const formatAmount = (amount: number) =>
-  amount.toLocaleString("en-MY", { minimumFractionDigits: 2 });
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-MY", { timeZone: "Asia/Kuala_Lumpur" });
@@ -269,7 +267,7 @@ const DashboardPage: React.FC = () => {
                       <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
                       <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
                         <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
-                        <span>{formatAmount(inv.total)}</span>
+                        <span className="text-base font-semibold">{formatAmount(inv.total)}</span>
                       </div>
                       <div className="flex justify-start">
                         <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />

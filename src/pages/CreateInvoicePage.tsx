@@ -11,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Loader2, Send, Plus, Trash2, ShieldAlert, ChevronsUpDown, Check, Zap, ChevronDown, CheckCircle2, AlertCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1474,7 +1474,7 @@ const CreateInvoicePage: React.FC = () => {
             <div className="text-sm text-muted-foreground flex-1 min-w-0">
               {total > 0 ? (
                 <span>
-                  Total: <strong className="text-foreground">{currency} {total.toFixed(2)}</strong>
+                  Total: <strong className="text-foreground text-base">{currency} {formatAmount(total)}</strong>
                   {lineItems.length > 1 && <span className="ml-2">({lineItems.length} items)</span>}
                 </span>
               ) : (
