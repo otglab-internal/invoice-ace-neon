@@ -106,11 +106,21 @@ Deno.serve(async (req) => {
 
       const data = await response.json();
       if (response.ok && data?.success && data?.user) {
-        // Pass the upstream session token straight through. The frontend
-        // stores it and sends it back as `x-app-jwt` on later calls; the
-        // shared auth helper validates it against the upstream `auth verify`.
         if (!data.environment) data.environment = environment || "production";
+        const existing =
+          data.token || data.session_token || data.access_token ||
+          data.user?.token || data.user?.session_token || data.user?.access_token;
+        if (!existing) {
+          data.token = await mintLocalSession({
+            sub: data.user.id,
+            email: data.user.email,
+            role: data.user.role,
+            org: orgId,
+            env: data.environment,
+          });
+        }
       }
+
 
       // 2FA validation failures are expected user-correctable states. Return
       // 200 with a structured body so the React login form can show a message
