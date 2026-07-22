@@ -50,6 +50,8 @@ const normalizeAuthEmail = (value: string | null | undefined): string | null => 
 
   const lower = normalized.toLowerCase();
   if (lower === "undefined" || lower === "null") return null;
+  // Local JWTs were removed; only opaque gateway session tokens are valid for the UI.
+  if (/^[^.]+\.[^.]+\.[^.]+$/.test(normalized)) return null;
 
   return normalized;
 };

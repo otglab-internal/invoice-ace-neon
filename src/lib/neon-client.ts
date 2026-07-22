@@ -13,7 +13,9 @@ function getHeaders(): Record<string, string> {
   try { headers["x-org-id"] = getOrgId(); } catch { /* noop */ }
   headers["x-environment"] = localStorage.getItem("auth_environment") || "production";
   const rawToken = localStorage.getItem("auth_token");
-  const token = rawToken && !["undefined", "null"].includes(rawToken.trim().toLowerCase())
+  const token = rawToken
+    && !["undefined", "null"].includes(rawToken.trim().toLowerCase())
+    && !/^[^.]+\.[^.]+\.[^.]+$/.test(rawToken.trim())
     ? rawToken.trim()
     : "";
   // Use x-app-jwt because supabase-js's functions.invoke overrides Authorization

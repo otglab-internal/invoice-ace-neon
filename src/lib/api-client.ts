@@ -18,7 +18,9 @@ export const apiClient = {
     body: Record<string, unknown> = {}
   ): Promise<T> {
     const rawToken = localStorage.getItem("auth_token");
-    const token = rawToken && !["undefined", "null"].includes(rawToken.trim().toLowerCase())
+    const token = rawToken
+      && !["undefined", "null"].includes(rawToken.trim().toLowerCase())
+      && !/^[^.]+\.[^.]+\.[^.]+$/.test(rawToken.trim())
       ? rawToken.trim()
       : "";
 

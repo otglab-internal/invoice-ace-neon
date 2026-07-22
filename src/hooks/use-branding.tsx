@@ -36,7 +36,7 @@ function applyFavicon(faviconUrl: string | null) {
 
 async function fetchBranding(): Promise<BrandingData> {
   const token = localStorage.getItem("auth_token")?.trim();
-  if (!token || ["undefined", "null"].includes(token.toLowerCase())) {
+  if (!token || ["undefined", "null"].includes(token.toLowerCase()) || /^[^.]+\.[^.]+\.[^.]+$/.test(token)) {
     return {
       logoUrl: null,
       faviconUrl: null,
