@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Plus, Trash2, Loader2, ChevronsUpDown, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatAmount } from "@/lib/utils";
 import { toast } from "sonner";
 import { neonUpdate, neonInsert, neonQuery } from "@/lib/neon-client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -516,8 +516,8 @@ const AmendInvoiceDialog: React.FC<AmendInvoiceDialogProps> = ({
             </div>
           </div>
 
-          <div className="text-sm font-medium text-foreground">
-            New Total: {invoice?.currency || "RM"} {total.toFixed(2)}
+          <div className="text-base font-semibold text-foreground">
+            New Total: {invoice?.currency || "RM"} {formatAmount(total)}
           </div>
 
           <div>
