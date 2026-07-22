@@ -75,7 +75,11 @@ const GlobalConfigPage: React.FC = () => {
   const [config, setConfig] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [xeroStatus, setXeroStatus] = useState<{ connected: boolean; hasCredentials: boolean }>({ connected: false, hasCredentials: false });
+  const [xeroStatus, setXeroStatus] = useState<{
+    connected: boolean;
+    hasCredentials: boolean;
+    hasContactWritePermission?: boolean | null;
+  }>({ connected: false, hasCredentials: false, hasContactWritePermission: null });
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -185,7 +189,11 @@ const GlobalConfigPage: React.FC = () => {
         headers: getXeroHeaders(),
       });
       if (data) {
-        setXeroStatus({ connected: data.connected, hasCredentials: data.hasCredentials });
+        setXeroStatus({
+          connected: data.connected,
+          hasCredentials: data.hasCredentials,
+          hasContactWritePermission: data.hasContactWritePermission ?? null,
+        });
       }
     } catch {
       // ignore
@@ -253,7 +261,7 @@ const GlobalConfigPage: React.FC = () => {
         body: { action: "disconnect" },
         headers: getXeroHeaders(),
       });
-      setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials });
+      setXeroStatus({ connected: false, hasCredentials: xeroStatus.hasCredentials, hasContactWritePermission: null });
       await logActivity("xero_disconnected", "config", performerId, performerName);
       toast({ title: "Xero disconnected" });
     } catch {
@@ -290,8 +298,14 @@ const GlobalConfigPage: React.FC = () => {
           headers: getXeroHeaders(),
         });
         if (data?.success) {
-          toast({ title: "Xero connected successfully", description: `Tenant: ${data.tenant}` });
-          setXeroStatus({ connected: true, hasCredentials: true });
+          toast({
+            title: "Xero connected successfully",
+            description: data.hasContactWritePermission === false
+              ? "Contact creation permission was not granted. Reconnect and approve all requested permissions."
+              : `Tenant: ${data.tenant}`,
+            variant: data.hasContactWritePermission === false ? "destructive" : undefined,
+          });
+          setXeroStatus({ connected: true, hasCredentials: true, hasContactWritePermission: data.hasContactWritePermission ?? null });
           logActivity("xero_connected", "config", performerId, performerName, { tenant: data.tenant });
         } else {
           toast({ title: "Xero connection failed", description: data?.error, variant: "destructive" });
