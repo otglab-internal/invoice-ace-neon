@@ -13,6 +13,47 @@ const LOGIN_URL = "https://ckrglmxxsrctofupqrgl.supabase.co/functions/v1/login-u
 const EXTERNAL_API_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrcmdsbXh4c3JjdG9mdXBxcmdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3ODQxMzgsImV4cCI6MjA4ODM2MDEzOH0.ArvthPlj5wq4LdNnJWA9t85DQr_BELyzPCGVcXBP5TQ";
 
+const jsonResponse = (data: unknown, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const normalizeAuthFailure = (data: any, fallback: string) => {
+  const raw = typeof data?.error === "string" ? data.error : typeof data?.message === "string" ? data.message : fallback;
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("invalid or expired challenge")) {
+    return {
+      success: false,
+      error: "Invalid or expired challenge token",
+      code: "challenge_expired",
+    };
+  }
+
+  if (lower.includes("invalid") && (lower.includes("totp") || lower.includes("2fa") || lower.includes("code"))) {
+    return {
+      success: false,
+      error: "Invalid verification code",
+      code: "invalid_2fa_code",
+    };
+  }
+
+  if (lower.includes("invalid login") || lower.includes("invalid credentials") || lower.includes("password")) {
+    return {
+      success: false,
+      error: "Incorrect email or password",
+      code: "invalid_credentials",
+    };
+  }
+
+  return {
+    success: false,
+    error: raw,
+    code: data?.code || "auth_failed",
+  };
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -44,10 +85,15 @@ Deno.serve(async (req) => {
         // shared auth helper validates it against the upstream `auth verify`.
         if (!data.environment) data.environment = environment || "production";
       }
-      return new Response(JSON.stringify(data), {
-        status: response.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+      // 2FA validation failures are expected user-correctable states. Return
+      // 200 with a structured body so the React login form can show a message
+      // instead of the preview/runtime treating the 401 as a fatal error.
+      if (!response.ok && response.status === 401) {
+        return jsonResponse(normalizeAuthFailure(data, "Verification failed"));
+      }
+
+      return jsonResponse(data, response.status);
     }
 
     // Login action — resolve api_key from secrets per org + environment
@@ -80,15 +126,13 @@ Deno.serve(async (req) => {
     });
 
     const data = await response.json();
-    return new Response(JSON.stringify(data), {
-      status: response.status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (!response.ok && response.status === 401) {
+      return jsonResponse(normalizeAuthFailure(data, "Login failed"));
+    }
+
+    return jsonResponse(data, response.status);
   } catch (err) {
     console.error("Login proxy error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Internal server error" }, 500);
   }
 });
