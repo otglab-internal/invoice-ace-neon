@@ -70,7 +70,49 @@ async function upsertConfig(sql: DbClient, key: string, value: string) {
   );
 }
 
-async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ access_token: string; refresh_token: string } | null> {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeScopes(source: unknown): string[] {
+  if (Array.isArray(source)) {
+    return source.filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim());
+  }
+  if (typeof source === "string") {
+    return source.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function getGrantedScopes(tokenOrScope: string | undefined): string[] {
+  if (!tokenOrScope) return [];
+  const decoded = decodeJwtPayload(tokenOrScope);
+  if (!decoded) return normalizeScopes(tokenOrScope);
+  const scopes = normalizeScopes(decoded.scope);
+  if (scopes.length > 0) return scopes;
+  return normalizeScopes(decoded.scp);
+}
+
+function hasContactWriteScope(scopes: string[]): boolean | null {
+  if (scopes.length === 0) return null;
+  return scopes.includes("accounting.contacts");
+}
+
+function getTokenResponseScopes(tokenData: Record<string, unknown>): string[] {
+  const explicitScopes = normalizeScopes(tokenData.scope);
+  if (explicitScopes.length > 0) return explicitScopes;
+  return getGrantedScopes(typeof tokenData.access_token === "string" ? tokenData.access_token : undefined);
+}
+
+async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ access_token: string; refresh_token: string; scopes: string[] } | null> {
   const clientId = config.xero_client_id;
   const clientSecret = config.xero_client_secret;
   const refreshToken = config.xero_refresh_token;
@@ -96,11 +138,16 @@ async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ a
 
   const data = await res.json();
 
+  const scopes = getTokenResponseScopes(data);
+
   // Save new tokens
   await upsertConfig(sql, "xero_access_token", data.access_token);
   await upsertConfig(sql, "xero_refresh_token", data.refresh_token);
+  if (scopes.length > 0) {
+    await upsertConfig(sql, "xero_granted_scopes", scopes.join(" "));
+  }
 
-  return { access_token: data.access_token, refresh_token: data.refresh_token };
+  return { access_token: data.access_token, refresh_token: data.refresh_token, scopes };
 }
 
 async function uploadReceiptPdfToStorage(localInvoiceId: string, pdfBytes: Uint8Array): Promise<string> {
