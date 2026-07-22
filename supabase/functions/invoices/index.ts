@@ -194,9 +194,26 @@ Deno.serve(async (req) => {
       }
 
       // --- Determine requires_approval (honor user flags + template) ---
+      // External CRMs push their own opaque session-shaped `system_id` (e.g. "sb_...")
+      // which does NOT match the auth-app UUID stored in user_approval_flags. Match on
+      // (a) system_id as-passed, (b) resolved user name (case-insensitive), and
+      // (c) resolved email → staff_centre_assignments.system_id bridge so a flagged
+      // user is honored regardless of which identifier the caller sent.
       let requiresApproval = false;
       try {
-        const flagRows = await dbSql`SELECT requires_approval FROM user_approval_flags WHERE system_id = ${system_id} LIMIT 1`;
+        const flagRows = await dbSql`
+          SELECT requires_approval FROM user_approval_flags
+          WHERE requires_approval = true
+            AND (
+              system_id = ${system_id}
+              OR lower(user_name) = lower(${resolvedName})
+              OR system_id IN (
+                SELECT system_id FROM staff_centre_assignments
+                WHERE lower(user_name) = lower(${resolvedName})
+              )
+            )
+          LIMIT 1
+        `;
         if (flagRows[0]?.requires_approval === true) requiresApproval = true;
       } catch (e) {
         console.warn("api-submit: user_approval_flags lookup failed:", e);
