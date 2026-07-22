@@ -70,7 +70,49 @@ async function upsertConfig(sql: DbClient, key: string, value: string) {
   );
 }
 
-async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ access_token: string; refresh_token: string } | null> {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeScopes(source: unknown): string[] {
+  if (Array.isArray(source)) {
+    return source.filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim());
+  }
+  if (typeof source === "string") {
+    return source.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function getGrantedScopes(tokenOrScope: string | undefined): string[] {
+  if (!tokenOrScope) return [];
+  const decoded = decodeJwtPayload(tokenOrScope);
+  if (!decoded) return normalizeScopes(tokenOrScope);
+  const scopes = normalizeScopes(decoded.scope);
+  if (scopes.length > 0) return scopes;
+  return normalizeScopes(decoded.scp);
+}
+
+function hasContactWriteScope(scopes: string[]): boolean | null {
+  if (scopes.length === 0) return null;
+  return scopes.includes("accounting.contacts");
+}
+
+function getTokenResponseScopes(tokenData: Record<string, unknown>): string[] {
+  const explicitScopes = normalizeScopes(tokenData.scope);
+  if (explicitScopes.length > 0) return explicitScopes;
+  return getGrantedScopes(typeof tokenData.access_token === "string" ? tokenData.access_token : undefined);
+}
+
+async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ access_token: string; refresh_token: string; scopes: string[] } | null> {
   const clientId = config.xero_client_id;
   const clientSecret = config.xero_client_secret;
   const refreshToken = config.xero_refresh_token;
@@ -96,11 +138,16 @@ async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ a
 
   const data = await res.json();
 
+  const scopes = getTokenResponseScopes(data);
+
   // Save new tokens
   await upsertConfig(sql, "xero_access_token", data.access_token);
   await upsertConfig(sql, "xero_refresh_token", data.refresh_token);
+  if (scopes.length > 0) {
+    await upsertConfig(sql, "xero_granted_scopes", scopes.join(" "));
+  }
 
-  return { access_token: data.access_token, refresh_token: data.refresh_token };
+  return { access_token: data.access_token, refresh_token: data.refresh_token, scopes };
 }
 
 async function uploadReceiptPdfToStorage(localInvoiceId: string, pdfBytes: Uint8Array): Promise<string> {
@@ -234,9 +281,11 @@ Deno.serve(async (req) => {
       }
 
       const tokenData = await tokenRes.json();
+      const grantedScopes = getTokenResponseScopes(tokenData);
 
       await upsertConfig(sql, "xero_access_token", tokenData.access_token);
       await upsertConfig(sql, "xero_refresh_token", tokenData.refresh_token);
+      await upsertConfig(sql, "xero_granted_scopes", grantedScopes.join(" "));
 
       const connRes = await fetch(XERO_CONNECTIONS_URL, {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
@@ -256,7 +305,12 @@ Deno.serve(async (req) => {
         await upsertConfig(sql, "xero_tenant_id", connections[0].tenantId);
       }
 
-      return new Response(JSON.stringify({ success: true, tenant: connections[0]?.tenantName || "Connected" }), {
+      return new Response(JSON.stringify({
+        success: true,
+        tenant: connections[0]?.tenantName || "Connected",
+        hasContactWritePermission: hasContactWriteScope(grantedScopes),
+        grantedScopes,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -265,15 +319,18 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const config = await getConfigMap(
         sql,
-        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id"],
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_granted_scopes"],
       );
       const connected = !!(config.xero_access_token && config.xero_tenant_id);
+      const grantedScopes = normalizeScopes(config.xero_granted_scopes || "");
 
       return new Response(
         JSON.stringify({
           connected,
           hasCredentials: !!(config.xero_client_id && config.xero_client_secret),
           tenantId: config.xero_tenant_id || null,
+          hasContactWritePermission: hasContactWriteScope(grantedScopes),
+          grantedScopes,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -444,6 +501,7 @@ Deno.serve(async (req) => {
       await upsertConfig(sql, "xero_access_token", "");
       await upsertConfig(sql, "xero_refresh_token", "");
       await upsertConfig(sql, "xero_tenant_id", "");
+      await upsertConfig(sql, "xero_granted_scopes", "");
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -717,7 +775,7 @@ Deno.serve(async (req) => {
     if (action === "list-xero-contacts") {
       const config = await getConfigMap(
         sql,
-        ["xero_access_token", "xero_refresh_token", "xero_client_id", "xero_client_secret", "xero_tenant_id"],
+        ["xero_access_token", "xero_refresh_token", "xero_client_id", "xero_client_secret", "xero_tenant_id", "xero_granted_scopes"],
       );
       if (!config.xero_access_token || !config.xero_tenant_id) {
         return new Response(JSON.stringify({ error: "Xero not connected", contacts: [] }), {
@@ -736,6 +794,7 @@ Deno.serve(async (req) => {
       const url = `${XERO_API_URL}/Contacts?where=${encodeURIComponent(where)}&order=Name&page=${page}`;
 
       let accessToken = config.xero_access_token;
+      let contactWriteScope = hasContactWriteScope(normalizeScopes(config.xero_granted_scopes || ""));
       let res = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}`, "Xero-Tenant-Id": config.xero_tenant_id, Accept: "application/json" },
       });
@@ -814,6 +873,7 @@ Deno.serve(async (req) => {
           });
         }
         accessToken = refreshed.access_token;
+        contactWriteScope = hasContactWriteScope(refreshed.scopes);
         lookup = await doFetch(lookupUrl);
       }
       if (lookup.ok) {
@@ -842,6 +902,7 @@ Deno.serve(async (req) => {
         const refreshed = await refreshAccessToken(sql, config);
         if (refreshed) {
           accessToken = refreshed.access_token;
+          contactWriteScope = hasContactWriteScope(refreshed.scopes);
           const retryRes = await doFetch(`${XERO_API_URL}/Contacts`, {
             method: "POST",
             body: JSON.stringify({ Contacts: [payload] }),
@@ -857,9 +918,12 @@ Deno.serve(async (req) => {
           const retryErrText = await retryRes.text();
           console.error("Xero create-xero-contact retry failed:", retryErrText);
         }
+        const missingScope = contactWriteScope === false;
         return new Response(JSON.stringify({
-          error: "Xero connection is missing contact write permission. Please reconnect Xero from Global Config, then try again.",
-          code: "xero_contact_write_permission_missing",
+          error: missingScope
+            ? "Xero did not grant contact write permission. Reconnect Xero from Global Config and approve all requested permissions."
+            : "Xero refused contact creation for the connected user. In Xero, make sure the authorising user has permission to manage contacts, then reconnect from Global Config.",
+          code: missingScope ? "xero_contact_write_scope_missing" : "xero_contact_user_permission_denied",
           detail: errText,
         }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
