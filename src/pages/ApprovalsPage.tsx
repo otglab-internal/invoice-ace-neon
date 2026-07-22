@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { nowGMT8 } from "@/lib/utils";
+import { nowGMT8, formatAmount } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
