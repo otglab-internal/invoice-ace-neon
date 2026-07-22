@@ -643,7 +643,7 @@ const ApprovalsPage: React.FC = () => {
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <p><span className="text-muted-foreground">Contact:</span> {selected.contact_name}</p>
-                            <p><span className="text-muted-foreground">Amount:</span> {selected.currency || "RM"} {Number(selected.total).toFixed(2)}</p>
+                            <p><span className="text-muted-foreground">Amount:</span> <span className="font-semibold">{selected.currency || "RM"} {formatAmount(selected.total)}</span></p>
                             <p><span className="text-muted-foreground">Date:</span> {selected.invoice_date}</p>
                             {selected.reference && <p><span className="text-muted-foreground">Ref:</span> {selected.reference}</p>}
                           </div>
