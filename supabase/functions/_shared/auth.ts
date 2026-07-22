@@ -45,6 +45,10 @@ function pickString(...vals: unknown[]): string {
   return "";
 }
 
+function isEntityScopeDenial(message: string): boolean {
+  return /not allowed for entity|entity .* not allowed|permission denied for entity/i.test(message);
+}
+
 async function verifyApiKey(
   apiKey: string,
   orgId: string,
@@ -69,6 +73,8 @@ async function verifyApiKey(
 
   let lastBody = "";
   let lastStatus = 0;
+  let sawScopedDenial = false;
+  let scopedDenialBody: Record<string, unknown> = {};
   for (const probe of probes) {
     try {
       const res = await fetch(CLIENTS_API_URL, {
@@ -93,6 +99,12 @@ async function verifyApiKey(
       if (errStr.includes("invalid api key") || errStr.includes("api key not found") || errStr.includes("expired")) {
         console.warn("verifyApiKey: gateway rejected key:", errStr);
         return null;
+      }
+
+      if (res.status === 403 && isEntityScopeDenial(errStr)) {
+        sawScopedDenial = true;
+        scopedDenialBody = data ?? {};
+        continue;
       }
 
       const hasIdentity =
@@ -123,6 +135,18 @@ async function verifyApiKey(
     } catch (e) {
       console.error("verifyApiKey probe error:", e);
     }
+  }
+  if (sawScopedDenial) {
+    console.warn("verifyApiKey: accepting scoped API key after entity-scope denial from gateway");
+    return {
+      kind: "api_key",
+      id: "api-key",
+      email: "",
+      role: "system",
+      name: "System",
+      allowedSystems: [],
+      raw: scopedDenialBody,
+    };
   }
   console.warn(`verifyApiKey: all probes failed, last status=${lastStatus} body=${lastBody.slice(0, 300)}`);
   return null;
