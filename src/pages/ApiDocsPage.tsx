@@ -149,7 +149,7 @@ x-environment: sandbox`}
                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">URL</th>
                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Action</th>
                   <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Purpose</th>
-                  <th className="text-left py-2 text-muted-foreground font-medium">App JWT</th>
+                  <th className="text-left py-2 text-muted-foreground font-medium">Auth</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border text-foreground">
@@ -500,7 +500,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
           </div>
           <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">{XERO}</code>
           <p className="text-xs text-muted-foreground">
-            Returns active Xero contacts for the current tenant. Supports search and pagination. Requires a valid <code>x-app-jwt</code>.
+            Returns active Xero contacts for the current tenant. Supports search and pagination. Requires <code>x-api-key</code> (system) or <code>x-app-jwt</code> (browser session).
           </p>
 
           <div>
@@ -532,7 +532,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
   -H 'Content-Type: application/json' \\
   -H 'apikey: <SUPABASE_ANON_KEY>' \\
   -H 'Authorization: Bearer <SUPABASE_ANON_KEY>' \\
-  -H 'x-app-jwt: <token from verify-2fa>' \\
+  -H 'x-api-key: <your system API key>' \\
   -H 'x-org-id: otg_lab' \\
   -H 'x-environment: sandbox' \\
   -d '{ "action": "list-xero-contacts", "search": "Lee Music", "page": 1 }'`}
@@ -549,7 +549,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
           </div>
           <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">{XERO}</code>
           <p className="text-xs text-muted-foreground">
-            Looks up an active Xero contact by exact name. If none exists, creates a new one and returns it. Use this before <code>api-submit</code> if you want a guaranteed <code>contact_id</code>. Requires a valid <code>x-app-jwt</code>.
+            Looks up an active Xero contact by exact name. If none exists, creates a new one and returns it. Use this before <code>api-submit</code> if you want a guaranteed <code>contact_id</code>. Requires <code>x-api-key</code> (system) or <code>x-app-jwt</code> (browser session).
           </p>
 
           <div>
@@ -588,7 +588,7 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
   -H 'Content-Type: application/json' \\
   -H 'apikey: <SUPABASE_ANON_KEY>' \\
   -H 'Authorization: Bearer <SUPABASE_ANON_KEY>' \\
-  -H 'x-app-jwt: <token from verify-2fa>' \\
+  -H 'x-api-key: <your system API key>' \\
   -H 'x-org-id: otg_lab' \\
   -H 'x-environment: sandbox' \\
   -d '{ "action": "create-xero-contact", "name": "Acme Corp Sdn Bhd" }'`}
