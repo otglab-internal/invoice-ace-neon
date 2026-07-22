@@ -267,7 +267,7 @@ const DashboardPage: React.FC = () => {
                       <span className="text-sm text-muted-foreground tabular-nums">{formatDate(inv.created_at)}</span>
                       <div className="flex items-baseline justify-between gap-2 text-sm font-medium text-foreground tabular-nums">
                         <span className="text-xs text-muted-foreground">{displayCurrency(inv.currency || currency)}</span>
-                        <span>{formatAmount(inv.total)}</span>
+                        <span className="text-base font-semibold">{formatAmount(inv.total)}</span>
                       </div>
                       <div className="flex justify-start">
                         <InvoiceStatusBadge status={inv.status} amendmentStatus={inv.amendment_status} />
