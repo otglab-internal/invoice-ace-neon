@@ -24,6 +24,8 @@ type SqlClient = (strings: TemplateStringsArray, ...values: unknown[]) => Promis
 export type PushEvent =
   | "invoice_pdf_ready"
   | "paid_invoice_pdf_ready"
+  | "partially_paid_invoice_pdf_ready"
+  | "partial_receipt_pdf_ready"
   | "receipt_pdf_ready";
 
 const ORG_SECRET_MAP: Record<string, string> = {
