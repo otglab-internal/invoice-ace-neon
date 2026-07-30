@@ -405,7 +405,8 @@ Deno.serve(async (req) => {
       console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""} (${receiptCount} receipt row(s))`);
 
 
-      if (newLocalStatus === "paid") {
+      if (newLocalStatus === "paid" || newLocalStatus === "partially_paid") {
+        const isPartial = newLocalStatus === "partially_paid";
         try {
           if (newPdfPath) {
             await dispatchApiPush({
@@ -413,7 +414,7 @@ Deno.serve(async (req) => {
               invoiceId: localInvoice.id as string,
               orgId,
               environment,
-              event: "paid_invoice_pdf_ready",
+              event: isPartial ? "partially_paid_invoice_pdf_ready" : "paid_invoice_pdf_ready",
             });
           }
           if (receiptPdfPath) {
@@ -422,7 +423,7 @@ Deno.serve(async (req) => {
               invoiceId: localInvoice.id as string,
               orgId,
               environment,
-              event: "receipt_pdf_ready",
+              event: isPartial ? "partial_receipt_pdf_ready" : "receipt_pdf_ready",
             });
           }
         } catch (pushErr) {
