@@ -253,10 +253,23 @@ Deno.serve(async (req) => {
 
     let accessToken = config.xero_access_token;
 
+    // Xero often sends the same resourceId multiple times in one payload
+    // (INVOICE.CREATE + several INVOICE.UPDATE). Process each invoice once.
+    const seenResourceIds = new Set<string>();
+
     for (const event of events) {
       if (event.eventCategory !== "INVOICE" || event.eventType !== "UPDATE") {
         continue;
       }
+      if (event.resourceId) {
+        if (seenResourceIds.has(event.resourceId)) {
+          console.log(`xero-webhook: Skipping duplicate event for ${event.resourceId} in same payload`);
+          continue;
+        }
+        seenResourceIds.add(event.resourceId);
+      }
+
+
 
       const xeroInvoiceId = event.resourceId;
       if (!xeroInvoiceId) continue;
