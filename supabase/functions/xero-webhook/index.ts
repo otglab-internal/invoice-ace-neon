@@ -253,10 +253,23 @@ Deno.serve(async (req) => {
 
     let accessToken = config.xero_access_token;
 
+    // Xero often sends the same resourceId multiple times in one payload
+    // (INVOICE.CREATE + several INVOICE.UPDATE). Process each invoice once.
+    const seenResourceIds = new Set<string>();
+
     for (const event of events) {
       if (event.eventCategory !== "INVOICE" || event.eventType !== "UPDATE") {
         continue;
       }
+      if (event.resourceId) {
+        if (seenResourceIds.has(event.resourceId)) {
+          console.log(`xero-webhook: Skipping duplicate event for ${event.resourceId} in same payload`);
+          continue;
+        }
+        seenResourceIds.add(event.resourceId);
+      }
+
+
 
       const xeroInvoiceId = event.resourceId;
       if (!xeroInvoiceId) continue;
@@ -405,7 +418,8 @@ Deno.serve(async (req) => {
       console.log(`xero-webhook: Invoice ${xeroInvoiceNumber} (${localInvoice.id}) marked as ${newLocalStatus}${newPdfPath ? " + PDF updated" : ""} (${receiptCount} receipt row(s))`);
 
 
-      if (newLocalStatus === "paid") {
+      if (newLocalStatus === "paid" || newLocalStatus === "partially_paid") {
+        const isPartial = newLocalStatus === "partially_paid";
         try {
           if (newPdfPath) {
             await dispatchApiPush({
@@ -413,7 +427,7 @@ Deno.serve(async (req) => {
               invoiceId: localInvoice.id as string,
               orgId,
               environment,
-              event: "paid_invoice_pdf_ready",
+              event: isPartial ? "partially_paid_invoice_pdf_ready" : "paid_invoice_pdf_ready",
             });
           }
           if (receiptPdfPath) {
@@ -422,7 +436,7 @@ Deno.serve(async (req) => {
               invoiceId: localInvoice.id as string,
               orgId,
               environment,
-              event: "receipt_pdf_ready",
+              event: isPartial ? "partial_receipt_pdf_ready" : "receipt_pdf_ready",
             });
           }
         } catch (pushErr) {
@@ -447,9 +461,31 @@ Deno.serve(async (req) => {
         console.error("xero-webhook: Failed to log status change:", logErr);
       }
 
-      // Send payment notification email only for fully paid invoices
-      if (newLocalStatus === "paid") {
+      // Send payment notification email only on the first transition to fully paid.
+      // Xero re-delivers the same payment event repeatedly, so guard on both the
+      // previous local status and any previously logged payment email.
+      let alreadyEmailed = localInvoice.status === "paid";
+      if (newLocalStatus === "paid" && !alreadyEmailed) {
+        try {
+          const prior = await sql.query(
+            `SELECT 1 FROM activity_logs
+             WHERE action_type = 'email_sent'
+               AND details->>'type' = 'payment_received'
+               AND details->>'invoice_id' = $1
+             LIMIT 1`,
+            [String(localInvoice.id)],
+          );
+          alreadyEmailed = prior.length > 0;
+        } catch (dupErr) {
+          console.error("xero-webhook: payment email dedupe check failed:", dupErr);
+        }
+      }
+      if (newLocalStatus === "paid" && alreadyEmailed) {
+        console.log(`xero-webhook: Payment email already sent for ${xeroInvoiceNumber}, skipping`);
+      }
+      if (newLocalStatus === "paid" && !alreadyEmailed) {
       try {
+
         const invoiceRows = await sql.query(
           `SELECT submitted_by_system_id, submitted_by_name, submitted_by_email, contact_name, total, invoice_date, reference, currency FROM invoices WHERE id = $1 LIMIT 1`,
           [localInvoice.id],
