@@ -561,7 +561,19 @@ const GlobalConfigPage: React.FC = () => {
                               {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                               Reauthorize
                             </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setXeroStatus((prev) => ({ ...prev, requiresTenantSelection: true }));
+                                void loadXeroTenants();
+                              }}
+                            >
+                              Change organisation
+                            </Button>
                           </>
+
                         ) : (
                           <Button type="button" variant="default" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
                             {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link className="w-3 h-3 mr-1" />}
