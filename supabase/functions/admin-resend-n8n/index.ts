@@ -1,8 +1,9 @@
-// One-off admin tool: re-fires the n8n approval webhook for the latest
-// invoice matching a given contact name in a specific org/environment.
+// One-off admin tool: re-pushes the latest invoice matching a given contact
+// name in a specific org/environment directly to Xero.
 // Also supports action="status" to inspect recent invoices/logs,
 // and action="check_key" to verify a Xero webhook signing key matches our stored secret.
 import { neon } from "npm:@neondatabase/serverless";
+import { pushInvoiceToXero } from "../_shared/xero-invoice.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
