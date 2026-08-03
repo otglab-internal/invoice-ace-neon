@@ -565,11 +565,45 @@ const GlobalConfigPage: React.FC = () => {
                         ) : (
                           <Button type="button" variant="default" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
                             {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link className="w-3 h-3 mr-1" />}
-                            Connect Xero
+                            {xeroStatus.requiresTenantSelection ? "Reauthorize" : "Connect Xero"}
                           </Button>
                         )}
                       </div>
+                      {xeroStatus.requiresTenantSelection && (
+                        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                          <div className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                            Xero is authorised but no organisation is bound yet. Pick the organisation this environment must post to — it stays locked until you change it here.
+                          </div>
+                          {xeroTenants.length === 0 ? (
+                            <div className="text-xs text-muted-foreground">Loading organisations…</div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {xeroTenants.map((tenant) => (
+                                <div key={tenant.tenantId} className="flex items-center justify-between gap-3 rounded border border-border bg-background px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium truncate">{tenant.tenantName}</div>
+                                    {tenant.isDemo && (
+                                      <Badge variant="destructive" className="text-[10px] mt-1">Xero Demo Company</Badge>
+                                    )}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={tenant.isDemo ? "outline" : "default"}
+                                    disabled={bindingTenant !== null}
+                                    onClick={() => handleSelectXeroTenant(tenant.tenantId, tenant.tenantName)}
+                                  >
+                                    {bindingTenant === tenant.tenantId ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                                    Use this
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {xeroStatus.connected && xeroStatus.hasContactWritePermission === false && (
+
                         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                           Xero did not grant contact creation access. Reauthorize and approve all requested permissions.
                           {(xeroStatus.missingRequiredScopes?.length || 0) > 0 && (
