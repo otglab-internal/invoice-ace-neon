@@ -78,13 +78,20 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroStatus, setXeroStatus] = useState<{
     connected: boolean;
     hasCredentials: boolean;
+    tenantName?: string | null;
+    requiresTenantSelection?: boolean;
     hasContactWritePermission?: boolean | null;
     missingRequiredScopes?: string[];
     grantedScopeCount?: number;
     scopeSource?: string;
   }>({ connected: false, hasCredentials: false, hasContactWritePermission: null });
+  const [xeroTenants, setXeroTenants] = useState<
+    { tenantId: string; tenantName: string; tenantType: string | null; isDemo: boolean }[]
+  >([]);
+  const [bindingTenant, setBindingTenant] = useState<string | null>(null);
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
+
   const [clearing, setClearing] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
@@ -195,16 +202,55 @@ const GlobalConfigPage: React.FC = () => {
         setXeroStatus({
           connected: data.connected,
           hasCredentials: data.hasCredentials,
+          tenantName: data.tenantName ?? null,
+          requiresTenantSelection: data.requiresTenantSelection === true,
           hasContactWritePermission: data.hasContactWritePermission ?? null,
           missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
           grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
           scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
         });
+        if (data.requiresTenantSelection === true) {
+          void loadXeroTenants();
+        }
       }
     } catch {
       // ignore
     }
   };
+
+  const loadXeroTenants = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "list-tenants" },
+        headers: getXeroHeaders(),
+      });
+      if (Array.isArray(data?.connections)) setXeroTenants(data.connections);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSelectXeroTenant = async (tenantId: string, tenantName: string) => {
+    setBindingTenant(tenantId);
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "select-tenant", tenantId },
+        headers: getXeroHeaders(),
+      });
+      if (data?.success) {
+        setXeroTenants([]);
+        toast({ title: "Xero organisation locked in", description: tenantName });
+        await logActivity("xero_tenant_selected", "config", performerId, performerName, { tenant: tenantName, tenantId });
+        await checkXeroStatus();
+      } else {
+        toast({ title: "Failed to select organisation", description: data?.error, variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Failed to select organisation", description: err?.message, variant: "destructive" });
+    }
+    setBindingTenant(null);
+  };
+
 
   const handleSave = async () => {
     setSaving(true);
@@ -303,17 +349,36 @@ const GlobalConfigPage: React.FC = () => {
           body: { action: "callback", code, redirectUri },
           headers: getXeroHeaders(),
         });
-        if (data?.success) {
+        if (data?.success && data?.requiresTenantSelection) {
+          setXeroTenants(Array.isArray(data.connections) ? data.connections : []);
+          setXeroStatus({
+            connected: false,
+            hasCredentials: true,
+            tenantName: null,
+            requiresTenantSelection: true,
+            hasContactWritePermission: data.hasContactWritePermission ?? null,
+            missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
+            grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
+            scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
+          });
+          toast({
+            title: "Choose a Xero organisation",
+            description: "Authorisation succeeded. Select which organisation this environment should use.",
+          });
+        } else if (data?.success) {
           toast({
             title: "Xero connected successfully",
             description: data.hasContactWritePermission === false
               ? `Contact creation permission was not granted. Missing: ${(data.missingRequiredScopes || ["accounting.contacts"]).join(", ")}`
-              : `Tenant: ${data.tenant}`,
+              : `Organisation: ${data.tenant}`,
             variant: data.hasContactWritePermission === false ? "destructive" : undefined,
           });
+          setXeroTenants([]);
           setXeroStatus({
             connected: true,
             hasCredentials: true,
+            tenantName: data.tenant ?? null,
+            requiresTenantSelection: false,
             hasContactWritePermission: data.hasContactWritePermission ?? null,
             missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
             grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
@@ -473,8 +538,11 @@ const GlobalConfigPage: React.FC = () => {
                           <>
                             <div className="flex items-center gap-2 text-sm text-green-600">
                               <Link className="w-4 h-4" />
-                              <span className="font-medium">Connected to Xero</span>
+                              <span className="font-medium">
+                                Connected to {xeroStatus.tenantName || "Xero"}
+                              </span>
                             </div>
+
                             {xeroStatus.hasContactWritePermission === false && (
                               <Badge variant="destructive" className="text-xs">
                                 Missing contact permission
@@ -493,15 +561,61 @@ const GlobalConfigPage: React.FC = () => {
                               {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                               Reauthorize
                             </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setXeroStatus((prev) => ({ ...prev, requiresTenantSelection: true }));
+                                void loadXeroTenants();
+                              }}
+                            >
+                              Change organisation
+                            </Button>
                           </>
+
                         ) : (
                           <Button type="button" variant="default" size="sm" onClick={handleXeroConnect} disabled={xeroConnecting}>
                             {xeroConnecting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link className="w-3 h-3 mr-1" />}
-                            Connect Xero
+                            {xeroStatus.requiresTenantSelection ? "Reauthorize" : "Connect Xero"}
                           </Button>
                         )}
                       </div>
+                      {xeroStatus.requiresTenantSelection && (
+                        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
+                          <div className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                            Xero is authorised but no organisation is bound yet. Pick the organisation this environment must post to — it stays locked until you change it here.
+                          </div>
+                          {xeroTenants.length === 0 ? (
+                            <div className="text-xs text-muted-foreground">Loading organisations…</div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {xeroTenants.map((tenant) => (
+                                <div key={tenant.tenantId} className="flex items-center justify-between gap-3 rounded border border-border bg-background px-3 py-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium truncate">{tenant.tenantName}</div>
+                                    {tenant.isDemo && (
+                                      <Badge variant="destructive" className="text-[10px] mt-1">Xero Demo Company</Badge>
+                                    )}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={tenant.isDemo ? "outline" : "default"}
+                                    disabled={bindingTenant !== null}
+                                    onClick={() => handleSelectXeroTenant(tenant.tenantId, tenant.tenantName)}
+                                  >
+                                    {bindingTenant === tenant.tenantId ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                                    Use this
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {xeroStatus.connected && xeroStatus.hasContactWritePermission === false && (
+
                         <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                           Xero did not grant contact creation access. Reauthorize and approve all requested permissions.
                           {(xeroStatus.missingRequiredScopes?.length || 0) > 0 && (

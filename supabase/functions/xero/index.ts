@@ -190,11 +190,17 @@ async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ a
   return { access_token: data.access_token, refresh_token: data.refresh_token, scopes };
 }
 
+function isDemoTenant(connection: XeroConnection): boolean {
+  const name = (connection.tenantName || "").toLowerCase();
+  return name.includes("demo company") || name === "demo";
+}
+
 async function fetchXeroConnections(accessToken: string): Promise<Response> {
   return await fetch(XERO_CONNECTIONS_URL, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
   });
 }
+
 
 async function revokeStoredXeroConnection(sql: DbClient, config: ConfigMap): Promise<{ attempted: boolean; revoked: boolean; status?: number; message?: string }> {
   if (!config.xero_access_token || !config.xero_tenant_id) {
@@ -337,6 +343,7 @@ Deno.serve(async (req) => {
         await upsertConfig(sql, "xero_access_token", "");
         await upsertConfig(sql, "xero_refresh_token", "");
         await upsertConfig(sql, "xero_tenant_id", "");
+        await upsertConfig(sql, "xero_tenant_name", "");
         await upsertConfig(sql, "xero_connection_id", "");
         await upsertConfig(sql, "xero_granted_scopes", "");
         console.log("Xero forced reauthorize prepared", revokeResult);
@@ -417,7 +424,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const connections = await connRes.json();
+      const connections = (await connRes.json()) as XeroConnection[];
       if (connections.length === 0) {
         return new Response(JSON.stringify({ error: "No Xero tenant connection was returned. Please reconnect and select an organisation." }), {
           status: 400,
@@ -425,13 +432,49 @@ Deno.serve(async (req) => {
         });
       }
 
-      const selectedConnection = connections[0] as XeroConnection;
-      await upsertConfig(sql, "xero_tenant_id", selectedConnection.tenantId || "");
-      await upsertConfig(sql, "xero_connection_id", selectedConnection.id || "");
-
       const scopeDiagnostics = getScopeDiagnostics(grantedScopes);
+      const selectable = connections
+        .filter((c) => !!c.tenantId)
+        .map((c) => ({
+          tenantId: c.tenantId as string,
+          tenantName: c.tenantName || "(unnamed organisation)",
+          tenantType: c.tenantType || null,
+          connectionId: c.id || null,
+          isDemo: isDemoTenant(c),
+        }));
+
+      // Never auto-bind when the authorising user granted access to more than
+      // one organisation, and never auto-bind a Xero Demo Company. Silent
+      // index-0 selection is what allowed the tenant to drift on reconnect.
+      const realOrgs = selectable.filter((c) => !c.isDemo);
+      const autoBind = realOrgs.length === 1 && selectable.length === 1 ? realOrgs[0] : null;
+
+      if (!autoBind) {
+        // Leave the tenant unbound until the user explicitly picks one.
+        await upsertConfig(sql, "xero_tenant_id", "");
+        await upsertConfig(sql, "xero_tenant_name", "");
+        await upsertConfig(sql, "xero_connection_id", "");
+        console.log("Xero authorised, awaiting explicit tenant selection", {
+          connectionCount: selectable.length,
+          demoCount: selectable.length - realOrgs.length,
+        });
+        return new Response(JSON.stringify({
+          success: true,
+          requiresTenantSelection: true,
+          connections: selectable,
+          hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
+          missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
+          grantedScopeCount: scopeDiagnostics.grantedScopeCount,
+          scopeSource: scopeDiagnostics.scopeSource,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await upsertConfig(sql, "xero_tenant_id", autoBind.tenantId);
+      await upsertConfig(sql, "xero_tenant_name", autoBind.tenantName);
+      await upsertConfig(sql, "xero_connection_id", autoBind.connectionId || "");
+
       console.log("Xero connected", {
-        tenantType: selectedConnection.tenantType || null,
+        tenantType: autoBind.tenantType,
         grantedScopeCount: scopeDiagnostics.grantedScopeCount,
         hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
         missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
@@ -439,7 +482,9 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({
         success: true,
-        tenant: selectedConnection.tenantName || "Connected",
+        requiresTenantSelection: false,
+        tenant: autoBind.tenantName,
+        tenantId: autoBind.tenantId,
         hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
         missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
         grantedScopeCount: scopeDiagnostics.grantedScopeCount,
@@ -453,7 +498,7 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const config = await getConfigMap(
         sql,
-        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_granted_scopes"],
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_tenant_name", "xero_granted_scopes"],
       );
       const connected = !!(config.xero_access_token && config.xero_tenant_id);
       const scopeDiagnostics = getScopeDiagnostics(getGrantedScopes(config.xero_access_token), config.xero_granted_scopes);
@@ -463,6 +508,9 @@ Deno.serve(async (req) => {
           connected,
           hasCredentials: !!(config.xero_client_id && config.xero_client_secret),
           tenantId: config.xero_tenant_id || null,
+          tenantName: config.xero_tenant_name || null,
+          // Authorised with Xero but no organisation has been explicitly bound yet.
+          requiresTenantSelection: !!config.xero_access_token && !config.xero_tenant_id,
           hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
           missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
           grantedScopeCount: scopeDiagnostics.grantedScopeCount,
@@ -471,6 +519,114 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // ACTION: list-tenants — organisations the current Xero grant can reach
+    if (action === "list-tenants") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+      );
+      if (!config.xero_access_token) {
+        return new Response(JSON.stringify({ error: "Xero is not authorised. Connect Xero first." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      let connRes = await fetchXeroConnections(accessToken);
+      if (connRes.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          connRes = await fetchXeroConnections(accessToken);
+        }
+      }
+
+      if (!connRes.ok) {
+        const detail = await connRes.text();
+        return new Response(JSON.stringify({ error: "Failed to list Xero organisations", detail }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const connections = (await connRes.json()) as XeroConnection[];
+      return new Response(JSON.stringify({
+        boundTenantId: config.xero_tenant_id || null,
+        connections: connections
+          .filter((c) => !!c.tenantId)
+          .map((c) => ({
+            tenantId: c.tenantId as string,
+            tenantName: c.tenantName || "(unnamed organisation)",
+            tenantType: c.tenantType || null,
+            connectionId: c.id || null,
+            isDemo: isDemoTenant(c),
+          })),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ACTION: select-tenant — explicit, user-confirmed organisation binding
+    if (action === "select-tenant") {
+      const tenantId = typeof body.tenantId === "string" ? body.tenantId.trim() : "";
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: "Missing tenantId" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token"],
+      );
+      if (!config.xero_access_token) {
+        return new Response(JSON.stringify({ error: "Xero is not authorised. Connect Xero first." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      let connRes = await fetchXeroConnections(accessToken);
+      if (connRes.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          connRes = await fetchXeroConnections(accessToken);
+        }
+      }
+
+      if (!connRes.ok) {
+        const detail = await connRes.text();
+        return new Response(JSON.stringify({ error: "Failed to verify Xero organisation", detail }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const connections = (await connRes.json()) as XeroConnection[];
+      const match = connections.find((c) => c.tenantId === tenantId);
+      if (!match) {
+        return new Response(JSON.stringify({
+          error: "That organisation is not part of the current Xero authorisation.",
+          code: "xero_tenant_not_authorised",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await upsertConfig(sql, "xero_tenant_id", match.tenantId || "");
+      await upsertConfig(sql, "xero_tenant_name", match.tenantName || "");
+      await upsertConfig(sql, "xero_connection_id", match.id || "");
+      console.log("Xero tenant explicitly bound", { tenantType: match.tenantType || null, isDemo: isDemoTenant(match) });
+
+      return new Response(JSON.stringify({
+        success: true,
+        tenantId: match.tenantId,
+        tenantName: match.tenantName || "",
+        isDemo: isDemoTenant(match),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
 
     if (action === "sync-invoice-receipt" || action === "list-invoice-receipts") {
       const invoiceId = typeof body.invoice_id === "string" ? body.invoice_id : "";
@@ -637,6 +793,7 @@ Deno.serve(async (req) => {
       await upsertConfig(sql, "xero_access_token", "");
       await upsertConfig(sql, "xero_refresh_token", "");
       await upsertConfig(sql, "xero_tenant_id", "");
+      await upsertConfig(sql, "xero_tenant_name", "");
       await upsertConfig(sql, "xero_connection_id", "");
       await upsertConfig(sql, "xero_granted_scopes", "");
 
