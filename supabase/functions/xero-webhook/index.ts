@@ -261,6 +261,15 @@ Deno.serve(async (req) => {
       if (event.eventCategory !== "INVOICE" || event.eventType !== "UPDATE") {
         continue;
       }
+
+      // A Xero app can deliver the same event to every configured webhook URL.
+      // Never process an event in a tenant slice that is bound to another Xero org.
+      if (event.tenantId && event.tenantId !== config.xero_tenant_id) {
+        console.log(
+          `xero-webhook: Skipping event for tenant ${event.tenantId}; this slice is bound to ${config.xero_tenant_id}`,
+        );
+        continue;
+      }
       if (event.resourceId) {
         if (seenResourceIds.has(event.resourceId)) {
           console.log(`xero-webhook: Skipping duplicate event for ${event.resourceId} in same payload`);
@@ -313,13 +322,26 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Directly-created invoices have a durable Xero ID and must be matched by it.
+      // Older invoices may only have a number, so retain a normalized fallback for
+      // whitespace/casing differences and prefer the newest row if legacy data has
+      // duplicate invoice numbers.
       const matchingInvoices = await sql.query(
-        `SELECT id, status, amendment_status, receipt_pdf_url FROM invoices WHERE invoice_number = $1 LIMIT 1`,
-        [xeroInvoiceNumber],
+        `SELECT id, status, amendment_status, receipt_pdf_url
+         FROM invoices
+         WHERE xero_invoice_id = $1
+            OR UPPER(BTRIM(invoice_number)) = UPPER(BTRIM($2))
+         ORDER BY
+           CASE WHEN xero_invoice_id = $1 THEN 0 ELSE 1 END,
+           created_at DESC
+         LIMIT 1`,
+        [xeroInvoiceId, xeroInvoiceNumber],
       );
 
       if (matchingInvoices.length === 0) {
-        console.warn(`xero-webhook: No local invoice found with invoice_number=${xeroInvoiceNumber}`);
+        console.warn(
+          `xero-webhook: No local invoice found with xero_invoice_id=${xeroInvoiceId} or invoice_number=${JSON.stringify(xeroInvoiceNumber)}`,
+        );
         continue;
       }
 
