@@ -1,87 +1,76 @@
 ## Goal
 
-Drop the app-minted JWT (`x-app-jwt`) as the credential for the invoices API and all inter-system edge functions. External callers (OTG CRM, Stridekidz systems, future integrations) authenticate with a single `x-api-key` header. The Federated Gateway (upstream auth-app) already resolves which systems a key may act on, so our edge functions delegate identity + system-scope checks to it.
+Remove n8n from the invoice pipeline entirely. When an invoice is approved (manually or auto-approved via API), and when an amendment is approved, this app talks to Xero directly using the existing OAuth2 connection: creates/reuses the contact, creates or updates the invoice as AUTHORISED, pulls the Xero PDF, stores it, and lets Xero email the client. Existing Xero payment webhook and outbound API push-back keep working unchanged.
 
-The browser app keeps working — but instead of holding a minted app JWT, it holds a **session API key** issued by the gateway at login and sends it as `x-api-key` on every call.
-
-## New auth model
+## Flow after the change
 
 ```text
-External system ──► POST /invoices
-                     x-api-key: <system key>
-                     x-org-id: otg_lab
-                     x-environment: production
-
-Edge function ──► GET  <auth-app>/verify-key
-                   x-api-key: <same key>
-                   x-target-system: invoices
-
-auth-app ──► { valid: true, system_id, allowed_systems: [...],
-                actor: { id, name, email, role } }
+approve / auto-approve
+        |
+        v
+[ resolve Xero contact ]  -- existing contact by ContactID or name
+        |                     -- else create it (name, email, first/last)
+        v
+[ POST /Invoices  Type=ACCREC, Status=AUTHORISED ]
+        |   line items -> Description, Quantity, UnitAmount,
+        |                 AccountCode, Tracking[]
+        |   CurrencyCode, DueDate = invoice_date + due_days, Reference
+        v
+[ store InvoiceID + InvoiceNumber on our row ]
+        |
+        +--> send_to_client? -> POST /Invoices/{id}/Email  (Xero-branded)
+        |
+        +--> GET /Invoices/{id} (Accept: application/pdf)
+                 -> strip protection -> upload to R2 -> invoice_pdf_url
+                 -> dispatchApiPush("invoice_pdf_ready") for API-submitted invoices
 ```
 
-If `invoices` is in `allowed_systems`, the request proceeds. Otherwise 403.
+Amendment approval follows the same path but issues `POST /Invoices/{InvoiceID}` (Xero upsert) against the stored Xero invoice id, then re-pulls the PDF.
 
-Result is cached per-key in-memory for 60s inside the edge function to avoid a round-trip on every call.
+## Work
 
-## What changes
+**1. New shared module `supabase/functions/_shared/xero-invoice.ts**`
 
-### Edge functions (Deno)
+- Token handling lifted from `xero/index.ts`: config map read, `refreshAccessToken`, 401-retry-once wrapper, tenant id/name resolution.
+- `resolveXeroContact()` — lookup by `contact_id` (ContactID) first, else exact-name lookup, else create. Same authorization/scope error surfacing already built for `create-xero-contact`.
+- `pushInvoiceToXero()` — builds the ACCREC payload, creates or upserts, returns `{ xeroInvoiceId, invoiceNumber, status }`.
+- `emailXeroInvoice()` — Xero's email endpoint, only when `send_to_client` is true.
+- `syncXeroInvoicePdf()` — fetch PDF, `stripPdfProtection`, `uploadToR2` to `invoices/{id}.pdf`, update `invoice_pdf_url`. Reuses the same paths `xero-webhook` already writes, so the later paid/partially-paid refresh overwrites cleanly.
 
-1. `_shared/auth.ts` — replace `verifyJwt` / `authenticate` with `authenticateApiKey(req)`:
-  - Reads `x-api-key`
-  - Calls upstream `verify-key` endpoint (new secret `FEDERATED_GATEWAY_URL` + reuse existing `AUTH_API_KEY_*` for gateway auth)
-  - Returns `{ system_id, actor, allowed_systems }` or `null`
-  - 60s LRU cache
-2. `invoices/index.ts`, `data-proxy/index.ts`, `get-users-proxy/index.ts`, `xero/index.ts`, `auth/index.ts` — swap `authenticate()` call, use returned `actor` where JWT `sub`/`email`/`role` were previously read.
-3. `clients-api-proxy/index.ts` — accept `x-api-key` from caller, forward it (already forwards `AUTH_API_KEY_*` — now forwards caller's key too).
-4. `login-proxy/index.ts` — `verify-2fa` no longer mints an HS256 JWT. Instead it returns the **session API key** that the auth-app issues for the logged-in user (needs upstream support; if the auth-app already returns one, use it; else fall back to storing the upstream `token` as the session key and treating it as an api-key on inbound calls — the verify-key endpoint validates either).
-5. Delete `createJwt` / `verifyJwt`. Remove `SUPABASE_SERVICE_ROLE_KEY`-as-signing-secret usage.
-6. CORS: add `x-api-key` to `Access-Control-Allow-Headers` on every function.
+**2. Database (one migration per tenant DB, run through the existing Neon proxy pattern)**
 
-### Frontend
+- `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS xero_invoice_id TEXT` (plus the same `IF NOT EXISTS` guard used for `callback_url`/`currency` so older slices self-heal).
 
-1. `src/lib/api-client.ts`, `src/lib/neon-client.ts` — send `x-api-key: <session key from localStorage>`; remove `x-app-jwt` + `Authorization: Bearer <appJwt>`.
-2. `src/contexts/AuthContext.tsx` — store the returned session key as `auth_api_key` in localStorage (rename from `auth_token` for clarity, with a one-time migration read).
-3. `src/pages/ApiDocsPage.tsx` — rewrite auth section: single `x-api-key` header, remove JWT/2FA-token confusion, keep the "Copy my current key" helper renamed to **Copy API key**.
-4. `src/lib/patch-functions-invoke.ts` — unchanged (error normalization still relevant).
+**3. `supabase/functions/invoices/index.ts**`
 
-### Secrets / config
+- `api-submit` auto-approve branch: replace the n8n fetch with the Xero push.
+- `approve` action: same replacement.
+- `notify-approval`: becomes a direct Xero push (kept as an action so the frontend call site is unchanged), returning the created invoice number instead of a webhook status.
+- `notify-amendment`: replace the hardcoded n8n test webhook with the Xero update path.
+- Drop all `N8N_WEBHOOK_URL` reads.
+- Failure handling: if the Xero push fails, the invoice stays approved but gets `xero_sync_error` recorded in `invoice_logs`, the action returns a readable error, and the UI can retry.
 
-- Add `FEDERATED_GATEWAY_VERIFY_URL` (via `add_secret`) — the endpoint on the auth-app that validates `x-api-key` and returns actor + allowed_systems. If the URL is already derivable from existing `WEBHOOK_SUPABASE_URL`, we hard-code the path and skip the new secret.
-- No new signing secret; JWT signing key usage is removed.
+**4. Retry surface**
 
-## Out of scope
+- Add a `retry-xero-push` action on the invoices function and a "Retry Xero sync" item in the invoice row actions, shown when an approved invoice has no `xero_invoice_id`.
 
-- Building the admin UI in the gateway for granting a key access to additional systems — that lives in the auth-app, not this project.
-- Backward compat for old JWTs: since `x-app-jwt` was only used by the browser + a small handful of external callers you control, cutover is hard. External integrators re-issue their key once.
+**5. Cleanup**
+
+- Delete `supabase/functions/admin-resend-n8n/index.ts`.
+- `invoice-pdf-webhook` stays (external PDF ingestion + presigned URL GET still used by the UI) but is no longer part of the approval path.
+- Update `ApiDocsPage.tsx` wording where it describes the n8n hop.
 
 ## Technical notes
 
-- Cache key = raw api key string; cache value = `{ actor, allowed_systems, cachedAt }`. Evict at 60s.
-- Every edge function declares its own `TARGET_SYSTEM` const (e.g. `"invoices"`, `"data-proxy"`) that gets passed to `authenticateApiKey` so the gateway checks the right allowlist entry.
-- `data-proxy` and `xero` are internal-only — their `TARGET_SYSTEM` is `"internal"` and only the browser session key (which owns `internal`) can call them.
-- Error taxonomy: `401 missing_api_key`, `401 invalid_api_key`, `403 system_not_allowed`.
+- Xero create is idempotent-guarded by our stored `xero_invoice_id`; a retry after a partial failure upserts rather than duplicating.
+- `xero-webhook` matching is unchanged (still by `invoice_number`), and now the number is written at creation time so the match is immediate.
+- Currency is still normalised to letters only (`SGD$` -> `SGD`); Xero rejects unknown codes, so an unsupported code surfaces as a readable error rather than a silent failure.
+- Line items require `AccountCode`; the create form already enforces account selection, but API-submitted line items without an account will be rejected with an explicit message.
+- Tracking categories map straight from the existing `tracking: [{ name, option }]` shape.
+- `N8N_WEBHOOK_URL` secret becomes unused; it can be deleted afterwards.
 
-## Files touched
+## Not included
 
-- `supabase/functions/_shared/auth.ts` (rewrite)
-- `supabase/functions/{invoices,data-proxy,get-users-proxy,xero,auth,clients-api-proxy,login-proxy}/index.ts` (swap authenticate + CORS)
-- `src/lib/{api-client,neon-client,resolve-user-email,invoice-receipts}.ts` (header swap)
-- `src/contexts/AuthContext.tsx` (storage key + no JWT mint expectation)
-- `src/pages/{ApiDocsPage,GlobalConfigPage,AllStaffPage,CreateInvoicePage}.tsx` + `src/components/AmendInvoiceDialog.tsx` (any direct header reads)
+- No change to the payment/receipt reconciliation, the outbound API push contract, or the tenant-binding work.  
 
-## Open questions before I start
-
-1. **Does the upstream auth-app already have a `verify-key` (or equivalent) endpoint that returns `{ actor, allowed_systems }` for a given `x-api-key`?** If not, this refactor can't land — the gateway needs to expose that endpoint first. I don't want to build a stub that trusts unvalidated keys.
-2. **On successful 2FA today, does `login-proxy`'s upstream response include a per-session API key, or only the JWT-style token you showed earlier?** If only the JWT-style token, we treat that opaque string as the session key and rely on the gateway's `verify-key` to validate it — confirm that's how the gateway wants us to use it.
-3. **Should the browser session and external CRM integrations use the same key type,** or does the gateway distinguish "user session key" vs "system integration key"? This affects whether `data-proxy` (browser-only) needs a different allowlist marker.  
-  
-**1. Verify-key endpoint — yes, it exists.** clients-api accepts x-api-key on every call and runs verifyApiKey before doing anything. It returns { systemId, systemName, permissions, allowedSystemIds } internally on every request. There isn't a dedicated verify-key-only action right now — validation is bundled into each action/entity call. If you want a pure { actor, allowed_systems } probe endpoint, say the word and I'll add an action: "verify-key" short-circuit to clients-api that returns exactly that shape without touching entities. Until that exists, don't stub — either add it here first, or have the upstream call any real action (e.g. describe) as its validation ping.
-  **2. 2FA response — only the opaque session token.** auth (login → verify-2fa) returns token: "ses_..." plus the user profile. No separate per-session API key is minted. That ses_... string is validated exclusively via auth action: "verify" (opaque token → DB lookup in the sessions table). It is **not** an API key and will not pass verifyApiKey — do not send it as x-api-key.
-  **3. Session keys vs system keys are distinct types — do not conflate.**
-  - ses_... / fed_... → user/browser sessions. Sent as Authorization: Bearer, verified via auth verify. No allowed_systems concept; access is scoped by the user's system_access / agent_access on their profile.
-  - prod_... / sb_... → system integration keys. Sent as x-api-key, verified via clients-api, carry allowedSystemIds (the per-key cross-system allowlist you set in the System Access dialog).
-  So data-proxy (browser) should treat the Bearer session as a user identity and derive allowed systems from the returned user profile's system_access, not from an API-key allowlist. Machine-to-machine integrations use x-api-key and rely on allowedSystemIds.
-
-Please answer 1–3 (or point me at the gateway's docs) and I'll implement.
+  User note: **ensure** that all Xero operations abide by their environment's Xero connection. Stridekidz sandbox and production, and OTG Lab's sandbox and production should be 4 separate and distinct connections that only interact with their established Xero connection. None should interacting with the others'. The point of this change is to reduce the confusion and errors that have arised regarding the app sending invoices to the wrong Xero.
