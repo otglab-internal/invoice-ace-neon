@@ -417,7 +417,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const connections = await connRes.json();
+      const connections = (await connRes.json()) as XeroConnection[];
       if (connections.length === 0) {
         return new Response(JSON.stringify({ error: "No Xero tenant connection was returned. Please reconnect and select an organisation." }), {
           status: 400,
@@ -425,13 +425,49 @@ Deno.serve(async (req) => {
         });
       }
 
-      const selectedConnection = connections[0] as XeroConnection;
-      await upsertConfig(sql, "xero_tenant_id", selectedConnection.tenantId || "");
-      await upsertConfig(sql, "xero_connection_id", selectedConnection.id || "");
-
       const scopeDiagnostics = getScopeDiagnostics(grantedScopes);
+      const selectable = connections
+        .filter((c) => !!c.tenantId)
+        .map((c) => ({
+          tenantId: c.tenantId as string,
+          tenantName: c.tenantName || "(unnamed organisation)",
+          tenantType: c.tenantType || null,
+          connectionId: c.id || null,
+          isDemo: isDemoTenant(c),
+        }));
+
+      // Never auto-bind when the authorising user granted access to more than
+      // one organisation, and never auto-bind a Xero Demo Company. Silent
+      // index-0 selection is what allowed the tenant to drift on reconnect.
+      const realOrgs = selectable.filter((c) => !c.isDemo);
+      const autoBind = realOrgs.length === 1 && selectable.length === 1 ? realOrgs[0] : null;
+
+      if (!autoBind) {
+        // Leave the tenant unbound until the user explicitly picks one.
+        await upsertConfig(sql, "xero_tenant_id", "");
+        await upsertConfig(sql, "xero_tenant_name", "");
+        await upsertConfig(sql, "xero_connection_id", "");
+        console.log("Xero authorised, awaiting explicit tenant selection", {
+          connectionCount: selectable.length,
+          demoCount: selectable.length - realOrgs.length,
+        });
+        return new Response(JSON.stringify({
+          success: true,
+          requiresTenantSelection: true,
+          connections: selectable,
+          hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
+          missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
+          grantedScopeCount: scopeDiagnostics.grantedScopeCount,
+          scopeSource: scopeDiagnostics.scopeSource,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await upsertConfig(sql, "xero_tenant_id", autoBind.tenantId);
+      await upsertConfig(sql, "xero_tenant_name", autoBind.tenantName);
+      await upsertConfig(sql, "xero_connection_id", autoBind.connectionId || "");
+
       console.log("Xero connected", {
-        tenantType: selectedConnection.tenantType || null,
+        tenantType: autoBind.tenantType,
         grantedScopeCount: scopeDiagnostics.grantedScopeCount,
         hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
         missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
@@ -439,7 +475,9 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({
         success: true,
-        tenant: selectedConnection.tenantName || "Connected",
+        requiresTenantSelection: false,
+        tenant: autoBind.tenantName,
+        tenantId: autoBind.tenantId,
         hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
         missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
         grantedScopeCount: scopeDiagnostics.grantedScopeCount,
