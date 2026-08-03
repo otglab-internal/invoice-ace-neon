@@ -42,6 +42,22 @@ async function authenticate(req: Request) {
   return await fgAuthenticate(req);
 }
 
+// Reads the Xero organisation currently bound in this tenant slice so n8n can
+// assert it is creating the invoice in the right Xero org.
+async function getXeroTenant(sql: any): Promise<{ xero_tenant_id: string | null; xero_tenant_name: string | null }> {
+  try {
+    const rows = await sql`SELECT key, value FROM global_config WHERE key IN ('xero_tenant_id', 'xero_tenant_name')` as any[];
+    const map = new Map(rows.map((r: any) => [r.key, r.value]));
+    return {
+      xero_tenant_id: (map.get("xero_tenant_id") as string) || null,
+      xero_tenant_name: (map.get("xero_tenant_name") as string) || null,
+    };
+  } catch (e) {
+    console.error("getXeroTenant failed:", e);
+    return { xero_tenant_id: null, xero_tenant_name: null };
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -286,6 +302,7 @@ Deno.serve(async (req) => {
                 line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
               })),
             };
+            const xeroTenant = await getXeroTenant(dbSql);
             await fetch(n8nWebhookUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -300,6 +317,8 @@ Deno.serve(async (req) => {
                 approved_at: created.created_at,
                 org_id: orgIdResolved,
                 environment: envResolved,
+                xero_tenant_id: xeroTenant.xero_tenant_id,
+                xero_tenant_name: xeroTenant.xero_tenant_name,
                 supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
                 supabase_url: Deno.env.get("SUPABASE_URL"),
               }),
@@ -563,6 +582,7 @@ Deno.serve(async (req) => {
             approved_at: invoice?.approved_at,
             org_id: req.headers.get("x-org-id") || body.org_id || "",
             environment: req.headers.get("x-environment") || "production",
+            ...(await getXeroTenant(getDb(req, bodyOrgId))),
           }),
         });
 
@@ -817,7 +837,7 @@ Deno.serve(async (req) => {
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", ...(await getXeroTenant(sql)), supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);

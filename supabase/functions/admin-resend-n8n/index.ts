@@ -108,6 +108,12 @@ Deno.serve(async (req) => {
       })),
     };
 
+    const tenantRows = await sql.query(
+      `SELECT key, value FROM global_config WHERE key IN ('xero_tenant_id','xero_tenant_name')`,
+      [],
+    ) as any[];
+    const tenantMap = new Map((tenantRows || []).map((r: any) => [r.key, r.value]));
+
     const webhookResponse = await fetch(n8nWebhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,6 +128,8 @@ Deno.serve(async (req) => {
         approved_at: invoice.approved_at,
         org_id: orgId,
         environment: env,
+        xero_tenant_id: tenantMap.get("xero_tenant_id") || null,
+        xero_tenant_name: tenantMap.get("xero_tenant_name") || null,
         resend: true,
       }),
     });
