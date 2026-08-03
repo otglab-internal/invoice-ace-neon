@@ -764,29 +764,24 @@ Deno.serve(async (req) => {
       }
 
       const approvedInvoice = result[0];
-      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-      if (n8nWebhookUrl) {
-        try {
-          // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD").
-          const rawApprovedCurrency = (approvedInvoice.currency ?? "RM").toString();
-          const approvedCurrencyCode = rawApprovedCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-          const enrichedApproved = {
-            ...approvedInvoice,
-            currency: approvedCurrencyCode,
-            line_items: (approvedInvoice.line_items || []).map((li: any) => ({
-              ...li,
-              line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-            })),
-          };
-          await fetch(n8nWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", ...(await getXeroTenant(sql)), supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
-          });
-        } catch (webhookErr) {
-          console.error("n8n webhook call failed:", webhookErr);
+
+      // Create the invoice directly in the Xero organisation bound to this slice.
+      let approveXero: Awaited<ReturnType<typeof pushInvoiceToXero>> | null = null;
+      try {
+        approveXero = await pushInvoiceToXero({
+          sql,
+          invoiceId: approvedInvoice.id,
+          orgId: req.headers.get("x-org-id") || bodyOrgId || "",
+          environment: req.headers.get("x-environment") || "production",
+        });
+        if (!approveXero.ok) {
+          console.error("approve: Xero push failed:", approveXero.error, approveXero.detail);
         }
+      } catch (xeroErr) {
+        console.error("approve: Xero push threw:", xeroErr);
+        approveXero = { ok: false, error: (xeroErr as Error).message };
       }
+
 
       // Send approved invoice notification email
       console.log(`invoices: [APPROVE] Starting email notification flow for invoice ${approvedInvoice.id}`);
