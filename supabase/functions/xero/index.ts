@@ -491,7 +491,7 @@ Deno.serve(async (req) => {
     if (action === "status") {
       const config = await getConfigMap(
         sql,
-        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_granted_scopes"],
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_tenant_id", "xero_tenant_name", "xero_granted_scopes"],
       );
       const connected = !!(config.xero_access_token && config.xero_tenant_id);
       const scopeDiagnostics = getScopeDiagnostics(getGrantedScopes(config.xero_access_token), config.xero_granted_scopes);
@@ -501,6 +501,9 @@ Deno.serve(async (req) => {
           connected,
           hasCredentials: !!(config.xero_client_id && config.xero_client_secret),
           tenantId: config.xero_tenant_id || null,
+          tenantName: config.xero_tenant_name || null,
+          // Authorised with Xero but no organisation has been explicitly bound yet.
+          requiresTenantSelection: !!config.xero_access_token && !config.xero_tenant_id,
           hasContactWritePermission: scopeDiagnostics.hasContactWritePermission,
           missingRequiredScopes: scopeDiagnostics.missingRequiredScopes,
           grantedScopeCount: scopeDiagnostics.grantedScopeCount,
@@ -509,6 +512,114 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
+    // ACTION: list-tenants — organisations the current Xero grant can reach
+    if (action === "list-tenants") {
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token", "xero_tenant_id"],
+      );
+      if (!config.xero_access_token) {
+        return new Response(JSON.stringify({ error: "Xero is not authorised. Connect Xero first." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      let connRes = await fetchXeroConnections(accessToken);
+      if (connRes.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          connRes = await fetchXeroConnections(accessToken);
+        }
+      }
+
+      if (!connRes.ok) {
+        const detail = await connRes.text();
+        return new Response(JSON.stringify({ error: "Failed to list Xero organisations", detail }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const connections = (await connRes.json()) as XeroConnection[];
+      return new Response(JSON.stringify({
+        boundTenantId: config.xero_tenant_id || null,
+        connections: connections
+          .filter((c) => !!c.tenantId)
+          .map((c) => ({
+            tenantId: c.tenantId as string,
+            tenantName: c.tenantName || "(unnamed organisation)",
+            tenantType: c.tenantType || null,
+            connectionId: c.id || null,
+            isDemo: isDemoTenant(c),
+          })),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ACTION: select-tenant — explicit, user-confirmed organisation binding
+    if (action === "select-tenant") {
+      const tenantId = typeof body.tenantId === "string" ? body.tenantId.trim() : "";
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: "Missing tenantId" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const config = await getConfigMap(
+        sql,
+        ["xero_client_id", "xero_client_secret", "xero_access_token", "xero_refresh_token"],
+      );
+      if (!config.xero_access_token) {
+        return new Response(JSON.stringify({ error: "Xero is not authorised. Connect Xero first." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let accessToken = config.xero_access_token;
+      let connRes = await fetchXeroConnections(accessToken);
+      if (connRes.status === 401) {
+        const refreshed = await refreshAccessToken(sql, config);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          connRes = await fetchXeroConnections(accessToken);
+        }
+      }
+
+      if (!connRes.ok) {
+        const detail = await connRes.text();
+        return new Response(JSON.stringify({ error: "Failed to verify Xero organisation", detail }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const connections = (await connRes.json()) as XeroConnection[];
+      const match = connections.find((c) => c.tenantId === tenantId);
+      if (!match) {
+        return new Response(JSON.stringify({
+          error: "That organisation is not part of the current Xero authorisation.",
+          code: "xero_tenant_not_authorised",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await upsertConfig(sql, "xero_tenant_id", match.tenantId || "");
+      await upsertConfig(sql, "xero_tenant_name", match.tenantName || "");
+      await upsertConfig(sql, "xero_connection_id", match.id || "");
+      console.log("Xero tenant explicitly bound", { tenantType: match.tenantType || null, isDemo: isDemoTenant(match) });
+
+      return new Response(JSON.stringify({
+        success: true,
+        tenantId: match.tenantId,
+        tenantName: match.tenantName || "",
+        isDemo: isDemoTenant(match),
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
 
     if (action === "sync-invoice-receipt" || action === "list-invoice-receipts") {
       const invoiceId = typeof body.invoice_id === "string" ? body.invoice_id : "";
