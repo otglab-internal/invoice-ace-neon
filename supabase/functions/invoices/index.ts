@@ -2,6 +2,7 @@ import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
 import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 import { authenticate as fgAuthenticate } from "../_shared/auth.ts";
+import { pushInvoiceToXero } from "../_shared/xero-invoice.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
