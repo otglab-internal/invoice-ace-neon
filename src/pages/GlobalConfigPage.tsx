@@ -538,8 +538,11 @@ const GlobalConfigPage: React.FC = () => {
                           <>
                             <div className="flex items-center gap-2 text-sm text-green-600">
                               <Link className="w-4 h-4" />
-                              <span className="font-medium">Connected to Xero</span>
+                              <span className="font-medium">
+                                Connected to {xeroStatus.tenantName || "Xero"}
+                              </span>
                             </div>
+
                             {xeroStatus.hasContactWritePermission === false && (
                               <Badge variant="destructive" className="text-xs">
                                 Missing contact permission
