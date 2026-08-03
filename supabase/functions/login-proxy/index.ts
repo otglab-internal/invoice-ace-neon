@@ -166,7 +166,27 @@ Deno.serve(async (req) => {
       return jsonResponse(normalizeAuthFailure(data, "Login failed"));
     }
 
+    // Normalize the 2FA challenge shape. Upstream has used several key names
+    // (requires_2fa / requires2FA / two_factor_required / mfa_required) and
+    // sometimes only returns a challenge token. The browser only understands
+    // `requires_2fa` + `challenge_token`, so map everything onto that here.
+    if (response.ok && data && typeof data === "object") {
+      const d = data as Record<string, any>;
+      const challenge =
+        d.challenge_token || d.challengeToken || d.challenge ||
+        d.mfa_token || d.two_factor_token || d.user?.challenge_token || "";
+      const flag =
+        d.requires_2fa ?? d.requires2FA ?? d.two_factor_required ??
+        d.mfa_required ?? d.requiresTwoFactor ?? (challenge ? true : undefined);
+      if (flag) {
+        d.requires_2fa = true;
+        if (challenge) d.challenge_token = challenge;
+      }
+      console.log("login-proxy login response keys:", Object.keys(d).join(","), "requires_2fa=", d.requires_2fa, "hasChallenge=", !!d.challenge_token);
+    }
+
     return jsonResponse(data, response.status);
+
   } catch (err) {
     console.error("Login proxy error:", err);
     return jsonResponse({ error: "Internal server error" }, 500);
