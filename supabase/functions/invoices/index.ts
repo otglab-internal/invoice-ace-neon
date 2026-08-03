@@ -826,7 +826,19 @@ Deno.serve(async (req) => {
         console.error("invoices: [APPROVE] Failed to send approved invoice email:", emailErr);
       }
 
-      return new Response(JSON.stringify({ invoice: approvedInvoice }), {
+      return new Response(JSON.stringify({
+        invoice: approvedInvoice,
+        xero: approveXero
+          ? {
+              pushed: approveXero.ok,
+              invoice_number: approveXero.invoiceNumber ?? null,
+              xero_invoice_id: approveXero.xeroInvoiceId ?? null,
+              tenant_name: approveXero.tenantName ?? null,
+              emailed: approveXero.emailed ?? false,
+              error: approveXero.ok ? null : approveXero.error ?? null,
+            }
+          : null,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
