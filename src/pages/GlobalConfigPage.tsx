@@ -202,16 +202,55 @@ const GlobalConfigPage: React.FC = () => {
         setXeroStatus({
           connected: data.connected,
           hasCredentials: data.hasCredentials,
+          tenantName: data.tenantName ?? null,
+          requiresTenantSelection: data.requiresTenantSelection === true,
           hasContactWritePermission: data.hasContactWritePermission ?? null,
           missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
           grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
           scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
         });
+        if (data.requiresTenantSelection === true) {
+          void loadXeroTenants();
+        }
       }
     } catch {
       // ignore
     }
   };
+
+  const loadXeroTenants = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "list-tenants" },
+        headers: getXeroHeaders(),
+      });
+      if (Array.isArray(data?.connections)) setXeroTenants(data.connections);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSelectXeroTenant = async (tenantId: string, tenantName: string) => {
+    setBindingTenant(tenantId);
+    try {
+      const { data } = await supabase.functions.invoke("xero", {
+        body: { action: "select-tenant", tenantId },
+        headers: getXeroHeaders(),
+      });
+      if (data?.success) {
+        setXeroTenants([]);
+        toast({ title: "Xero organisation locked in", description: tenantName });
+        await logActivity("xero_tenant_selected", "config", performerId, performerName, { tenant: tenantName, tenantId });
+        await checkXeroStatus();
+      } else {
+        toast({ title: "Failed to select organisation", description: data?.error, variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Failed to select organisation", description: err?.message, variant: "destructive" });
+    }
+    setBindingTenant(null);
+  };
+
 
   const handleSave = async () => {
     setSaving(true);
