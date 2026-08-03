@@ -2,7 +2,6 @@ import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
 import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 import { authenticate as fgAuthenticate } from "../_shared/auth.ts";
-import { getN8nTarget, n8nRouting } from "../_shared/n8n-target.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -274,8 +273,7 @@ Deno.serve(async (req) => {
       // gets the invoice with the correct currency. Without this, api-submit auto-approved
       // invoices never reach Xero through the n8n flow.
       if (!created.requires_approval && created.status === "approved") {
-        const n8nTarget = await getN8nTarget(dbSql, orgIdResolved, envResolved);
-        const n8nWebhookUrl = n8nTarget.url;
+        const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
         if (n8nWebhookUrl) {
           try {
             const rawCurrency = (created.currency ?? "RM").toString();
@@ -300,7 +298,8 @@ Deno.serve(async (req) => {
                 contact_persons: Array.isArray(created.contact_persons) ? created.contact_persons : [],
                 approved_by: "api",
                 approved_at: created.created_at,
-                ...n8nRouting(n8nTarget),
+                org_id: orgIdResolved,
+                environment: envResolved,
                 supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
                 supabase_url: Deno.env.get("SUPABASE_URL"),
               }),
@@ -526,15 +525,10 @@ Deno.serve(async (req) => {
         });
       }
       const { invoice } = body;
-      const n8nTarget = await getN8nTarget(
-        sql,
-        req.headers.get("x-org-id") || bodyOrgId || "",
-        req.headers.get("x-environment") || "production",
-      );
-      const n8nWebhookUrl = n8nTarget.url;
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
 
       if (!n8nWebhookUrl) {
-        return new Response(JSON.stringify({ error: "n8n webhook URL is not configured for this instance. Set it in Global Config." }), {
+        return new Response(JSON.stringify({ error: "N8N_WEBHOOK_URL not configured" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -567,7 +561,8 @@ Deno.serve(async (req) => {
             contact_persons: Array.isArray(invoice?.contact_persons) ? invoice.contact_persons : [],
             approved_by: invoice?.approved_by,
             approved_at: invoice?.approved_at,
-            ...n8nRouting(n8nTarget),
+            org_id: req.headers.get("x-org-id") || body.org_id || "",
+            environment: req.headers.get("x-environment") || "production",
           }),
         });
 
@@ -805,12 +800,7 @@ Deno.serve(async (req) => {
       }
 
       const approvedInvoice = result[0];
-      const approveN8nTarget = await getN8nTarget(
-        sql,
-        req.headers.get("x-org-id") || bodyOrgId || "",
-        req.headers.get("x-environment") || "production",
-      );
-      const n8nWebhookUrl = approveN8nTarget.url;
+      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
       if (n8nWebhookUrl) {
         try {
           // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD").
@@ -827,7 +817,7 @@ Deno.serve(async (req) => {
           await fetch(n8nWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, ...n8nRouting(approveN8nTarget), supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
+            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
           });
         } catch (webhookErr) {
           console.error("n8n webhook call failed:", webhookErr);

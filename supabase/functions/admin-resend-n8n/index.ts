@@ -3,7 +3,6 @@
 // Also supports action="status" to inspect recent invoices/logs,
 // and action="check_key" to verify a Xero webhook signing key matches our stored secret.
 import { neon } from "npm:@neondatabase/serverless";
-import { getN8nTarget, n8nRouting } from "../_shared/n8n-target.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -94,9 +93,8 @@ Deno.serve(async (req) => {
     }
     const invoice = rows[0];
 
-    const n8nTarget = await getN8nTarget(sql, orgId, env);
-    const n8nWebhookUrl = n8nTarget.url;
-    if (!n8nWebhookUrl) throw new Error("n8n webhook URL is not configured for this instance");
+    const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
+    if (!n8nWebhookUrl) throw new Error("N8N_WEBHOOK_URL not configured");
 
     const rawCurrency = (invoice.currency ?? "RM").toString();
     const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
@@ -122,7 +120,8 @@ Deno.serve(async (req) => {
         contact_persons: Array.isArray(invoice.contact_persons) ? invoice.contact_persons : [],
         approved_by: invoice.approved_by,
         approved_at: invoice.approved_at,
-        ...n8nRouting(n8nTarget),
+        org_id: orgId,
+        environment: env,
         resend: true,
       }),
     });
