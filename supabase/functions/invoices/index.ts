@@ -302,6 +302,7 @@ Deno.serve(async (req) => {
                 line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
               })),
             };
+            const xeroTenant = await getXeroTenant(dbSql);
             await fetch(n8nWebhookUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -316,6 +317,8 @@ Deno.serve(async (req) => {
                 approved_at: created.created_at,
                 org_id: orgIdResolved,
                 environment: envResolved,
+                xero_tenant_id: xeroTenant.xero_tenant_id,
+                xero_tenant_name: xeroTenant.xero_tenant_name,
                 supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
                 supabase_url: Deno.env.get("SUPABASE_URL"),
               }),
