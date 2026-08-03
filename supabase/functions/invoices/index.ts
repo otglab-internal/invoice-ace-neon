@@ -350,6 +350,19 @@ Deno.serve(async (req) => {
         status: created.status,
         requires_approval: created.requires_approval,
         total: created.total,
+        ...(xeroResult
+          ? {
+              xero: {
+                pushed: xeroResult.ok,
+                invoice_number: xeroResult.invoiceNumber ?? null,
+                xero_invoice_id: xeroResult.xeroInvoiceId ?? null,
+                tenant_id: xeroResult.tenantId ?? null,
+                tenant_name: xeroResult.tenantName ?? null,
+                emailed: xeroResult.emailed ?? false,
+                error: xeroResult.ok ? null : xeroResult.error ?? null,
+              },
+            }
+          : {}),
       }), {
         status: 201,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
