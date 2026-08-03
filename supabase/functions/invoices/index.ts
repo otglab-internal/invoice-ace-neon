@@ -286,48 +286,25 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${sourceLabel ? `api:${sourceSystemId || sourceSystemName}` : 'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(logDetails)}::jsonb)
       `;
 
-      // If auto-approved (no approval required), fire n8n webhook immediately so Xero
-      // gets the invoice with the correct currency. Without this, api-submit auto-approved
-      // invoices never reach Xero through the n8n flow.
+      // If auto-approved (no approval required), create the invoice directly in the
+      // Xero organisation bound to this org + environment.
+      let xeroResult: Awaited<ReturnType<typeof pushInvoiceToXero>> | null = null;
       if (!created.requires_approval && created.status === "approved") {
-        const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-        if (n8nWebhookUrl) {
-          try {
-            const rawCurrency = (created.currency ?? "RM").toString();
-            const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-            const enriched = {
-              ...created,
-              currency: currencyCode,
-              line_items: (created.line_items || []).map((li: any) => ({
-                ...li,
-                line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-              })),
-            };
-            const xeroTenant = await getXeroTenant(dbSql);
-            await fetch(n8nWebhookUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event: "invoice_approved",
-                invoice: enriched,
-                send_to_client: created.send_to_client === true,
-                due_days: Number(created.due_days) || 7,
-                recipient_emails: Array.isArray(created.recipient_emails) ? created.recipient_emails : [],
-                contact_persons: Array.isArray(created.contact_persons) ? created.contact_persons : [],
-                approved_by: "api",
-                approved_at: created.created_at,
-                org_id: orgIdResolved,
-                environment: envResolved,
-                xero_tenant_id: xeroTenant.xero_tenant_id,
-                xero_tenant_name: xeroTenant.xero_tenant_name,
-                supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
-                supabase_url: Deno.env.get("SUPABASE_URL"),
-              }),
-            });
-            console.log(`api-submit: n8n webhook fired for auto-approved invoice ${created.id} (currency=${currencyCode})`);
-          } catch (webhookErr) {
-            console.error("api-submit: n8n webhook call failed:", webhookErr);
+        try {
+          xeroResult = await pushInvoiceToXero({
+            sql: dbSql,
+            invoiceId: created.id,
+            orgId: orgIdResolved,
+            environment: envResolved,
+          });
+          if (xeroResult.ok) {
+            console.log(`api-submit: invoice ${created.id} created in Xero as ${xeroResult.invoiceNumber} (tenant ${xeroResult.tenantId})`);
+          } else {
+            console.error(`api-submit: Xero push failed for ${created.id}:`, xeroResult.error, xeroResult.detail);
           }
+        } catch (xeroErr) {
+          console.error("api-submit: Xero push threw:", xeroErr);
+          xeroResult = { ok: false, error: (xeroErr as Error).message };
         }
       }
 
