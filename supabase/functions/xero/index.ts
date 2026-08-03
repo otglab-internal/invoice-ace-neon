@@ -190,11 +190,17 @@ async function refreshAccessToken(sql: DbClient, config: ConfigMap): Promise<{ a
   return { access_token: data.access_token, refresh_token: data.refresh_token, scopes };
 }
 
+function isDemoTenant(connection: XeroConnection): boolean {
+  const name = (connection.tenantName || "").toLowerCase();
+  return name.includes("demo company") || name === "demo";
+}
+
 async function fetchXeroConnections(accessToken: string): Promise<Response> {
   return await fetch(XERO_CONNECTIONS_URL, {
     headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
   });
 }
+
 
 async function revokeStoredXeroConnection(sql: DbClient, config: ConfigMap): Promise<{ attempted: boolean; revoked: boolean; status?: number; message?: string }> {
   if (!config.xero_access_token || !config.xero_tenant_id) {
