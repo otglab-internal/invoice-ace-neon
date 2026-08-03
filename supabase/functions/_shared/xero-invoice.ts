@@ -202,11 +202,38 @@ function normalizeCurrency(raw: unknown): string {
   return code;
 }
 
-function addDays(dateStr: string, days: number): string {
-  const base = new Date(`${String(dateStr).slice(0, 10)}T00:00:00Z`);
-  if (Number.isNaN(base.getTime())) return String(dateStr).slice(0, 10);
+/**
+ * Normalises a stored date into ISO yyyy-mm-dd.
+ * The app stores dates as DD/MM/YYYY (GMT+8); Xero must never be handed an
+ * ambiguous value or it parses 03/08/2026 as 8 March.
+ */
+function toIsoDate(raw: unknown): string {
+  const s = String(raw ?? "").trim();
+  const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dmy) {
+    const [, d, m, y] = dmy;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return iso[0];
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDays(isoDate: string, days: number): string {
+  const base = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) return isoDate;
   base.setUTCDate(base.getUTCDate() + days);
   return base.toISOString().slice(0, 10);
+}
+
+/** Turns literal "\n" sequences stored in text into real line breaks for Xero. */
+function unescapeNewlines(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .trim();
 }
 
 // deno-lint-ignore no-explicit-any
@@ -221,12 +248,13 @@ function buildLineItems(invoice: any): { items: Record<string, unknown>[]; error
       return { items: [], error: "Every line item needs a Xero account code before it can be sent to Xero." };
     }
     const item: Record<string, unknown> = {
-      Description: String(li.description ?? "").trim() || "-",
+      Description: unescapeNewlines(li.description) || "-",
       Quantity: Number(li.quantity) || 0,
       UnitAmount: Number(li.cost) || 0,
       AccountCode: account,
       TaxType: "NONE",
     };
+
     const tracking = Array.isArray(li.tracking)
       ? li.tracking
           .filter((t: Record<string, string>) => t && t.name && t.option)
@@ -380,7 +408,7 @@ export async function pushInvoiceToXero({
     };
   }
 
-  const invoiceDate = String(invoice.invoice_date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const invoiceDate = toIsoDate(invoice.invoice_date);
   const dueDays = Number(invoice.due_days) || 7;
 
   const payload: Record<string, unknown> = {
@@ -388,7 +416,8 @@ export async function pushInvoiceToXero({
     Contact: { ContactID: contact.contactId },
     Date: invoiceDate,
     DueDate: addDays(invoiceDate, dueDays),
-    Reference: invoice.reference || "",
+    Reference: unescapeNewlines(invoice.reference),
+
     CurrencyCode: normalizeCurrency(invoice.currency),
     LineAmountTypes: "NoTax",
     Status: "AUTHORISED",
