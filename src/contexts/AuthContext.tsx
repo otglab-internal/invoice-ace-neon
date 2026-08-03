@@ -184,17 +184,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(msg);
     }
 
-    if (data.requires_2fa) {
+    const challengeToken =
+      data?.challenge_token || data?.challengeToken || data?.challenge ||
+      data?.mfa_token || data?.two_factor_token || data?.user?.challenge_token || "";
+    const requires2FA =
+      data?.requires_2fa ?? data?.requires2FA ?? data?.two_factor_required ??
+      data?.mfa_required ?? (challengeToken ? true : false);
+
+    if (requires2FA) {
       setPendingEmail(email);
       setPendingEnvironment(env);
       // Persist the email the user typed at login as a guaranteed fallback
       // for submitted_by_email. The external auth API's user-list shape can
       // drift, so we never want to depend solely on it.
       try { localStorage.setItem("auth_login_email", email.trim()); } catch { /* ignore */ }
-      return { requires2FA: true, challengeToken: data.challenge_token };
+      return { requires2FA: true, challengeToken };
     }
 
-    throw new Error("Two-factor authentication is not enabled for this account.");
+    throw new Error(
+      "The sign-in service did not return a two-factor challenge for this account in this environment. Please try again, or contact an administrator to confirm 2FA is enrolled for this organisation/environment.",
+    );
+
   }, []);
 
   const verify2FA = useCallback(async (code: string, challengeToken: string) => {
