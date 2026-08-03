@@ -793,6 +793,7 @@ Deno.serve(async (req) => {
       await upsertConfig(sql, "xero_access_token", "");
       await upsertConfig(sql, "xero_refresh_token", "");
       await upsertConfig(sql, "xero_tenant_id", "");
+      await upsertConfig(sql, "xero_tenant_name", "");
       await upsertConfig(sql, "xero_connection_id", "");
       await upsertConfig(sql, "xero_granted_scopes", "");
 
