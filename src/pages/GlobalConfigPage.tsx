@@ -66,7 +66,15 @@ const SMTP_KEYS = [
 const XERO_KEYS = [
   { key: "xero_client_id", label: "Client ID", placeholder: "Your Xero OAuth2 Client ID" },
   { key: "xero_client_secret", label: "Client Secret", placeholder: "Your Xero OAuth2 Client Secret", type: "password" },
+  {
+    key: "n8n_webhook_url",
+    label: "n8n Webhook URL (this instance)",
+    placeholder: "https://n8n.example.com/webhook/…",
+    description:
+      "Approved invoices from THIS organisation + environment are sent here. Each instance must use its own n8n workflow / Xero credential, otherwise invoices can be created in another organisation's Xero.",
+  },
 ];
+
 
 const GlobalConfigPage: React.FC = () => {
   const { isAdmin, user, systemId } = useAuth();
