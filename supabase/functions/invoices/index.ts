@@ -582,6 +582,7 @@ Deno.serve(async (req) => {
             approved_at: invoice?.approved_at,
             org_id: req.headers.get("x-org-id") || body.org_id || "",
             environment: req.headers.get("x-environment") || "production",
+            ...(await getXeroTenant(getDb(req, bodyOrgId))),
           }),
         });
 
