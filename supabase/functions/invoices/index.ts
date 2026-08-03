@@ -42,6 +42,22 @@ async function authenticate(req: Request) {
   return await fgAuthenticate(req);
 }
 
+// Reads the Xero organisation currently bound in this tenant slice so n8n can
+// assert it is creating the invoice in the right Xero org.
+async function getXeroTenant(sql: any): Promise<{ xero_tenant_id: string | null; xero_tenant_name: string | null }> {
+  try {
+    const rows = await sql`SELECT key, value FROM global_config WHERE key IN ('xero_tenant_id', 'xero_tenant_name')` as any[];
+    const map = new Map(rows.map((r: any) => [r.key, r.value]));
+    return {
+      xero_tenant_id: (map.get("xero_tenant_id") as string) || null,
+      xero_tenant_name: (map.get("xero_tenant_name") as string) || null,
+    };
+  } catch (e) {
+    console.error("getXeroTenant failed:", e);
+    return { xero_tenant_id: null, xero_tenant_name: null };
+  }
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
