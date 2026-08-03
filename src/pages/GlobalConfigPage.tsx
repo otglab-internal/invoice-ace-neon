@@ -78,13 +78,20 @@ const GlobalConfigPage: React.FC = () => {
   const [xeroStatus, setXeroStatus] = useState<{
     connected: boolean;
     hasCredentials: boolean;
+    tenantName?: string | null;
+    requiresTenantSelection?: boolean;
     hasContactWritePermission?: boolean | null;
     missingRequiredScopes?: string[];
     grantedScopeCount?: number;
     scopeSource?: string;
   }>({ connected: false, hasCredentials: false, hasContactWritePermission: null });
+  const [xeroTenants, setXeroTenants] = useState<
+    { tenantId: string; tenantName: string; tenantType: string | null; isDemo: boolean }[]
+  >([]);
+  const [bindingTenant, setBindingTenant] = useState<string | null>(null);
   const [xeroConnecting, setXeroConnecting] = useState(false);
   const [xeroDisconnecting, setXeroDisconnecting] = useState(false);
+
   const [clearing, setClearing] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
