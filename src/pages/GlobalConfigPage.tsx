@@ -349,17 +349,36 @@ const GlobalConfigPage: React.FC = () => {
           body: { action: "callback", code, redirectUri },
           headers: getXeroHeaders(),
         });
-        if (data?.success) {
+        if (data?.success && data?.requiresTenantSelection) {
+          setXeroTenants(Array.isArray(data.connections) ? data.connections : []);
+          setXeroStatus({
+            connected: false,
+            hasCredentials: true,
+            tenantName: null,
+            requiresTenantSelection: true,
+            hasContactWritePermission: data.hasContactWritePermission ?? null,
+            missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
+            grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
+            scopeSource: typeof data.scopeSource === "string" ? data.scopeSource : undefined,
+          });
+          toast({
+            title: "Choose a Xero organisation",
+            description: "Authorisation succeeded. Select which organisation this environment should use.",
+          });
+        } else if (data?.success) {
           toast({
             title: "Xero connected successfully",
             description: data.hasContactWritePermission === false
               ? `Contact creation permission was not granted. Missing: ${(data.missingRequiredScopes || ["accounting.contacts"]).join(", ")}`
-              : `Tenant: ${data.tenant}`,
+              : `Organisation: ${data.tenant}`,
             variant: data.hasContactWritePermission === false ? "destructive" : undefined,
           });
+          setXeroTenants([]);
           setXeroStatus({
             connected: true,
             hasCredentials: true,
+            tenantName: data.tenant ?? null,
+            requiresTenantSelection: false,
             hasContactWritePermission: data.hasContactWritePermission ?? null,
             missingRequiredScopes: Array.isArray(data.missingRequiredScopes) ? data.missingRequiredScopes : [],
             grantedScopeCount: typeof data.grantedScopeCount === "number" ? data.grantedScopeCount : undefined,
