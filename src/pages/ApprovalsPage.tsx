@@ -204,14 +204,14 @@ const ApprovalsPage: React.FC = () => {
           });
         } catch (err) {
           webhookDelivered = false;
-          console.warn("n8n webhook notification failed:", err);
+          console.warn("Xero push failed:", err);
         }
       }
 
       if (webhookDelivered) {
-        toast.success("Invoice approved and webhook sent to n8n");
+        toast.success("Invoice approved and sent to Xero");
       } else {
-        toast.error("Invoice approved, but the n8n webhook failed");
+        toast.error("Invoice approved, but sending it to Xero failed");
       }
 
       setSelectedId(null);

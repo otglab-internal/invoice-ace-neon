@@ -2,6 +2,7 @@ import { neon } from "npm:@neondatabase/serverless";
 import { getSmtpConfig, getSandboxTestEmail, sendEmailViaSMTP, buildApprovalEmailHtml, buildApprovedEmailHtml } from "../_shared/email-utils.ts";
 import { buildPdfAttachment, fetchPdfBase64FromR2 } from "../_shared/pdf-artifacts.ts";
 import { authenticate as fgAuthenticate } from "../_shared/auth.ts";
+import { pushInvoiceToXero } from "../_shared/xero-invoice.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,6 +42,9 @@ function getDb(req: Request, orgId?: string) {
 async function authenticate(req: Request) {
   return await fgAuthenticate(req);
 }
+
+// Invoices are pushed straight to Xero via ../_shared/xero-invoice.ts, which
+// reads the Xero connection bound to this org + environment slice.
 
 
 Deno.serve(async (req) => {
@@ -269,45 +273,25 @@ Deno.serve(async (req) => {
         VALUES (${created.id}, ${'request'}, ${sourceLabel ? `api:${sourceSystemId || sourceSystemName}` : 'api'}, ${user_id}, ${'API:' + user_id}, ${JSON.stringify(logDetails)}::jsonb)
       `;
 
-      // If auto-approved (no approval required), fire n8n webhook immediately so Xero
-      // gets the invoice with the correct currency. Without this, api-submit auto-approved
-      // invoices never reach Xero through the n8n flow.
+      // If auto-approved (no approval required), create the invoice directly in the
+      // Xero organisation bound to this org + environment.
+      let xeroResult: Awaited<ReturnType<typeof pushInvoiceToXero>> | null = null;
       if (!created.requires_approval && created.status === "approved") {
-        const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-        if (n8nWebhookUrl) {
-          try {
-            const rawCurrency = (created.currency ?? "RM").toString();
-            const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-            const enriched = {
-              ...created,
-              currency: currencyCode,
-              line_items: (created.line_items || []).map((li: any) => ({
-                ...li,
-                line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-              })),
-            };
-            await fetch(n8nWebhookUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                event: "invoice_approved",
-                invoice: enriched,
-                send_to_client: created.send_to_client === true,
-                due_days: Number(created.due_days) || 7,
-                recipient_emails: Array.isArray(created.recipient_emails) ? created.recipient_emails : [],
-                contact_persons: Array.isArray(created.contact_persons) ? created.contact_persons : [],
-                approved_by: "api",
-                approved_at: created.created_at,
-                org_id: orgIdResolved,
-                environment: envResolved,
-                supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"),
-                supabase_url: Deno.env.get("SUPABASE_URL"),
-              }),
-            });
-            console.log(`api-submit: n8n webhook fired for auto-approved invoice ${created.id} (currency=${currencyCode})`);
-          } catch (webhookErr) {
-            console.error("api-submit: n8n webhook call failed:", webhookErr);
+        try {
+          xeroResult = await pushInvoiceToXero({
+            sql: dbSql,
+            invoiceId: created.id,
+            orgId: orgIdResolved,
+            environment: envResolved,
+          });
+          if (xeroResult.ok) {
+            console.log(`api-submit: invoice ${created.id} created in Xero as ${xeroResult.invoiceNumber} (tenant ${xeroResult.tenantId})`);
+          } else {
+            console.error(`api-submit: Xero push failed for ${created.id}:`, xeroResult.error, xeroResult.detail);
           }
+        } catch (xeroErr) {
+          console.error("api-submit: Xero push threw:", xeroErr);
+          xeroResult = { ok: false, error: (xeroErr as Error).message };
         }
       }
 
@@ -353,6 +337,19 @@ Deno.serve(async (req) => {
         status: created.status,
         requires_approval: created.requires_approval,
         total: created.total,
+        ...(xeroResult
+          ? {
+              xero: {
+                pushed: xeroResult.ok,
+                invoice_number: xeroResult.invoiceNumber ?? null,
+                xero_invoice_id: xeroResult.xeroInvoiceId ?? null,
+                tenant_id: xeroResult.tenantId ?? null,
+                tenant_name: xeroResult.tenantName ?? null,
+                emailed: xeroResult.emailed ?? false,
+                error: xeroResult.ok ? null : xeroResult.error ?? null,
+              },
+            }
+          : {}),
       }), {
         status: 201,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -444,7 +441,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // notify-amendment — sends amended invoice to dedicated amendment webhook
+    // notify-amendment — pushes the amended invoice straight to Xero (updates the
+    // existing Xero invoice in place when we already know its InvoiceID).
     if (action === "notify-amendment") {
       const claims = await authenticate(req);
       if (!claims) {
@@ -453,69 +451,49 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { invoice, previous } = body;
-      const amendmentWebhookUrl = "https://n8n.srv1031900.hstgr.cloud/webhook-test/989fb99f-80c1-420a-9f92-614322b00c08";
-
-      try {
-        const rawCurrency = (invoice?.currency ?? "RM").toString();
-        const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-
-        const enrichedInvoice = {
-          ...invoice,
-          currency: currencyCode,
-          line_items: (invoice?.line_items || []).map((li: any) => ({
-            ...li,
-            line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-          })),
-        };
-
-        const webhookResponse = await fetch(amendmentWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "invoice_amended",
-            invoice_id: invoice?.id,
-            xero_invoice_id: invoice?.contact_id ? invoice?.xero_invoice_id ?? null : null,
-            invoice_number: invoice?.invoice_number ?? null,
-            contact_id: invoice?.contact_id ?? null,
-            template_id: invoice?.template_id ?? null,
-            invoice: enrichedInvoice,
-            previous: previous ?? null,
-            approved_by: invoice?.approved_by ?? null,
-            approved_at: invoice?.approved_at ?? null,
-            org_id: req.headers.get("x-org-id") || body.org_id || "",
-            environment: req.headers.get("x-environment") || "production",
-          }),
-        });
-
-        const responseStatus = webhookResponse.status;
-        const responseBody = await webhookResponse.text();
-
-        if (!webhookResponse.ok) {
-          console.error("amendment webhook returned non-2xx", { responseStatus, responseBody });
-          return new Response(JSON.stringify({
-            error: `amendment webhook returned ${responseStatus}`,
-            webhookStatus: responseStatus,
-            webhookBody: responseBody,
-          }), {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
+      const { invoice } = body;
+      const invoiceId = invoice?.id;
+      if (!invoiceId) {
+        return new Response(JSON.stringify({ error: "invoice.id is required" }), {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
-      } catch (webhookErr) {
-        console.error("amendment webhook call failed:", webhookErr);
-        return new Response(JSON.stringify({ error: "Amendment webhook call failed" }), {
+      }
+      const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
+      const environment = req.headers.get("x-environment") || "production";
+
+      const result = await pushInvoiceToXero({
+        sql: getDb(req, orgId),
+        invoiceId,
+        orgId,
+        environment,
+        mode: "amend",
+      });
+
+      if (!result.ok) {
+        return new Response(JSON.stringify({
+          error: result.error || "Failed to update the invoice in Xero.",
+          code: result.code,
+          detail: result.detail,
+          xero_correlation_id: result.correlationId ?? null,
+        }), {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      return new Response(JSON.stringify({
+        success: true,
+        invoice_number: result.invoiceNumber ?? null,
+        xero_invoice_id: result.xeroInvoiceId ?? null,
+        tenant_name: result.tenantName ?? null,
+        emailed: result.emailed ?? false,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // notify-approval — webhook proxy
+    // notify-approval — creates the approved invoice directly in Xero
     if (action === "notify-approval") {
       const claims = await authenticate(req);
       if (!claims) {
@@ -525,73 +503,46 @@ Deno.serve(async (req) => {
         });
       }
       const { invoice } = body;
-      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-
-      if (!n8nWebhookUrl) {
-        return new Response(JSON.stringify({ error: "N8N_WEBHOOK_URL not configured" }), {
-          status: 500,
+      const invoiceId = invoice?.id;
+      if (!invoiceId) {
+        return new Response(JSON.stringify({ error: "invoice.id is required" }), {
+          status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const orgId = bodyOrgId || req.headers.get("x-org-id") || "";
+      const environment = req.headers.get("x-environment") || "production";
 
-      try {
-        // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD", "RM" -> "RM").
-        const rawCurrency = (invoice?.currency ?? "RM").toString();
-        const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
+      const result = await pushInvoiceToXero({
+        sql: getDb(req, orgId),
+        invoiceId,
+        orgId,
+        environment,
+      });
 
-        // Enrich line items with line_amount
-        const enrichedInvoice = {
-          ...invoice,
-          currency: currencyCode,
-          line_items: (invoice?.line_items || []).map((li: any) => ({
-            ...li,
-            line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-          })),
-        };
-
-        const webhookResponse = await fetch(n8nWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            event: "invoice_approved",
-            invoice: enrichedInvoice,
-            send_to_client: invoice?.send_to_client === true,
-            due_days: Number(invoice?.due_days) || 7,
-            recipient_emails: Array.isArray(invoice?.recipient_emails) ? invoice.recipient_emails : [],
-            contact_persons: Array.isArray(invoice?.contact_persons) ? invoice.contact_persons : [],
-            approved_by: invoice?.approved_by,
-            approved_at: invoice?.approved_at,
-            org_id: req.headers.get("x-org-id") || body.org_id || "",
-            environment: req.headers.get("x-environment") || "production",
-          }),
-        });
-
-        const responseStatus = webhookResponse.status;
-        const responseBody = await webhookResponse.text();
-
-        if (!webhookResponse.ok) {
-          console.error("n8n webhook returned non-2xx", { responseStatus, responseBody });
-          return new Response(JSON.stringify({
-            error: `n8n webhook returned ${responseStatus}`,
-            webhookStatus: responseStatus,
-            webhookBody: responseBody,
-          }), {
-            status: 502,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        return new Response(JSON.stringify({ success: true, webhookStatus: responseStatus }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (webhookErr) {
-        console.error("n8n webhook call failed:", webhookErr);
-        return new Response(JSON.stringify({ error: "Webhook call failed" }), {
+      if (!result.ok) {
+        return new Response(JSON.stringify({
+          error: result.error || "Failed to create the invoice in Xero.",
+          code: result.code,
+          detail: result.detail,
+          xero_correlation_id: result.correlationId ?? null,
+        }), {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      return new Response(JSON.stringify({
+        success: true,
+        invoice_number: result.invoiceNumber ?? null,
+        xero_invoice_id: result.xeroInvoiceId ?? null,
+        tenant_name: result.tenantName ?? null,
+        emailed: result.emailed ?? false,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+
 
     // send-approval-email — re-enabled, sends to configured approval_notice_emails
     if (action === "send-approval-email") {
@@ -800,29 +751,24 @@ Deno.serve(async (req) => {
       }
 
       const approvedInvoice = result[0];
-      const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-      if (n8nWebhookUrl) {
-        try {
-          // Strip non-letter symbols from currency code for n8n/Xero (e.g. "SGD$" -> "SGD").
-          const rawApprovedCurrency = (approvedInvoice.currency ?? "RM").toString();
-          const approvedCurrencyCode = rawApprovedCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-          const enrichedApproved = {
-            ...approvedInvoice,
-            currency: approvedCurrencyCode,
-            line_items: (approvedInvoice.line_items || []).map((li: any) => ({
-              ...li,
-              line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-            })),
-          };
-          await fetch(n8nWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: "invoice_approved", invoice: enrichedApproved, send_to_client: approvedInvoice.send_to_client === true, due_days: Number(approvedInvoice.due_days) || 7, recipient_emails: Array.isArray(approvedInvoice.recipient_emails) ? approvedInvoice.recipient_emails : [], contact_persons: Array.isArray(approvedInvoice.contact_persons) ? approvedInvoice.contact_persons : [], approved_by: userId, approved_at: approvedInvoice.approved_at, org_id: req.headers.get("x-org-id") || body.org_id || "", environment: req.headers.get("x-environment") || "production", supabase_anon_key: Deno.env.get("SUPABASE_ANON_KEY"), supabase_url: Deno.env.get("SUPABASE_URL") }),
-          });
-        } catch (webhookErr) {
-          console.error("n8n webhook call failed:", webhookErr);
+
+      // Create the invoice directly in the Xero organisation bound to this slice.
+      let approveXero: Awaited<ReturnType<typeof pushInvoiceToXero>> | null = null;
+      try {
+        approveXero = await pushInvoiceToXero({
+          sql,
+          invoiceId: approvedInvoice.id,
+          orgId: req.headers.get("x-org-id") || bodyOrgId || "",
+          environment: req.headers.get("x-environment") || "production",
+        });
+        if (!approveXero.ok) {
+          console.error("approve: Xero push failed:", approveXero.error, approveXero.detail);
         }
+      } catch (xeroErr) {
+        console.error("approve: Xero push threw:", xeroErr);
+        approveXero = { ok: false, error: (xeroErr as Error).message };
       }
+
 
       // Send approved invoice notification email
       console.log(`invoices: [APPROVE] Starting email notification flow for invoice ${approvedInvoice.id}`);
@@ -867,7 +813,19 @@ Deno.serve(async (req) => {
         console.error("invoices: [APPROVE] Failed to send approved invoice email:", emailErr);
       }
 
-      return new Response(JSON.stringify({ invoice: approvedInvoice }), {
+      return new Response(JSON.stringify({
+        invoice: approvedInvoice,
+        xero: approveXero
+          ? {
+              pushed: approveXero.ok,
+              invoice_number: approveXero.invoiceNumber ?? null,
+              xero_invoice_id: approveXero.xeroInvoiceId ?? null,
+              tenant_name: approveXero.tenantName ?? null,
+              emailed: approveXero.emailed ?? false,
+              error: approveXero.ok ? null : approveXero.error ?? null,
+            }
+          : null,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
