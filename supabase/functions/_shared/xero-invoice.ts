@@ -408,7 +408,7 @@ export async function pushInvoiceToXero({
     };
   }
 
-  const invoiceDate = String(invoice.invoice_date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+  const invoiceDate = toIsoDate(invoice.invoice_date);
   const dueDays = Number(invoice.due_days) || 7;
 
   const payload: Record<string, unknown> = {
@@ -416,7 +416,8 @@ export async function pushInvoiceToXero({
     Contact: { ContactID: contact.contactId },
     Date: invoiceDate,
     DueDate: addDays(invoiceDate, dueDays),
-    Reference: invoice.reference || "",
+    Reference: unescapeNewlines(invoice.reference),
+
     CurrencyCode: normalizeCurrency(invoice.currency),
     LineAmountTypes: "NoTax",
     Status: "AUTHORISED",
