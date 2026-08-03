@@ -1016,7 +1016,7 @@ const CreateInvoicePage: React.FC = () => {
 
           const webhookDelivered = webhookResult.status === "fulfilled";
           if (!webhookDelivered) {
-            console.warn("n8n webhook failed for auto-submitted invoice:", webhookResult.reason);
+            console.warn("Xero push failed for auto-submitted invoice:", webhookResult.reason);
           }
 
           if (webhookDelivered) {
@@ -1025,7 +1025,7 @@ const CreateInvoicePage: React.FC = () => {
               icon: <Zap className="w-4 h-4" />,
             });
           } else {
-            toast.error("Invoice saved, but the webhook to Xero failed", {
+            toast.error("Invoice saved, but sending it to Xero failed", {
               description: "Please contact your admin.",
             });
           }

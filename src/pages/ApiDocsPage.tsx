@@ -157,7 +157,7 @@ x-environment: sandbox`}
                 <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/invoices</td><td className="py-2 pr-4 font-mono">api-get</td><td className="py-2 pr-4 text-muted-foreground">Fetch invoice + PDFs (base64)</td><td className="py-2 text-muted-foreground">No</td></tr>
                 <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/xero</td><td className="py-2 pr-4 font-mono">list-xero-contacts</td><td className="py-2 pr-4 text-muted-foreground">Search Xero contacts (paginated)</td><td className="py-2 text-muted-foreground">Yes</td></tr>
                 <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/xero</td><td className="py-2 pr-4 font-mono">create-xero-contact</td><td className="py-2 pr-4 text-muted-foreground">Find-or-create Xero contact by name</td><td className="py-2 text-muted-foreground">Yes</td></tr>
-                <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/invoice-pdf-webhook</td><td className="py-2 pr-4 font-mono">—</td><td className="py-2 pr-4 text-muted-foreground">n8n uploads Xero PDF back to the app</td><td className="py-2 text-muted-foreground">No</td></tr>
+                <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/invoice-pdf-webhook</td><td className="py-2 pr-4 font-mono">—</td><td className="py-2 pr-4 text-muted-foreground">Legacy: external uploader attaches a Xero PDF</td><td className="py-2 text-muted-foreground">No</td></tr>
                 <tr><td className="py-2 pr-4 font-mono break-all">/functions/v1/login-proxy</td><td className="py-2 pr-4 font-mono">login, verify-2fa</td><td className="py-2 pr-4 text-muted-foreground">Mint an x-app-jwt</td><td className="py-2 text-muted-foreground">No</td></tr>
               </tbody>
             </table>
@@ -258,7 +258,7 @@ x-environment: sandbox`}
               </table>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              <strong>Approval behaviour:</strong> auto-approves unless the submitting user is in <code>user_approval_flags</code>. Flagged invoices land in <code>pending_approval</code> and trigger the standard approver email + n8n workflow. Templates are UI-only and ignored on this endpoint.
+              <strong>Approval behaviour:</strong> auto-approves unless the submitting user is in <code>user_approval_flags</code>. Flagged invoices land in <code>pending_approval</code> and trigger the standard approver email; on approval the invoice is created directly in Xero. Templates are UI-only and ignored on this endpoint.
             </p>
           </div>
 
@@ -600,11 +600,11 @@ app.post("/webhooks/invoice-updates", express.raw({ type: "application/json" }),
         <Card className="p-5 space-y-3">
           <div className="flex items-center gap-2">
             <Badge className="text-xs bg-blue-600">POST</Badge>
-            <h2 className="text-sm font-semibold font-display text-foreground">Invoice PDF Webhook (n8n → App)</h2>
+            <h2 className="text-sm font-semibold font-display text-foreground">Invoice PDF Webhook (legacy external uploader)</h2>
           </div>
           <code className="block text-xs bg-muted p-3 rounded-lg text-foreground break-all">{PDF_WEBHOOK}</code>
           <p className="text-xs text-muted-foreground">
-            n8n calls this endpoint after pushing the invoice to Xero to attach the generated PDF.
+            Optional legacy endpoint for attaching a Xero PDF. Approved invoices now sync their PDF from Xero automatically.
             Supports <strong>multipart/form-data</strong> or <strong>JSON with base64</strong>.
           </p>
 
