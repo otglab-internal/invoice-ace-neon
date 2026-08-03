@@ -93,61 +93,29 @@ Deno.serve(async (req) => {
     }
     const invoice = rows[0];
 
-    const n8nWebhookUrl = Deno.env.get("N8N_WEBHOOK_URL");
-    if (!n8nWebhookUrl) throw new Error("N8N_WEBHOOK_URL not configured");
-
-    const rawCurrency = (invoice.currency ?? "RM").toString();
-    const currencyCode = rawCurrency.replace(/[^A-Za-z]/g, "").toUpperCase() || "RM";
-
-    const enrichedInvoice = {
-      ...invoice,
-      currency: currencyCode,
-      line_items: (invoice.line_items || []).map((li: any) => ({
-        ...li,
-        line_amount: (Number(li.quantity) || 0) * (Number(li.cost) || 0),
-      })),
-    };
-
-    const tenantRows = await sql.query(
-      `SELECT key, value FROM global_config WHERE key IN ('xero_tenant_id','xero_tenant_name')`,
-      [],
-    ) as any[];
-    const tenantMap = new Map((tenantRows || []).map((r: any) => [r.key, r.value]));
-
-    const webhookResponse = await fetch(n8nWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        event: "invoice_approved",
-        invoice: enrichedInvoice,
-        send_to_client: invoice.send_to_client === true,
-        due_days: Number(invoice.due_days) || 7,
-        recipient_emails: Array.isArray(invoice.recipient_emails) ? invoice.recipient_emails : [],
-        contact_persons: Array.isArray(invoice.contact_persons) ? invoice.contact_persons : [],
-        approved_by: invoice.approved_by,
-        approved_at: invoice.approved_at,
-        org_id: orgId,
-        environment: env,
-        xero_tenant_id: tenantMap.get("xero_tenant_id") || null,
-        xero_tenant_name: tenantMap.get("xero_tenant_name") || null,
-        resend: true,
-      }),
+    const result = await pushInvoiceToXero({
+      sql,
+      invoiceId: invoice.id as string,
+      orgId,
+      environment: env,
+      mode: invoice.xero_invoice_id ? "amend" : "create",
     });
 
-    const responseStatus = webhookResponse.status;
-    const responseBody = await webhookResponse.text();
-
     return new Response(JSON.stringify({
-      success: webhookResponse.ok,
-      webhookStatus: responseStatus,
-      webhookBody: responseBody,
+      success: result.ok,
+      error: result.ok ? null : result.error,
+      detail: result.detail ?? null,
+      xero_correlation_id: result.correlationId ?? null,
       invoice_id: invoice.id,
-      invoice_number: invoice.invoice_number,
+      invoice_number: result.invoiceNumber ?? invoice.invoice_number,
+      xero_invoice_id: result.xeroInvoiceId ?? null,
+      tenant_id: result.tenantId ?? null,
+      tenant_name: result.tenantName ?? null,
       contact_name: invoice.contact_name,
       total: invoice.total,
       created_at: invoice.created_at,
     }), {
-      status: webhookResponse.ok ? 200 : 502,
+      status: result.ok ? 200 : 502,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
