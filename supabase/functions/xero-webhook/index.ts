@@ -233,6 +233,9 @@ Deno.serve(async (req) => {
       return new Response("", { status: 200 });
     }
 
+    // Xero requires a reply within 5s. Acknowledge immediately and do the
+    // heavy work (Xero API, PDFs, R2, receipts, emails) in the background.
+    const work = (async () => {
     // Get Xero credentials for API calls
     const config = await getConfigMap(sql, [
       "xero_client_id",
@@ -572,6 +575,11 @@ Deno.serve(async (req) => {
       }
       } // end if newLocalStatus === "paid"
     }
+
+    })().catch((bgErr) => console.error("xero-webhook background error:", bgErr));
+    // deno-lint-ignore no-explicit-any
+    const rt = (globalThis as any).EdgeRuntime;
+    if (rt?.waitUntil) rt.waitUntil(work); else await work;
 
     return new Response("", { status: 200 });
   } catch (err) {
